@@ -1,107 +1,45 @@
-import OpenAI from 'openai';
 import type { AudioSpeechCreateParams } from 'openai/resources/audio/speech';
-import type { ChatCompletionChunk } from 'openai/resources/chat/completions';
-import { ModelConfig, ChatMessage } from '@/types/agent';
-import {
-  recordResponseTime,
-  recordTokens,
-  incrementError,
-} from './analytics';
+import type { ModelConfig, ChatMessage } from '@/types/agent';
+import type { ProviderClient } from './api/ProviderClient';
+import { OpenAIClient } from './api/providers/OpenAIClient';
+import { AzureOpenAIClient } from './api/providers/AzureOpenAIClient';
+import { OpenRouterClient } from './api/providers/OpenRouterClient';
+import { ProviderOptions } from './api/ProviderClient';
 
-interface ChatCompletionResponse {
-  choices: { message?: { content?: string } }[];
-  usage?: { total_tokens?: number };
-}
-
-interface SpeechResponse {
-  arrayBuffer: () => Promise<ArrayBuffer>;
-}
-
-interface TranscriptionResponse {
-  text: string;
+export interface MetricsCallbacks {
+  recordResponseTime?: (agentId: string, ms: number) => void;
+  recordTokens?: (agentId: string, tokens: string | number) => void;
+  incrementError?: (agentId: string) => void;
 }
 
 export class APIClient {
+  private provider: ProviderClient;
   private config: ModelConfig;
-  private client!: OpenAI;
   private agentId?: string;
+  private metrics?: MetricsCallbacks;
 
-  constructor(config: ModelConfig, agentId?: string) {
+  constructor(config: ModelConfig, agentId?: string, metrics?: MetricsCallbacks) {
     this.config = config;
     this.agentId = agentId;
-    this.initializeClient();
+    this.metrics = metrics;
+    this.provider = this.createProvider();
   }
 
-  private initializeClient() {
+  private createProvider(): ProviderClient {
+    const onError: ProviderOptions['onError'] | undefined =
+      this.agentId && this.metrics?.incrementError
+        ? () => this.metrics!.incrementError!(this.agentId!)
+        : undefined;
     switch (this.config.provider) {
       case 'openai':
-        this.client = new OpenAI({
-          apiKey: this.config.apiKey,
-          dangerouslyAllowBrowser: true,
-        });
-        break;
+        return new OpenAIClient(this.config, { onError });
       case 'azure-openai':
-        // Azure OpenAI using OpenAI-compatible interface
-        this.client = new OpenAI({
-          apiKey: this.config.apiKey,
-          baseURL: this.config.baseUrl,
-          defaultQuery: { 'api-version': this.config.apiVersion || '2023-12-01-preview' },
-          dangerouslyAllowBrowser: true,
-        });
-        break;
+        return new AzureOpenAIClient(this.config, { onError });
       case 'openrouter':
-        this.client = new OpenAI({
-          apiKey: this.config.apiKey,
-          baseURL: this.config.baseUrl || 'https://openrouter.ai/api/v1',
-          dangerouslyAllowBrowser: true,
-        });
-        break;
+        return new OpenRouterClient(this.config, { onError });
       default:
         throw new Error(`Unsupported provider: ${this.config.provider}`);
     }
-  }
-
-  private async sleep(ms: number) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-  }
-
-  private async withTimeout<T>(promise: Promise<T>, timeoutMs: number) {
-    if (!timeoutMs) return promise;
-    return new Promise<T>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        reject(new Error(`Request timed out after ${timeoutMs}ms`));
-      }, timeoutMs);
-      promise
-        .then(res => {
-          clearTimeout(timer);
-          resolve(res);
-        })
-        .catch(err => {
-          clearTimeout(timer);
-          reject(err);
-        });
-    });
-  }
-
-  private async retryWithBackoff<T>(operation: (attempt: number) => Promise<T>) {
-    const maxRetries = this.config.maxRetries ?? 3;
-    const baseDelay = 500;
-    let attempt = 0;
-    let lastError: unknown;
-    while (attempt <= maxRetries) {
-      try {
-        return await operation(attempt);
-      } catch (err) {
-        lastError = err;
-        if (this.agentId) incrementError(this.agentId);
-        if (attempt === maxRetries) break;
-        const delay = baseDelay * 2 ** attempt;
-        await this.sleep(delay);
-      }
-      attempt++;
-    }
-    const message = lastError instanceof Error ? lastError.message : String(lastError);
-    throw new Error(`Operation failed after ${maxRetries + 1} attempts: ${message}`);
   }
 
   async sendMessage(
@@ -111,33 +49,20 @@ export class APIClient {
     maxTokens: number = 1000
   ): Promise<string> {
     const start = Date.now();
-    const formattedMessages = [
-      { role: 'system', content: systemPrompt },
-      ...messages.map(msg => ({
-        role: msg.role,
-        content: msg.content
-      }))
-    ];
-
-    const makeRequest = () =>
-      this.withTimeout<ChatCompletionResponse>(
-        this.client.chat.completions.create({
-          model: this.config.model,
-          messages: formattedMessages,
-          temperature,
-          max_tokens: maxTokens,
-        }) as Promise<ChatCompletionResponse>,
-        this.config.timeoutMs ?? 30000
-      );
-
     try {
-      const response = await this.retryWithBackoff<ChatCompletionResponse>(makeRequest);
+      const response = await this.provider.sendMessage(
+        messages,
+        systemPrompt,
+        temperature,
+        maxTokens
+      );
       if (this.agentId) {
-        recordResponseTime(this.agentId, Date.now() - start);
-        const tokens = response.usage?.total_tokens;
-        if (tokens) recordTokens(this.agentId, tokens);
+        this.metrics?.recordResponseTime?.(this.agentId, Date.now() - start);
+        if (response.tokens !== undefined) {
+          this.metrics?.recordTokens?.(this.agentId, response.tokens);
+        }
       }
-      return response.choices[0]?.message?.content || '';
+      return response.content;
     } catch (error) {
       console.error('API Error:', error);
       const message = error instanceof Error ? error.message : String(error);
@@ -151,44 +76,21 @@ export class APIClient {
     temperature: number = 0.7,
     maxTokens: number = 1000
   ): AsyncGenerator<string> {
-    if (!['openai', 'openrouter'].includes(this.config.provider)) {
-      yield await this.sendMessage(messages, systemPrompt, temperature, maxTokens);
-      return;
-    }
-
     const start = Date.now();
-    const formattedMessages = [
-      { role: 'system', content: systemPrompt },
-      ...messages.map(m => ({ role: m.role, content: m.content }))
-    ];
-
-    const makeRequest = () =>
-      this.withTimeout<AsyncIterable<ChatCompletionChunk>>(
-        this.client.chat.completions.create({
-          model: this.config.model,
-          messages: formattedMessages,
-          temperature,
-          max_tokens: maxTokens,
-          stream: true,
-        }) as AsyncIterable<ChatCompletionChunk>,
-        this.config.timeoutMs ?? 30000
-      );
-
     try {
-      const stream = await this.retryWithBackoff<AsyncIterable<ChatCompletionChunk>>(
-        () => makeRequest()
-      );
       let full = '';
-      for await (const part of stream) {
-        const token = part.choices?.[0]?.delta?.content;
-        if (token) {
-          full += token;
-          yield token;
-        }
+      for await (const token of this.provider.streamMessage(
+        messages,
+        systemPrompt,
+        temperature,
+        maxTokens
+      )) {
+        full += token;
+        yield token;
       }
       if (this.agentId) {
-        recordResponseTime(this.agentId, Date.now() - start);
-        recordTokens(this.agentId, full);
+        this.metrics?.recordResponseTime?.(this.agentId, Date.now() - start);
+        this.metrics?.recordTokens?.(this.agentId, full);
       }
     } catch (error) {
       console.error('Streaming API error:', error);
@@ -201,27 +103,16 @@ export class APIClient {
     text: string,
     voice: AudioSpeechCreateParams['voice'] = 'alloy'
   ): Promise<ArrayBuffer> {
-    if (this.config.provider !== 'openai') {
-      throw new Error('Speech generation only supported with OpenAI');
+    if (!this.provider.generateSpeech) {
+      throw new Error('Speech generation not supported by this provider');
     }
-
     const start = Date.now();
-    const makeRequest = () =>
-      this.withTimeout<SpeechResponse>(
-        this.client.audio.speech.create({
-          model: 'tts-1',
-          voice,
-          input: text,
-        }) as Promise<SpeechResponse>,
-        this.config.timeoutMs ?? 30000
-      );
-
     try {
-      const response = await this.retryWithBackoff<SpeechResponse>(makeRequest);
+      const buffer = await this.provider.generateSpeech(text, voice);
       if (this.agentId) {
-        recordResponseTime(this.agentId, Date.now() - start);
+        this.metrics?.recordResponseTime?.(this.agentId, Date.now() - start);
       }
-      return await response.arrayBuffer();
+      return buffer;
     } catch (error) {
       console.error('Speech generation error:', error);
       const message = error instanceof Error ? error.message : String(error);
@@ -230,26 +121,16 @@ export class APIClient {
   }
 
   async transcribeAudio(audioFile: File): Promise<string> {
-    if (this.config.provider !== 'openai') {
-      throw new Error('Audio transcription only supported with OpenAI');
+    if (!this.provider.transcribeAudio) {
+      throw new Error('Audio transcription not supported by this provider');
     }
-
     const start = Date.now();
-    const makeRequest = () =>
-      this.withTimeout<TranscriptionResponse>(
-        this.client.audio.transcriptions.create({
-          file: audioFile,
-          model: 'whisper-1',
-        }) as Promise<TranscriptionResponse>,
-        this.config.timeoutMs ?? 30000
-      );
-
     try {
-      const response = await this.retryWithBackoff<TranscriptionResponse>(makeRequest);
+      const text = await this.provider.transcribeAudio(audioFile);
       if (this.agentId) {
-        recordResponseTime(this.agentId, Date.now() - start);
+        this.metrics?.recordResponseTime?.(this.agentId, Date.now() - start);
       }
-      return response.text;
+      return text;
     } catch (error) {
       console.error('Transcription error:', error);
       const message = error instanceof Error ? error.message : String(error);
