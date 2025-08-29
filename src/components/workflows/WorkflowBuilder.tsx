@@ -83,8 +83,12 @@ export function WorkflowBuilder() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+        <label htmlFor="workflow-name" className="sr-only">
+          Workflow name
+        </label>
         <Input
+          id="workflow-name"
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Workflow name"
@@ -95,7 +99,7 @@ export function WorkflowBuilder() {
           Load
         </Button>
       </div>
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Button size="sm" onClick={() => addNode('task')}>
           Add Task
         </Button>
@@ -109,7 +113,7 @@ export function WorkflowBuilder() {
           Add Parallel
         </Button>
       </div>
-      <div className="h-[500px] bg-white border rounded-md">
+      <div className="h-[500px] bg-white border rounded-md" role="region" aria-label="Workflow diagram">
         <ReactFlow
           nodes={nodes}
           edges={edges}

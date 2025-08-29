@@ -160,7 +160,7 @@ export function AgentDashboard({ onStartChat, onStartVoice }: AgentDashboardProp
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
         {/* Modern Header */}
         <div className="glass-effect border-b border-blue-100">
-          <div className="container mx-auto px-8 py-6">
+        <div className="container mx-auto px-4 sm:px-8 py-6">
             <div className="flex items-center justify-between">
               <div className="space-y-2">
                 <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
@@ -183,7 +183,7 @@ export function AgentDashboard({ onStartChat, onStartVoice }: AgentDashboardProp
                   onClick={handleCreateAgent}
                   className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-6 py-3 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 flex items-center gap-3 text-base font-semibold"
                 >
-                  <Plus className="h-5 w-5" />
+                  <Plus className="h-5 w-5" aria-hidden="true" />
                   Create Agent
                 </Button>
               </div>
@@ -192,13 +192,13 @@ export function AgentDashboard({ onStartChat, onStartVoice }: AgentDashboardProp
         </div>
 
         {/* Modern Statistics Cards */}
-        <div className="container mx-auto px-8 py-8">
+        <div className="container mx-auto px-4 sm:px-8 py-8">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <Card className="agent-card border-0 shadow-xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-1">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
                 <CardTitle className="text-lg font-semibold text-slate-700">Total Agents</CardTitle>
                 <div className="p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl">
-                  <Users className="h-6 w-6 text-white" />
+                  <Users className="h-6 w-6 text-white" aria-hidden="true" />
                 </div>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -220,7 +220,7 @@ export function AgentDashboard({ onStartChat, onStartVoice }: AgentDashboardProp
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
                 <CardTitle className="text-lg font-semibold text-slate-700">Active Sessions</CardTitle>
                 <div className="p-3 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl">
-                  <MessageSquare className="h-6 w-6 text-white" />
+                  <MessageSquare className="h-6 w-6 text-white" aria-hidden="true" />
                 </div>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -253,7 +253,7 @@ export function AgentDashboard({ onStartChat, onStartVoice }: AgentDashboardProp
         </div>
 
         {/* Modern Agents Section */}
-        <div className="container mx-auto px-8 py-8">
+        <div className="container mx-auto px-4 sm:px-8 py-8">
           <div className="flex items-center justify-between mb-8">
             <div>
               <h2 className="text-3xl font-bold text-slate-800 mb-2">Your Agents</h2>
@@ -296,14 +296,14 @@ export function AgentDashboard({ onStartChat, onStartVoice }: AgentDashboardProp
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <Button 
                   onClick={handleCreateAgent}
-                  className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-8 py-3 text-lg font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
+                  className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-6 sm:px-8 py-3 text-lg font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
                 >
-                  <Plus className="mr-2 h-5 w-5" />
+                  <Plus className="mr-2 h-5 w-5" aria-hidden="true" />
                   Create Agent
                 </Button>
                 <Button 
                   variant="outline" 
-                  className="border-2 border-blue-200 text-blue-600 hover:bg-blue-50 px-8 py-3 text-lg font-semibold rounded-xl"
+                  className="border-2 border-blue-200 text-blue-600 hover:bg-blue-50 px-6 sm:px-8 py-3 text-lg font-semibold rounded-xl"
                 >
                   Browse Templates
                 </Button>
@@ -327,7 +327,7 @@ export function AgentDashboard({ onStartChat, onStartVoice }: AgentDashboardProp
         </div>
  
         {/* Modern Workflow Section */}
-        <div className="container mx-auto px-8 py-8">
+        <div className="container mx-auto px-4 sm:px-8 py-8">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Workflow Canvas */}
             <div className="lg:col-span-2">
@@ -336,14 +336,18 @@ export function AgentDashboard({ onStartChat, onStartVoice }: AgentDashboardProp
                 <p className="text-slate-600">Drag agents here to create multi-agent workflows</p>
               </div>
               
-              <Card className="agent-card border-0 shadow-xl p-12 text-center bg-gradient-to-br from-slate-50 to-blue-50 min-h-[400px] flex items-center justify-center">
+              <Card
+                className="agent-card border-0 shadow-xl p-12 text-center bg-gradient-to-br from-slate-50 to-blue-50 min-h-[400px] flex items-center justify-center"
+                role="region"
+                aria-label="Workflow canvas"
+              >
                 <div className="space-y-6">
                   <div className="mx-auto w-24 h-24 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center animate-float">
-                    <Plus className="h-12 w-12 text-white" />
+                    <Plus className="h-12 w-12 text-white" aria-hidden="true" />
                   </div>
                   <div>
                     <h3 className="text-xl font-bold text-slate-800 mb-2">Start Building Workflows</h3>
-                    <p className="text-slate-600 max-w-sm mx-auto">
+                    <p className="text-slate-700 max-w-sm mx-auto">
                       Drag agents from your collection to create powerful multi-agent workflows and automations
                     </p>
                   </div>
@@ -363,43 +367,61 @@ export function AgentDashboard({ onStartChat, onStartVoice }: AgentDashboardProp
                 <p className="text-slate-600">Get started with common tasks</p>
               </div>
               
-              <div className="space-y-4">
-                <Card className="agent-card border-0 shadow-lg p-6 hover:shadow-xl transition-all duration-300 cursor-pointer group">
-                  <div className="flex items-center gap-4">
-                    <div className="p-3 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl group-hover:scale-110 transition-transform">
-                      <MessageSquare className="h-6 w-6 text-white" />
+                <div className="space-y-4">
+                  <Card
+                    className="agent-card border-0 shadow-lg p-6 hover:shadow-xl transition-all duration-300 cursor-pointer group"
+                    role="button"
+                    tabIndex={0}
+                    aria-label="Start chat session"
+                    onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ' ? (e.currentTarget as HTMLDivElement).click() : null)}
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="p-3 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl group-hover:scale-110 transition-transform">
+                        <MessageSquare className="h-6 w-6 text-white" aria-hidden="true" />
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-slate-800">Start Chat Session</h3>
+                        <p className="text-sm text-slate-700">Begin conversation with an agent</p>
+                      </div>
                     </div>
-                    <div>
-                      <h3 className="font-semibold text-slate-800">Start Chat Session</h3>
-                      <p className="text-sm text-slate-600">Begin conversation with an agent</p>
+                  </Card>
+
+                  <Card
+                    className="agent-card border-0 shadow-lg p-6 hover:shadow-xl transition-all duration-300 cursor-pointer group"
+                    role="button"
+                    tabIndex={0}
+                    aria-label="Create workflow"
+                    onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ' ? (e.currentTarget as HTMLDivElement).click() : null)}
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="p-3 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl group-hover:scale-110 transition-transform">
+                        <Users className="h-6 w-6 text-white" aria-hidden="true" />
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-slate-800">Create Workflow</h3>
+                        <p className="text-sm text-slate-700">Build multi-agent automation</p>
+                      </div>
                     </div>
-                  </div>
-                </Card>
-                
-                <Card className="agent-card border-0 shadow-lg p-6 hover:shadow-xl transition-all duration-300 cursor-pointer group">
-                  <div className="flex items-center gap-4">
-                    <div className="p-3 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl group-hover:scale-110 transition-transform">
-                      <Users className="h-6 w-6 text-white" />
+                  </Card>
+
+                  <Card
+                    className="agent-card border-0 shadow-lg p-6 hover:shadow-xl transition-all duration-300 cursor-pointer group"
+                    role="button"
+                    tabIndex={0}
+                    aria-label="Import template"
+                    onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ' ? (e.currentTarget as HTMLDivElement).click() : null)}
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="p-3 bg-gradient-to-br from-orange-500 to-red-600 rounded-xl group-hover:scale-110 transition-transform">
+                        <Plus className="h-6 w-6 text-white" aria-hidden="true" />
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-slate-800">Import Template</h3>
+                        <p className="text-sm text-slate-700">Use pre-built agent templates</p>
+                      </div>
                     </div>
-                    <div>
-                      <h3 className="font-semibold text-slate-800">Create Workflow</h3>
-                      <p className="text-sm text-slate-600">Build multi-agent automation</p>
-                    </div>
-                  </div>
-                </Card>
-                
-                <Card className="agent-card border-0 shadow-lg p-6 hover:shadow-xl transition-all duration-300 cursor-pointer group">
-                  <div className="flex items-center gap-4">
-                    <div className="p-3 bg-gradient-to-br from-orange-500 to-red-600 rounded-xl group-hover:scale-110 transition-transform">
-                      <Plus className="h-6 w-6 text-white" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-slate-800">Import Template</h3>
-                      <p className="text-sm text-slate-600">Use pre-built agent templates</p>
-                    </div>
-                  </div>
-                </Card>
-              </div>
+                  </Card>
+                </div>
               
               {/* Pro Tips */}
               <div className="space-y-4">
