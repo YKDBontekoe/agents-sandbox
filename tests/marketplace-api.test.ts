@@ -1,4 +1,3 @@
-/// <reference types="vitest" />
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { promises as fs } from 'fs';
 import path from 'path';

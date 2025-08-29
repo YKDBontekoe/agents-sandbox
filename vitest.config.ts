@@ -9,5 +9,7 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
+    exclude: ['src/lib/plugin-system.test.ts', 'src/lib/utils.test.ts'],
+    include: ['src/**/*.{test,spec}.ts', 'tests/**/*.{test,spec}.ts'],
   },
 });

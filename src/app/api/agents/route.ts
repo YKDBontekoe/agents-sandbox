@@ -5,12 +5,13 @@ import { generateId } from '@/lib/utils';
 
 const KEY = 'agents';
 
-function parseAgent(raw: any): AgentConfig {
+function parseAgent(raw: unknown): AgentConfig {
+  const data = raw as AgentConfig;
   return {
-    ...raw,
-    createdAt: new Date(raw.createdAt),
-    updatedAt: new Date(raw.updatedAt),
-  } as AgentConfig;
+    ...data,
+    createdAt: new Date(data.createdAt),
+    updatedAt: new Date(data.updatedAt),
+  };
 }
 
 export async function GET() {
