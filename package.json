@@ -9,7 +9,8 @@
     "lint": "eslint",
     "plugins": "tsx src/lib/plugin-system.ts",
     "scaffold:plugin": "tsx scripts/scaffold-plugin.ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prepare": "husky"
   },
   "dependencies": {
     "@azure/openai": "^2.0.0",
@@ -48,6 +49,7 @@
     "@types/uuid": "^10.0.0",
     "eslint": "^9",
     "eslint-config-next": "15.5.2",
+    "husky": "^9.1.7",
     "tailwindcss": "^4",
     "tsx": "^4.20.5",
     "typescript": "^5",
