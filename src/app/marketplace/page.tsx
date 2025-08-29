@@ -15,9 +15,9 @@ export default function MarketplacePage() {
       .catch(console.error);
   }, []);
 
-  const handleImport = (agent: AgentConfig) => {
+  const handleImport = async (agent: AgentConfig) => {
     const { id, createdAt, updatedAt, ...rest } = agent;
-    agentStore.createAgent(rest);
+    await agentStore.createAgent(rest);
   };
 
   return (

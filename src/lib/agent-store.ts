@@ -3,76 +3,57 @@ import { generateId } from './utils';
 import { recordTokens } from './analytics';
 
 class AgentStore {
-  private agents: Map<string, AgentConfig> = new Map();
+  private agents: AgentConfig[] = [];
   private sessions: Map<string, AgentSession> = new Map();
-  private storageKey = 'agentic-app-data';
-
-  private notifySessionsChanged(): void {
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new Event('agent-sessions-changed'));
-    }
-  }
-
-  constructor() {
-    this.loadFromStorage();
-  }
+  private baseUrl = '/api/agents';
 
   // Agent management
-  createAgent(config: Omit<AgentConfig, 'id' | 'createdAt' | 'updatedAt'>): AgentConfig {
-    const agent: AgentConfig = {
-      version: '1.0.0',
-      visibility: 'private',
-      screenshots: [],
-      rating: 0,
-      ...config,
-      id: generateId(),
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    
-    this.agents.set(agent.id, agent);
-    this.saveToStorage();
-    return agent;
-  }
-
-  updateAgent(id: string, updates: Partial<AgentConfig>): AgentConfig | null {
-    const agent = this.agents.get(id);
-    if (!agent) return null;
-
-    const updatedAgent = {
-      ...agent,
-      ...updates,
-      id, // Ensure ID doesn't change
-      updatedAt: new Date(),
-    };
-
-    this.agents.set(id, updatedAgent);
-    this.saveToStorage();
-    return updatedAgent;
-  }
-
-  deleteAgent(id: string): boolean {
-    const deleted = this.agents.delete(id);
-    // Also delete all sessions for this agent
-    Array.from(this.sessions.values())
-      .filter(session => session.agentId === id)
-      .forEach(session => this.sessions.delete(session.id));
-    
-    if (deleted) {
-      this.saveToStorage();
-    }
-    return deleted;
-  }
-
-  getAgent(id: string): AgentConfig | null {
-    return this.agents.get(id) || null;
+  async fetchAgents(): Promise<AgentConfig[]> {
+    const res = await fetch(this.baseUrl);
+    const data = (await res.json()) as AgentConfig[];
+    this.agents = data.map(a => this.parseAgent(a));
+    return this.agents;
   }
 
   getAllAgents(): AgentConfig[] {
-    return Array.from(this.agents.values());
+    return this.agents;
   }
 
-  // Session management
+  async createAgent(config: Omit<AgentConfig, 'id' | 'createdAt' | 'updatedAt'>): Promise<AgentConfig> {
+    const res = await fetch(this.baseUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config),
+    });
+    const agent = this.parseAgent((await res.json()) as AgentConfig);
+    this.agents.push(agent);
+    return agent;
+  }
+
+  async updateAgent(id: string, updates: Partial<AgentConfig>): Promise<AgentConfig | null> {
+    const res = await fetch(`${this.baseUrl}/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    });
+    if (!res.ok) return null;
+    const agent = this.parseAgent((await res.json()) as AgentConfig);
+    this.agents = this.agents.map(a => (a.id === id ? agent : a));
+    return agent;
+  }
+
+  async deleteAgent(id: string): Promise<boolean> {
+    const res = await fetch(`${this.baseUrl}/${id}`, { method: 'DELETE' });
+    if (!res.ok) return false;
+    this.agents = this.agents.filter(a => a.id !== id);
+    // Remove sessions for this agent
+    Array.from(this.sessions.values())
+      .filter(s => s.agentId === id)
+      .forEach(s => this.sessions.delete(s.id));
+    return true;
+  }
+
+  // Session management (in-memory)
   createSession(agentId: string): AgentSession {
     const session: AgentSession = {
       id: generateId(),
@@ -81,10 +62,7 @@ class AgentStore {
       createdAt: new Date(),
       updatedAt: new Date(),
     };
-
     this.sessions.set(session.id, session);
-    this.saveToStorage();
-    this.notifySessionsChanged();
     return session;
   }
 
@@ -97,20 +75,20 @@ class AgentStore {
   }
 
   getSessionsByAgent(agentId: string): AgentSession[] {
-    return Array.from(this.sessions.values())
-      .filter(session => session.agentId === agentId);
+    return Array.from(this.sessions.values()).filter(s => s.agentId === agentId);
   }
 
-  addMessageToSession(sessionId: string, message: Omit<ChatMessage, 'id' | 'timestamp'>): ChatMessage | null {
+  addMessageToSession(
+    sessionId: string,
+    message: Omit<ChatMessage, 'id' | 'timestamp'>
+  ): ChatMessage | null {
     const session = this.sessions.get(sessionId);
     if (!session) return null;
-
     const newMessage: ChatMessage = {
       ...message,
       id: generateId(),
       timestamp: new Date(),
     };
-
     session.messages.push(newMessage);
     session.updatedAt = new Date();
 
@@ -119,83 +97,24 @@ class AgentStore {
     }
 
     this.sessions.set(sessionId, session);
-    this.saveToStorage();
     return newMessage;
   }
 
   deleteSession(id: string): boolean {
-    const deleted = this.sessions.delete(id);
-    if (deleted) {
-      this.saveToStorage();
-      this.notifySessionsChanged();
-    }
-    return deleted;
-  }
-
-  // Storage management
-  private saveToStorage(): void {
-    if (typeof window === 'undefined') return;
-
-    const data = {
-      agents: Array.from(this.agents.entries()),
-      sessions: Array.from(this.sessions.entries()),
-    };
-
-    try {
-      localStorage.setItem(this.storageKey, JSON.stringify(data));
-    } catch (error) {
-      console.error('Failed to save data to storage:', error);
-    }
-  }
-
-  private loadFromStorage(): void {
-    if (typeof window === 'undefined') return;
-    
-    try {
-      const stored = localStorage.getItem(this.storageKey);
-      if (!stored) return;
-      
-      const data = JSON.parse(stored);
-      
-      if (data.agents) {
-        this.agents = new Map(
-          data.agents.map(([id, agent]: [string, AgentConfig]) => [
-            id,
-            {
-              ...agent,
-              createdAt: new Date(agent.createdAt),
-              updatedAt: new Date(agent.updatedAt),
-            },
-          ]),
-        );
-      }
-
-      if (data.sessions) {
-        this.sessions = new Map(
-          data.sessions.map(([id, session]: [string, AgentSession]) => [
-            id,
-            {
-              ...session,
-              createdAt: new Date(session.createdAt),
-              updatedAt: new Date(session.updatedAt),
-              messages: session.messages.map((msg: ChatMessage) => ({
-                ...msg,
-                timestamp: new Date(msg.timestamp),
-              })),
-            },
-          ]),
-        );
-      }
-    } catch (error) {
-      console.error('Failed to load data from storage:', error);
-    }
+    return this.sessions.delete(id);
   }
 
   clearAll(): void {
-    this.agents.clear();
+    this.agents = [];
     this.sessions.clear();
-    this.saveToStorage();
-    this.notifySessionsChanged();
+  }
+
+  private parseAgent(raw: AgentConfig): AgentConfig {
+    return {
+      ...raw,
+      createdAt: new Date(raw.createdAt),
+      updatedAt: new Date(raw.updatedAt),
+    };
   }
 }
 

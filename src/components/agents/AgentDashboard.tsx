@@ -30,8 +30,7 @@ export function AgentDashboard({ onStartChat, onStartVoice }: AgentDashboardProp
   const [sharedAgents, setSharedAgents] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    // Load agents from store
-    setAgents(agentStore.getAllAgents());
+    agentStore.fetchAgents().then(setAgents).catch(console.error);
   }, []);
 
   useEffect(() => {
@@ -54,16 +53,21 @@ export function AgentDashboard({ onStartChat, onStartVoice }: AgentDashboardProp
     setShowForm(true);
   };
 
-  const handleSaveAgent = (agentData: Omit<AgentConfig, 'id' | 'createdAt' | 'updatedAt'>) => {
+  const handleSaveAgent = async (
+    agentData: Omit<AgentConfig, 'id' | 'createdAt' | 'updatedAt'>
+  ) => {
     if (editingAgent) {
-      // Update existing agent
-      const updatedAgent = agentStore.updateAgent(editingAgent.id, agentData);
+      const updatedAgent = await agentStore.updateAgent(
+        editingAgent.id,
+        agentData
+      );
       if (updatedAgent) {
-        setAgents(prev => prev.map(a => a.id === editingAgent.id ? updatedAgent : a));
+        setAgents(prev =>
+          prev.map(a => (a.id === editingAgent.id ? updatedAgent : a))
+        );
       }
     } else {
-      // Create new agent
-      const newAgent = agentStore.createAgent(agentData);
+      const newAgent = await agentStore.createAgent(agentData);
       setAgents(prev => [...prev, newAgent]);
     }
     setShowForm(false);
@@ -113,9 +117,9 @@ export function AgentDashboard({ onStartChat, onStartVoice }: AgentDashboardProp
     }
   };
 
-  const confirmDeleteAgent = () => {
+  const confirmDeleteAgent = async () => {
     if (agentToDelete) {
-      agentStore.deleteAgent(agentToDelete);
+      await agentStore.deleteAgent(agentToDelete);
       setAgents(prev => prev.filter(a => a.id !== agentToDelete));
     }
     setDeleteDialogOpen(false);

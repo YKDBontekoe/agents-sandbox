@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { getAllMetrics, AgentMetrics } from '@/lib/analytics';
 import { agentStore } from '@/lib/agent-store';
+import { AgentConfig } from '@/types/agent';
 import {
   Card,
   CardHeader,
@@ -17,6 +18,7 @@ function average(values: number[]): number {
 
 export default function AnalyticsDashboard() {
   const [metrics, setMetrics] = useState<Record<string, AgentMetrics>>({});
+  const [agents, setAgents] = useState<AgentConfig[]>([]);
 
   useEffect(() => {
     const update = () => setMetrics({ ...getAllMetrics() });
@@ -27,7 +29,10 @@ export default function AnalyticsDashboard() {
     }
   }, []);
 
-  const agents = agentStore.getAllAgents();
+  useEffect(() => {
+    agentStore.fetchAgents().then(setAgents).catch(console.error);
+  }, []);
+
   const maxTokens = Math.max(1, ...Object.values(metrics).map(m => m.tokensUsed));
 
   return (
