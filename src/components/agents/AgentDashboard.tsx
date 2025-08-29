@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DragDropProvider } from './DragDropProvider';
@@ -153,13 +154,23 @@ export function AgentDashboard({ onStartChat, onStartVoice }: AgentDashboardProp
                   Create, manage, and deploy your AI agents
                 </p>
               </div>
-              <Button
-                onClick={handleCreateAgent}
-                className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-6 py-3 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 flex items-center gap-3 text-base font-semibold"
-              >
-                <Plus className="h-5 w-5" />
-                Create Agent
-              </Button>
+              <div className="flex items-center gap-4">
+                <Link href="/workflows">
+                  <Button
+                    variant="outline"
+                    className="border-blue-200 text-blue-600 hover:bg-blue-50"
+                  >
+                    Workflow Builder
+                  </Button>
+                </Link>
+                <Button
+                  onClick={handleCreateAgent}
+                  className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-6 py-3 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 flex items-center gap-3 text-base font-semibold"
+                >
+                  <Plus className="h-5 w-5" />
+                  Create Agent
+                </Button>
+              </div>
             </div>
           </div>
         </div>
