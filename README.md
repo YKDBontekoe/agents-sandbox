@@ -46,5 +46,9 @@ The project ships with an in-memory store for rapid prototyping. Agent chat sess
 - **Testing:** run `npm test` (when available) and `npm run lint` before committing.
 - **Documentation:** update both the README and `docs/` directory whenever behavior or APIs change.
 
+### Default Agent Config Builder
+
+Use `createDefaultAgentConfig` from `src/lib/agents/agent-builder` to scaffold new agent definitions. It returns an `AgentConfig` without id or timestamps pre-populated with common defaults, which helps keep forms and tests consistent.
+
 For extended guidelines, consult [docs/developer-guidelines.md](docs/developer-guidelines.md).
 
