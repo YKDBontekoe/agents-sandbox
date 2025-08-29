@@ -23,6 +23,7 @@
 # misc
 .DS_Store
 *.pem
+plugins/plugin-state.json
 
 # debug
 npm-debug.log*
