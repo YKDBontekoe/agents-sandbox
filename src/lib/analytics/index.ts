@@ -1,4 +1,4 @@
-import { countTokens } from './utils';
+import { countTokens } from '../utils';
 
 export interface AgentMetrics {
   responseTimes: number[];
@@ -6,7 +6,7 @@ export interface AgentMetrics {
   tokensUsed: number;
 }
 
-interface Thresholds {
+export interface Thresholds {
   responseTimeMs?: number;
   errorCount?: number;
   tokensUsed?: number;
@@ -29,7 +29,7 @@ const alertHandlers: AlertHandler[] = [];
 
 export async function readMetrics(): Promise<Record<string, AgentMetrics>> {
   if (typeof window !== 'undefined') return {};
-  const { persistence } = await import('./persistence/file');
+  const { persistence } = await import('../persistence/file');
   return persistence.read<Record<string, AgentMetrics>>(
     'analytics-metrics',
     {}
@@ -38,7 +38,7 @@ export async function readMetrics(): Promise<Record<string, AgentMetrics>> {
 
 export async function writeMetrics(): Promise<void> {
   if (typeof window !== 'undefined') return;
-  const { persistence } = await import('./persistence/file');
+  const { persistence } = await import('../persistence/file');
   await persistence.write('analytics-metrics', metrics);
 }
 
@@ -113,55 +113,7 @@ export function setThresholds(newThresholds: Thresholds) {
   thresholds = { ...thresholds, ...newThresholds };
 }
 
-export function onAlert(handler: AlertHandler) {
+export function registerAlertHandler(handler: AlertHandler) {
   alertHandlers.push(handler);
 }
 
-export async function sendSlackAlert(
-  agentId: string,
-  metric: keyof Thresholds,
-  value: number
-) {
-  if (!process.env.SLACK_WEBHOOK_URL) return;
-  try {
-    await fetch(process.env.SLACK_WEBHOOK_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        text: `Agent ${agentId} exceeded ${metric}: ${value}`,
-      }),
-    });
-  } catch (err) {
-    console.error('Failed to send Slack alert', err);
-  }
-}
-
-export async function sendEmailAlert(
-  agentId: string,
-  metric: keyof Thresholds,
-  value: number
-) {
-  if (!process.env.EMAIL_WEBHOOK_URL) return;
-  try {
-    await fetch(process.env.EMAIL_WEBHOOK_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ agentId, metric, value }),
-    });
-  } catch (err) {
-    console.error('Failed to send email alert', err);
-  }
-}
-
-// Register default alert handlers if environment variables are provided
-if (process.env.SLACK_WEBHOOK_URL) {
-  onAlert((agentId, metric, value) => {
-    sendSlackAlert(agentId, metric, value);
-  });
-}
-
-if (process.env.EMAIL_WEBHOOK_URL) {
-  onAlert((agentId, metric, value) => {
-    sendEmailAlert(agentId, metric, value);
-  });
-}
