@@ -7,7 +7,6 @@ import { DragDropProvider } from './DragDropProvider';
 import { DraggableAgentCard } from './DraggableAgentCard';
 import { AgentForm } from './AgentForm';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { AgentConfig } from '@/types/agent';
 import { AgentConfig, AgentSession } from '@/types/agent';
 import { DragEndEvent } from '@dnd-kit/core';
 import { agentStore } from '@/lib/agent-store';
@@ -22,7 +21,6 @@ export function AgentDashboard({ onStartChat, onStartVoice }: AgentDashboardProp
   const [agents, setAgents] = useState<AgentConfig[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingAgent, setEditingAgent] = useState<AgentConfig | null>(null);
-  const [sessions] = useState<unknown[]>([]);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [agentToDelete, setAgentToDelete] = useState<string | null>(null);
   const [sessions, setSessions] = useState<AgentSession[]>([]);
