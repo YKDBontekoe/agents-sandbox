@@ -47,15 +47,20 @@ export default async function PluginsPage() {
               </span>
               <PluginSettings plugin={plugin} action={updatePlugin} />
             </div>
-            {plugin.error && (
-              <div className="text-xs text-red-600">{plugin.error}</div>
-            )}
-            {plugin.warning && (
-              <div className="text-xs text-yellow-600">{plugin.warning}</div>
-            )}
-          </li>
-        ))}
-      </ul>
+          {plugin.error && (
+            <div className="text-xs text-red-600">{plugin.error}</div>
+          )}
+          {plugin.permissions?.length ? (
+            <div className="text-xs text-yellow-600">
+              Requires permissions: {plugin.permissions.join(', ')}
+            </div>
+          ) : null}
+          {plugin.warning && (
+            <div className="text-xs text-yellow-600">{plugin.warning}</div>
+          )}
+        </li>
+      ))}
+    </ul>
     </div>
   );
 }

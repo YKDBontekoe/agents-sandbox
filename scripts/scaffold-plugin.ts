@@ -19,11 +19,12 @@ if (fs.existsSync(filePath)) {
   process.exit(1);
 }
 
-const content = `import { Plugin } from '@/lib/plugin-system';
+const content = `import type { Plugin } from '@/lib/plugin-system';
 
 const plugin: Plugin = {
   id: '${name}',
   name: '${name.replace(/[-_]/g, ' ')}',
+  // permissions: ['fs'],
   onEnable: () => {
     console.log('${name} enabled');
   },
