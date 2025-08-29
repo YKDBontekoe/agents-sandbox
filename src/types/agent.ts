@@ -8,6 +8,8 @@ export interface ModelConfig {
   model: string;
   baseUrl?: string; // For Azure OpenAI and OpenRouter
   apiVersion?: string; // For Azure OpenAI
+  timeoutMs?: number;
+  maxRetries?: number;
 }
 
 export interface AgentConfig {
