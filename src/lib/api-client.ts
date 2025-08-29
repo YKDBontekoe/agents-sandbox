@@ -7,6 +7,7 @@ import {
   recordTokens,
   incrementError,
 } from './analytics';
+import { retryWithBackoff, withTimeout } from './api/utils';
 
 interface ChatCompletionResponse {
   choices: { message?: { content?: string } }[];
@@ -61,48 +62,7 @@ export class APIClient {
     }
   }
 
-  private async sleep(ms: number) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-  }
-
-  private async withTimeout<T>(promise: Promise<T>, timeoutMs: number) {
-    if (!timeoutMs) return promise;
-    return new Promise<T>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        reject(new Error(`Request timed out after ${timeoutMs}ms`));
-      }, timeoutMs);
-      promise
-        .then(res => {
-          clearTimeout(timer);
-          resolve(res);
-        })
-        .catch(err => {
-          clearTimeout(timer);
-          reject(err);
-        });
-    });
-  }
-
-  private async retryWithBackoff<T>(operation: (attempt: number) => Promise<T>) {
-    const maxRetries = this.config.maxRetries ?? 3;
-    const baseDelay = 500;
-    let attempt = 0;
-    let lastError: unknown;
-    while (attempt <= maxRetries) {
-      try {
-        return await operation(attempt);
-      } catch (err) {
-        lastError = err;
-        if (this.agentId) incrementError(this.agentId);
-        if (attempt === maxRetries) break;
-        const delay = baseDelay * 2 ** attempt;
-        await this.sleep(delay);
-      }
-      attempt++;
-    }
-    const message = lastError instanceof Error ? lastError.message : String(lastError);
-    throw new Error(`Operation failed after ${maxRetries + 1} attempts: ${message}`);
-  }
+  // request helpers handled in ./api/utils
 
   async sendMessage(
     messages: ChatMessage[],
@@ -120,7 +80,7 @@ export class APIClient {
     ];
 
     const makeRequest = () =>
-      this.withTimeout<ChatCompletionResponse>(
+      withTimeout<ChatCompletionResponse>(
         this.client.chat.completions.create({
           model: this.config.model,
           messages: formattedMessages,
@@ -131,7 +91,12 @@ export class APIClient {
       );
 
     try {
-      const response = await this.retryWithBackoff<ChatCompletionResponse>(makeRequest);
+      const response = await retryWithBackoff<ChatCompletionResponse>(makeRequest, {
+        maxRetries: this.config.maxRetries,
+        onError: () => {
+          if (this.agentId) incrementError(this.agentId);
+        },
+      });
       if (this.agentId) {
         recordResponseTime(this.agentId, Date.now() - start);
         const tokens = response.usage?.total_tokens;
@@ -170,16 +135,19 @@ export class APIClient {
         max_tokens: maxTokens,
         stream: true,
       });
-      return this.withTimeout<AsyncIterable<ChatCompletionChunk>>(
-         Promise.resolve(response as unknown as AsyncIterable<ChatCompletionChunk>),
-         this.config.timeoutMs ?? 30000
-       );
+      return withTimeout<AsyncIterable<ChatCompletionChunk>>(
+        Promise.resolve(response as unknown as AsyncIterable<ChatCompletionChunk>),
+        this.config.timeoutMs ?? 30000
+      );
     };
 
     try {
-      const stream = await this.retryWithBackoff<AsyncIterable<ChatCompletionChunk>>(
-        makeRequest
-      );
+      const stream = await retryWithBackoff<AsyncIterable<ChatCompletionChunk>>(makeRequest, {
+        maxRetries: this.config.maxRetries,
+        onError: () => {
+          if (this.agentId) incrementError(this.agentId);
+        },
+      });
       let full = '';
       for await (const part of stream) {
         const token = part.choices?.[0]?.delta?.content;
@@ -209,7 +177,7 @@ export class APIClient {
 
     const start = Date.now();
     const makeRequest = () =>
-      this.withTimeout<SpeechResponse>(
+      withTimeout<SpeechResponse>(
         this.client.audio.speech.create({
           model: 'tts-1',
           voice,
@@ -219,7 +187,12 @@ export class APIClient {
       );
 
     try {
-      const response = await this.retryWithBackoff<SpeechResponse>(makeRequest);
+      const response = await retryWithBackoff<SpeechResponse>(makeRequest, {
+        maxRetries: this.config.maxRetries,
+        onError: () => {
+          if (this.agentId) incrementError(this.agentId);
+        },
+      });
       if (this.agentId) {
         recordResponseTime(this.agentId, Date.now() - start);
       }
@@ -238,7 +211,7 @@ export class APIClient {
 
     const start = Date.now();
     const makeRequest = () =>
-      this.withTimeout<TranscriptionResponse>(
+      withTimeout<TranscriptionResponse>(
         this.client.audio.transcriptions.create({
           file: audioFile,
           model: 'whisper-1',
@@ -247,7 +220,12 @@ export class APIClient {
       );
 
     try {
-      const response = await this.retryWithBackoff<TranscriptionResponse>(makeRequest);
+      const response = await retryWithBackoff<TranscriptionResponse>(makeRequest, {
+        maxRetries: this.config.maxRetries,
+        onError: () => {
+          if (this.agentId) incrementError(this.agentId);
+        },
+      });
       if (this.agentId) {
         recordResponseTime(this.agentId, Date.now() - start);
       }
