@@ -1,90 +1,60 @@
 import { WorkflowTemplate } from '@/types/workflow';
-import { generateId } from './utils';
 
 class WorkflowStore {
-  private workflows: Map<string, WorkflowTemplate> = new Map();
-  private storageKey = 'workflow-templates';
+  private workflows: WorkflowTemplate[] = [];
+  private baseUrl = '/api/workflows';
 
-  constructor() {
-    this.loadFromStorage();
-  }
-
-  createWorkflow(data: Omit<WorkflowTemplate, 'id' | 'createdAt' | 'updatedAt'>): WorkflowTemplate {
-    const workflow: WorkflowTemplate = {
-      ...data,
-      id: generateId(),
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    this.workflows.set(workflow.id, workflow);
-    this.saveToStorage();
-    return workflow;
-  }
-
-  updateWorkflow(id: string, updates: Partial<WorkflowTemplate>): WorkflowTemplate | null {
-    const existing = this.workflows.get(id);
-    if (!existing) return null;
-    const updated: WorkflowTemplate = {
-      ...existing,
-      ...updates,
-      id,
-      updatedAt: new Date(),
-    };
-    this.workflows.set(id, updated);
-    this.saveToStorage();
-    return updated;
-  }
-
-  deleteWorkflow(id: string): boolean {
-    const deleted = this.workflows.delete(id);
-    if (deleted) {
-      this.saveToStorage();
-    }
-    return deleted;
-  }
-
-  getWorkflow(id: string): WorkflowTemplate | null {
-    return this.workflows.get(id) || null;
+  async fetchWorkflows(): Promise<WorkflowTemplate[]> {
+    const res = await fetch(this.baseUrl);
+    const data = (await res.json()) as WorkflowTemplate[];
+    this.workflows = data.map(w => this.parseWorkflow(w));
+    return this.workflows;
   }
 
   getAllWorkflows(): WorkflowTemplate[] {
-    return Array.from(this.workflows.values());
+    return this.workflows;
   }
 
-  private saveToStorage(): void {
-    if (typeof window === 'undefined') return;
-    try {
-      const data = Array.from(this.workflows.entries());
-      localStorage.setItem(this.storageKey, JSON.stringify(data));
-    } catch (error) {
-      console.error('Failed to save workflows to storage:', error);
-    }
+  async createWorkflow(data: Omit<WorkflowTemplate, 'id' | 'createdAt' | 'updatedAt'>): Promise<WorkflowTemplate> {
+    const res = await fetch(this.baseUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    const workflow = this.parseWorkflow((await res.json()) as WorkflowTemplate);
+    this.workflows.push(workflow);
+    return workflow;
   }
 
-  private loadFromStorage(): void {
-    if (typeof window === 'undefined') return;
-    try {
-      const stored = localStorage.getItem(this.storageKey);
-      if (!stored) return;
-      const data: [string, WorkflowTemplate][] = JSON.parse(stored);
-      this.workflows = new Map(
-        data.map(([id, workflow]) => [
-          id,
-          {
-            ...workflow,
-            createdAt: new Date(workflow.createdAt),
-            updatedAt: new Date(workflow.updatedAt),
-          },
-        ]),
-      );
-    } catch (error) {
-      console.error('Failed to load workflows from storage:', error);
-    }
+  async updateWorkflow(id: string, updates: Partial<WorkflowTemplate>): Promise<WorkflowTemplate | null> {
+    const res = await fetch(`${this.baseUrl}/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    });
+    if (!res.ok) return null;
+    const workflow = this.parseWorkflow((await res.json()) as WorkflowTemplate);
+    this.workflows = this.workflows.map(w => (w.id === id ? workflow : w));
+    return workflow;
+  }
+
+  async deleteWorkflow(id: string): Promise<boolean> {
+    const res = await fetch(`${this.baseUrl}/${id}`, { method: 'DELETE' });
+    if (!res.ok) return false;
+    this.workflows = this.workflows.filter(w => w.id !== id);
+    return true;
   }
 
   clearAll(): void {
-    this.workflows.clear();
-    this.saveToStorage();
+    this.workflows = [];
+  }
+
+  private parseWorkflow(raw: WorkflowTemplate): WorkflowTemplate {
+    return {
+      ...raw,
+      createdAt: new Date(raw.createdAt),
+      updatedAt: new Date(raw.updatedAt),
+    };
   }
 }
 

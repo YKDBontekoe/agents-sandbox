@@ -22,6 +22,7 @@ interface DraggableAgentCardProps {
   onStartChat?: (agent: AgentConfig) => void;
   onStartVoice?: (agent: AgentConfig) => void;
   onShare?: (agent: AgentConfig) => void;
+  shareDisabled?: boolean;
 }
 
 export const DraggableAgentCard: React.FC<DraggableAgentCardProps> = ({
@@ -30,7 +31,8 @@ export const DraggableAgentCard: React.FC<DraggableAgentCardProps> = ({
   onDelete,
   onStartChat,
   onStartVoice,
-  onShare
+  onShare,
+  shareDisabled,
 }) => {
   const {
     attributes,
@@ -136,7 +138,8 @@ export const DraggableAgentCard: React.FC<DraggableAgentCardProps> = ({
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() => onShare?.(agent)}
-                  className="hover:bg-green-50 hover:text-green-700"
+                  disabled={shareDisabled}
+                  className={`hover:bg-green-50 hover:text-green-700 ${shareDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   <Share2 className="mr-2 h-4 w-4" />
                   Share to Marketplace
