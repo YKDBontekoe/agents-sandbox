@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { countTokens } from './utils';
+import { countTokens, validateApiKey, getModelsByProvider } from './utils';
 import { recordTokens, getMetrics } from './analytics';
+import { registerProvider } from './providers';
 
 describe('utils', () => {
   it('countTokens counts tokens using tiktoken', () => {
@@ -12,5 +13,17 @@ describe('utils', () => {
     recordTokens(agentId, 'Hello world from tests');
     const metrics = getMetrics(agentId);
     expect(metrics?.tokensUsed).toBe(countTokens('Hello world from tests'));
+  });
+
+  it('validates API keys using provider configs', () => {
+    expect(validateApiKey('openai', 'sk-valid')).toBe(true);
+    expect(validateApiKey('openai', 'invalid')).toBe(false);
+  });
+
+  it('supports registering providers at runtime', () => {
+    const id = `test-${Math.random()}`;
+    registerProvider(id, { models: ['test-model'], apiKeyPattern: /^test-/ });
+    expect(getModelsByProvider(id)).toEqual(['test-model']);
+    expect(validateApiKey(id, 'test-123')).toBe(true);
   });
 });
