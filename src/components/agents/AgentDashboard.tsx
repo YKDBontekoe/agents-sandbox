@@ -8,6 +8,7 @@ import { DraggableAgentCard } from './DraggableAgentCard';
 import { AgentForm } from './AgentForm';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { AgentConfig } from '@/types/agent';
+import { AgentConfig, AgentSession } from '@/types/agent';
 import { DragEndEvent } from '@dnd-kit/core';
 import { agentStore } from '@/lib/agent-store';
 import { Plus, Users, MessageSquare } from 'lucide-react';
@@ -24,10 +25,21 @@ export function AgentDashboard({ onStartChat, onStartVoice }: AgentDashboardProp
   const [sessions] = useState<unknown[]>([]);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [agentToDelete, setAgentToDelete] = useState<string | null>(null);
+  const [sessions, setSessions] = useState<AgentSession[]>([]);
 
   useEffect(() => {
     // Load agents from store
     setAgents(agentStore.getAllAgents());
+  }, []);
+
+  useEffect(() => {
+    const loadSessions = () => {
+      setSessions(agentStore.getAllSessions());
+    };
+
+    loadSessions();
+    window.addEventListener('agent-sessions-changed', loadSessions);
+    return () => window.removeEventListener('agent-sessions-changed', loadSessions);
   }, []);
 
   const handleCreateAgent = () => {
