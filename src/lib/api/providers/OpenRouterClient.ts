@@ -1,5 +1,5 @@
 import OpenAI from 'openai';
-import type { ChatCompletionChunk } from 'openai/resources/chat/completions';
+import type { ChatCompletionChunk, ChatCompletion, ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import type { ModelConfig, ChatMessage } from '@/types/agent';
 import { ProviderClient, MessageResponse, ProviderOptions } from '../ProviderClient';
 import { withTimeout, retryWithBackoff } from '../utils';
@@ -25,10 +25,10 @@ export class OpenRouterClient implements ProviderClient {
     temperature: number = 0.7,
     maxTokens: number = 1000
   ): Promise<MessageResponse> {
-    const formattedMessages = [
-      { role: 'system', content: systemPrompt },
-      ...messages.map(m => ({ role: m.role, content: m.content })),
-    ];
+    const formattedMessages: ChatCompletionMessageParam[] = [
+        { role: 'system', content: systemPrompt },
+        ...messages.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
+      ];
 
     const makeRequest = () =>
       withTimeout(
@@ -37,7 +37,7 @@ export class OpenRouterClient implements ProviderClient {
           messages: formattedMessages,
           temperature,
           max_tokens: maxTokens,
-        }) as Promise<any>,
+        }),
         this.config.timeoutMs ?? 30000
       );
 
@@ -46,10 +46,11 @@ export class OpenRouterClient implements ProviderClient {
       onError: this.onError,
     });
 
-    return {
-      content: response.choices[0]?.message?.content || '',
-      tokens: response.usage?.total_tokens,
-    };
+    const chatResponse = response as ChatCompletion;
+      return {
+        content: chatResponse.choices[0]?.message?.content || '',
+        tokens: chatResponse.usage?.total_tokens,
+      };
   }
 
   async *streamMessage(
@@ -58,29 +59,31 @@ export class OpenRouterClient implements ProviderClient {
     temperature: number = 0.7,
     maxTokens: number = 1000
   ): AsyncGenerator<string> {
-    const formattedMessages = [
+    const formattedMessages: ChatCompletionMessageParam[] = [
       { role: 'system', content: systemPrompt },
-      ...messages.map(m => ({ role: m.role, content: m.content })),
+      ...messages.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
     ];
 
-    const makeRequest = () =>
-      withTimeout(
-        this.client.chat.completions.create({
+    const makeRequest = async () => {
+        const response = await this.client.chat.completions.create({
           model: this.config.model,
           messages: formattedMessages,
           temperature,
           max_tokens: maxTokens,
           stream: true,
-        }) as AsyncIterable<ChatCompletionChunk>,
-        this.config.timeoutMs ?? 30000
-      );
+        });
+        return withTimeout(
+          Promise.resolve(response as AsyncIterable<ChatCompletionChunk>),
+          this.config.timeoutMs ?? 30000
+        );
+      };
 
-    const stream = await retryWithBackoff(() => makeRequest(), {
-      maxRetries: this.config.maxRetries,
-      onError: this.onError,
-    });
+      const stream = await retryWithBackoff(makeRequest, {
+        maxRetries: this.config.maxRetries,
+        onError: this.onError,
+      });
 
-    for await (const part of stream) {
+      for await (const part of stream as AsyncIterable<ChatCompletionChunk>) {
       const token = part.choices?.[0]?.delta?.content;
       if (token) yield token;
     }

@@ -1,4 +1,4 @@
-import type { AudioSpeechCreateParams } from 'openai/resources/audio/speech';
+import type { SpeechCreateParams } from 'openai/resources/audio/speech';
 import type { ChatMessage } from '@/types/agent';
 
 export interface MessageResponse {
@@ -23,7 +23,7 @@ export interface ProviderClient {
 
   generateSpeech?(
     text: string,
-    voice?: AudioSpeechCreateParams['voice']
+    voice?: SpeechCreateParams['voice']
   ): Promise<ArrayBuffer>;
 
   transcribeAudio?(audioFile: File): Promise<string>;

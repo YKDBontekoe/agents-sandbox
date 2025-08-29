@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { marketplaceStore } from '@/lib/marketplace-store';
-import { agentSchema } from '../route';
+import { agentSchema } from '@/lib/schemas/agent';
 
 export async function GET(
   _request: NextRequest,

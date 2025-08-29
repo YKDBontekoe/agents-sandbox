@@ -1,3 +1,5 @@
+export {};
+
 if (process.env.SLACK_WEBHOOK_URL) {
   await import('./alerts/slack');
 }

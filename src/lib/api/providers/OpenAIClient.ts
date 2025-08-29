@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
-import type { ChatCompletionChunk } from 'openai/resources/chat/completions';
-import type { AudioSpeechCreateParams } from 'openai/resources/audio/speech';
+import type { ChatCompletionChunk, ChatCompletion, ChatCompletionMessageParam } from 'openai/resources/chat/completions';
+import type { SpeechCreateParams } from 'openai/resources/audio/speech';
 import type { ModelConfig, ChatMessage } from '@/types/agent';
 import { ProviderClient, MessageResponse, ProviderOptions } from '../ProviderClient';
 import { withTimeout, retryWithBackoff } from '../utils';
@@ -25,9 +25,9 @@ export class OpenAIClient implements ProviderClient {
     temperature: number = 0.7,
     maxTokens: number = 1000
   ): Promise<MessageResponse> {
-    const formattedMessages = [
+    const formattedMessages: ChatCompletionMessageParam[] = [
       { role: 'system', content: systemPrompt },
-      ...messages.map(m => ({ role: m.role, content: m.content })),
+      ...messages.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
     ];
 
     const makeRequest = () =>
@@ -37,7 +37,7 @@ export class OpenAIClient implements ProviderClient {
           messages: formattedMessages,
           temperature,
           max_tokens: maxTokens,
-        }) as Promise<any>,
+        }),
         this.config.timeoutMs ?? 30000
       );
 
@@ -58,29 +58,31 @@ export class OpenAIClient implements ProviderClient {
     temperature: number = 0.7,
     maxTokens: number = 1000
   ): AsyncGenerator<string> {
-    const formattedMessages = [
+    const formattedMessages: ChatCompletionMessageParam[] = [
       { role: 'system', content: systemPrompt },
-      ...messages.map(m => ({ role: m.role, content: m.content })),
+      ...messages.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
     ];
 
-    const makeRequest = () =>
-      withTimeout(
-        this.client.chat.completions.create({
-          model: this.config.model,
-          messages: formattedMessages,
-          temperature,
-          max_tokens: maxTokens,
-          stream: true,
-        }) as AsyncIterable<ChatCompletionChunk>,
+    const makeRequest = async () => {
+      const response = await this.client.chat.completions.create({
+        model: this.config.model,
+        messages: formattedMessages,
+        temperature,
+        max_tokens: maxTokens,
+        stream: true,
+      });
+      return withTimeout(
+        Promise.resolve(response as AsyncIterable<ChatCompletionChunk>),
         this.config.timeoutMs ?? 30000
       );
+    };
 
-    const stream = await retryWithBackoff(() => makeRequest(), {
+    const stream = await retryWithBackoff(makeRequest, {
       maxRetries: this.config.maxRetries,
       onError: this.onError,
     });
 
-    for await (const part of stream) {
+    for await (const part of stream as AsyncIterable<ChatCompletionChunk>) {
       const token = part.choices?.[0]?.delta?.content;
       if (token) yield token;
     }
@@ -88,7 +90,7 @@ export class OpenAIClient implements ProviderClient {
 
   async generateSpeech(
     text: string,
-    voice: AudioSpeechCreateParams['voice'] = 'alloy'
+    voice: SpeechCreateParams['voice'] = 'alloy'
   ): Promise<ArrayBuffer> {
     const makeRequest = () =>
       withTimeout(

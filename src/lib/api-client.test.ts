@@ -16,8 +16,7 @@ describe('APIClient retry logic', () => {
     };
     const client = new APIClient(
       { provider: 'openai', apiKey: 'x', model: 'gpt', maxRetries: 2, timeoutMs: 1000 },
-      'agent-success',
-      metrics
+      'agent-success'
     );
 
     const mockCreate = vi
@@ -26,6 +25,7 @@ describe('APIClient retry logic', () => {
       .mockRejectedValueOnce(new Error('fail2'))
       .mockResolvedValue({ choices: [{ message: { content: 'ok' } }], usage: { total_tokens: 1 } });
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (client as any).provider.client = {
       chat: { completions: { create: mockCreate } },
     };
@@ -44,11 +44,11 @@ describe('APIClient retry logic', () => {
     };
     const client = new APIClient(
       { provider: 'openai', apiKey: 'x', model: 'gpt', maxRetries: 2, timeoutMs: 1000 },
-      'agent-fail',
-      metrics
+      'agent-fail'
     );
 
     const mockCreate = vi.fn().mockRejectedValue(new Error('always fail'));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (client as any).provider.client = {
       chat: { completions: { create: mockCreate } },
     };

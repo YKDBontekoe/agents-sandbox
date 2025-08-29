@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import type { ChatCompletion, ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import type { ModelConfig, ChatMessage } from '@/types/agent';
 import { ProviderClient, MessageResponse, ProviderOptions } from '../ProviderClient';
 import { withTimeout, retryWithBackoff } from '../utils';
@@ -25,9 +26,9 @@ export class AzureOpenAIClient implements ProviderClient {
     temperature: number = 0.7,
     maxTokens: number = 1000
   ): Promise<MessageResponse> {
-    const formattedMessages = [
+    const formattedMessages: ChatCompletionMessageParam[] = [
       { role: 'system', content: systemPrompt },
-      ...messages.map(m => ({ role: m.role, content: m.content })),
+      ...messages.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
     ];
 
     const makeRequest = () =>
@@ -37,7 +38,7 @@ export class AzureOpenAIClient implements ProviderClient {
           messages: formattedMessages,
           temperature,
           max_tokens: maxTokens,
-        }) as Promise<any>,
+        }),
         this.config.timeoutMs ?? 30000
       );
 
@@ -46,9 +47,10 @@ export class AzureOpenAIClient implements ProviderClient {
       onError: this.onError,
     });
 
+    const chatResponse = response as ChatCompletion;
     return {
-      content: response.choices[0]?.message?.content || '',
-      tokens: response.usage?.total_tokens,
+      content: chatResponse.choices[0]?.message?.content || '',
+      tokens: chatResponse.usage?.total_tokens,
     };
   }
 

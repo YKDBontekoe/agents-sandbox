@@ -46,7 +46,7 @@ export async function registerPlugin(plugin: Plugin): Promise<void> {
       entry.error = String(err);
     }
   }
-  if (entry.permissions.length) {
+  if (entry.permissions && entry.permissions.length) {
     entry.warning = `Requests permissions: ${entry.permissions.join(', ')}`;
   }
 }
