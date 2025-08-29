@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AgentConfig, ChatMessage, AgentSession } from '@/types/agent';
 import { APIClient } from '@/lib/api-client';
-import { agentStore } from '@/lib/agent-store';
+import { sessionStore } from '@/lib/agents/session-store';
 import { formatDate } from '@/lib/utils';
 import { Send, Bot, User, Loader2, ArrowLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -36,7 +36,7 @@ export function ChatInterface({ agent, onBack }: ChatInterfaceProps) {
     }
 
     // Create or load session
-    const newSession = agentStore.createSession(agent.id);
+    const newSession = sessionStore.createSession(agent.id);
     setSession(newSession);
     setMessages(newSession.messages);
   }, [agent]);
@@ -56,7 +56,7 @@ export function ChatInterface({ agent, onBack }: ChatInterfaceProps) {
     setIsLoading(true);
 
     try {
-      const newUserMessage = agentStore.addMessageToSession(session.id, {
+      const newUserMessage = sessionStore.addMessageToSession(session.id, {
         role: 'user',
         content: userMessage,
         agentId: agent.id,
@@ -77,7 +77,7 @@ export function ChatInterface({ agent, onBack }: ChatInterfaceProps) {
         es.onmessage = e => {
           if (e.data === '[DONE]') {
             es.close();
-            const aiMessage = agentStore.addMessageToSession(session.id, {
+            const aiMessage = sessionStore.addMessageToSession(session.id, {
               role: 'assistant',
               content: full,
               agentId: agent.id,
@@ -101,7 +101,7 @@ export function ChatInterface({ agent, onBack }: ChatInterfaceProps) {
               agent.temperature,
               agent.maxTokens
             );
-            const aiMessage = agentStore.addMessageToSession(session.id, {
+            const aiMessage = sessionStore.addMessageToSession(session.id, {
               role: 'assistant',
               content: response,
               agentId: agent.id,
@@ -109,7 +109,7 @@ export function ChatInterface({ agent, onBack }: ChatInterfaceProps) {
             if (aiMessage) setMessages(prev => [...prev, aiMessage]);
           } catch (err) {
             console.error('Failed to send message:', err);
-            const errorMessage = agentStore.addMessageToSession(session.id, {
+            const errorMessage = sessionStore.addMessageToSession(session.id, {
               role: 'assistant',
               content:
                 'Sorry, I encountered an error while processing your message. Please check your API configuration and try again.',
@@ -128,7 +128,7 @@ export function ChatInterface({ agent, onBack }: ChatInterfaceProps) {
           agent.temperature,
           agent.maxTokens
         );
-        const aiMessage = agentStore.addMessageToSession(session.id, {
+        const aiMessage = sessionStore.addMessageToSession(session.id, {
           role: 'assistant',
           content: response,
           agentId: agent.id,
@@ -141,7 +141,7 @@ export function ChatInterface({ agent, onBack }: ChatInterfaceProps) {
       }
     } catch (error) {
       console.error('Failed to send message:', error);
-      const errorMessage = agentStore.addMessageToSession(session.id, {
+      const errorMessage = sessionStore.addMessageToSession(session.id, {
         role: 'assistant',
         content:
           'Sorry, I encountered an error while processing your message. Please check your API configuration and try again.',

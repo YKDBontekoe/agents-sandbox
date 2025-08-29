@@ -11,7 +11,13 @@ import { AgentForm } from './AgentForm';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { AgentConfig, AgentSession } from '@/types/agent';
 import { DragEndEvent } from '@dnd-kit/core';
-import { agentStore } from '@/lib/agent-store';
+import {
+  fetchAgents,
+  createAgent,
+  updateAgent,
+  deleteAgent,
+} from '@/lib/agents/repository';
+import { sessionStore } from '@/lib/agents/session-store';
 import { Plus, Users, MessageSquare } from 'lucide-react';
 
 interface AgentDashboardProps {
@@ -30,12 +36,12 @@ export function AgentDashboard({ onStartChat, onStartVoice }: AgentDashboardProp
   const [sharedAgents, setSharedAgents] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    agentStore.fetchAgents().then(setAgents).catch(console.error);
+    fetchAgents().then(setAgents).catch(console.error);
   }, []);
 
   useEffect(() => {
     const loadSessions = () => {
-      setSessions(agentStore.getAllSessions());
+      setSessions(sessionStore.getAllSessions());
     };
 
     loadSessions();
@@ -57,7 +63,7 @@ export function AgentDashboard({ onStartChat, onStartVoice }: AgentDashboardProp
     agentData: Omit<AgentConfig, 'id' | 'createdAt' | 'updatedAt'>
   ) => {
     if (editingAgent) {
-      const updatedAgent = await agentStore.updateAgent(
+      const updatedAgent = await updateAgent(
         editingAgent.id,
         agentData
       );
@@ -67,7 +73,7 @@ export function AgentDashboard({ onStartChat, onStartVoice }: AgentDashboardProp
         );
       }
     } else {
-      const newAgent = await agentStore.createAgent(agentData);
+      const newAgent = await createAgent(agentData);
       setAgents(prev => [...prev, newAgent]);
     }
     setShowForm(false);
@@ -119,7 +125,7 @@ export function AgentDashboard({ onStartChat, onStartVoice }: AgentDashboardProp
 
   const confirmDeleteAgent = async () => {
     if (agentToDelete) {
-      await agentStore.deleteAgent(agentToDelete);
+      await deleteAgent(agentToDelete);
       setAgents(prev => prev.filter(a => a.id !== agentToDelete));
     }
     setDeleteDialogOpen(false);

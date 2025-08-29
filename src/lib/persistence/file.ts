@@ -1,6 +1,7 @@
 import { promises as fs } from 'fs';
 import path from 'path';
 import { AgentSession } from '@/types/agent';
+import { SessionPersistence } from '@/lib/agents/session-persistence';
 
 const dataDir = path.join(process.cwd(), 'data');
 
@@ -45,5 +46,10 @@ async function readSessions(): Promise<AgentSession[]> {
 async function writeSessions(sessions: AgentSession[]): Promise<void> {
   await write('sessions', sessions);
 }
+
+export const sessionPersistence: SessionPersistence = {
+  readSessions,
+  writeSessions,
+};
 
 export const persistence = { read, write, readSessions, writeSessions };

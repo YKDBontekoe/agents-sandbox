@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AgentConfig, ChatMessage, AgentSession } from '@/types/agent';
 import { APIClient } from '@/lib/api-client';
-import { agentStore } from '@/lib/agent-store';
+import { sessionStore } from '@/lib/agents/session-store';
 import { formatDate } from '@/lib/utils';
 import { Mic, MicOff, Bot, User, ArrowLeft, Volume2, VolumeX, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -45,7 +45,7 @@ export function VoiceInterface({ agent, onBack }: VoiceInterfaceProps) {
     }
 
     // Create or load session
-    const newSession = agentStore.createSession(agent.id);
+    const newSession = sessionStore.createSession(agent.id);
     setSession(newSession);
     setMessages(newSession.messages);
   }, [agent]);
@@ -122,7 +122,7 @@ export function VoiceInterface({ agent, onBack }: VoiceInterfaceProps) {
       }
 
       // Add user voice message
-      const userMessage = agentStore.addMessageToSession(session.id, {
+      const userMessage = sessionStore.addMessageToSession(session.id, {
         role: 'user',
         content: transcription,
         agentId: agent.id,
@@ -144,7 +144,7 @@ export function VoiceInterface({ agent, onBack }: VoiceInterfaceProps) {
         es.onmessage = async e => {
           if (e.data === '[DONE]') {
             es.close();
-            const aiMessage = agentStore.addMessageToSession(session.id, {
+            const aiMessage = sessionStore.addMessageToSession(session.id, {
               role: 'assistant',
               content: full,
               agentId: agent.id,
@@ -185,7 +185,7 @@ export function VoiceInterface({ agent, onBack }: VoiceInterfaceProps) {
               agent.temperature,
               agent.maxTokens
             );
-            const aiMessage = agentStore.addMessageToSession(session.id, {
+            const aiMessage = sessionStore.addMessageToSession(session.id, {
               role: 'assistant',
               content: response,
               agentId: agent.id,
@@ -220,7 +220,7 @@ export function VoiceInterface({ agent, onBack }: VoiceInterfaceProps) {
           agent.temperature,
           agent.maxTokens
         );
-        const aiMessage = agentStore.addMessageToSession(session.id, {
+        const aiMessage = sessionStore.addMessageToSession(session.id, {
           role: 'assistant',
           content: response,
           agentId: agent.id,
@@ -248,7 +248,7 @@ export function VoiceInterface({ agent, onBack }: VoiceInterfaceProps) {
     } catch (error) {
       console.error('Failed to process audio message:', error);
 
-      const errorMessage = agentStore.addMessageToSession(session.id, {
+      const errorMessage = sessionStore.addMessageToSession(session.id, {
         role: 'assistant',
         content: 'Sorry, I encountered an error while processing your voice message. Please try again.',
         agentId: agent.id,
