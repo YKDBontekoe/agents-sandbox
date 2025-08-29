@@ -114,13 +114,17 @@ class AgentStore {
   // Storage management
   private saveToStorage(): void {
     if (typeof window === 'undefined') return;
-    
+
     const data = {
       agents: Array.from(this.agents.entries()),
       sessions: Array.from(this.sessions.entries()),
     };
-    
-    localStorage.setItem(this.storageKey, JSON.stringify(data));
+
+    try {
+      localStorage.setItem(this.storageKey, JSON.stringify(data));
+    } catch (error) {
+      console.error('Failed to save data to storage:', error);
+    }
   }
 
   private loadFromStorage(): void {
