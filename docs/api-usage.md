@@ -14,6 +14,23 @@ Responses return JSON payloads describing agent output or errors.
 
 API routes are currently unsecured and intended for local development only. Add authentication middleware before deploying to production.
 
+## Marketplace
+
+List marketplace agents with optional search and category filters:
+
+```bash
+curl \
+  'http://localhost:3000/api/marketplace/agents?q=assistant&category=utilities'
+```
+
+Rate an agent and automatically update its average rating:
+
+```bash
+curl -X PUT \
+  http://localhost:3000/api/marketplace/agents/<id>/rating \
+  -H 'Content-Type: application/json' \
+  -d '{"rating":5}'
+```
 ## Streaming Responses
 
 Agents support Server-Sent Events for real-time token streaming. Open a stream like:

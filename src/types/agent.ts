@@ -17,6 +17,7 @@ export interface AgentConfig {
   name: string;
   type: AgentType;
   description: string;
+  category: string;
   systemPrompt: string;
   modelConfig: ModelConfig;
   temperature: number;
@@ -30,6 +31,7 @@ export interface AgentConfig {
   visibility?: 'public' | 'private';
   screenshots?: string[];
   rating?: number;
+  ratingCount?: number;
   createdAt: Date;
   updatedAt: Date;
 }

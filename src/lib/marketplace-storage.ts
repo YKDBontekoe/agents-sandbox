@@ -13,8 +13,8 @@ async function readAgents(): Promise<AgentConfig[]> {
       createdAt: new Date(agent.createdAt),
       updatedAt: new Date(agent.updatedAt),
     }));
-  } catch (err: any) {
-    if (err.code === 'ENOENT') {
+  } catch (err: unknown) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
       return [];
     }
     throw err;

@@ -14,6 +14,7 @@ export const agentSchema = z.object({
   name: z.string(),
   type: z.enum(['chat', 'voice']),
   description: z.string(),
+  category: z.string(),
   systemPrompt: z.string(),
   modelConfig: modelConfigSchema,
   temperature: z.number(),
@@ -30,8 +31,11 @@ export const agentSchema = z.object({
   rating: z.number().optional(),
 });
 
-export async function GET() {
-  const agents = await marketplaceStore.listAgents();
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const q = searchParams.get('q') || undefined;
+  const category = searchParams.get('category') || undefined;
+  const agents = await marketplaceStore.listAgents({ q, category });
   return NextResponse.json(agents);
 }
 

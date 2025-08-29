@@ -4,12 +4,17 @@ import { AgentConfig } from '@/types/agent';
 
 const KEY = 'agents';
 
-function parseAgent(raw: any): AgentConfig {
+function parseAgent(raw: unknown): AgentConfig {
+  const data = raw as {
+    [key: string]: unknown;
+    createdAt: string;
+    updatedAt: string;
+  };
   return {
-    ...raw,
-    createdAt: new Date(raw.createdAt),
-    updatedAt: new Date(raw.updatedAt),
-  } as AgentConfig;
+    ...(data as Omit<AgentConfig, 'createdAt' | 'updatedAt'>),
+    createdAt: new Date(data.createdAt),
+    updatedAt: new Date(data.updatedAt),
+  };
 }
 
 export async function GET(
