@@ -27,6 +27,7 @@ export function VoiceInterface({ agent, onBack }: VoiceInterfaceProps) {
   const [audioChunks, setAudioChunks] = useState<Blob[]>([]);
   const [speechSynthesis, setSpeechSynthesis] = useState<SpeechSynthesis | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const audioUrlRefs = useRef<string[]>([]);
 
   useEffect(() => {
     // Initialize API client
@@ -52,6 +53,12 @@ export function VoiceInterface({ agent, onBack }: VoiceInterfaceProps) {
     // Scroll to bottom when messages change
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  useEffect(() => {
+    return () => {
+      audioUrlRefs.current.forEach(url => URL.revokeObjectURL(url));
+    };
+  }, []);
 
   const startRecording = async () => {
     try {
@@ -96,6 +103,7 @@ export function VoiceInterface({ agent, onBack }: VoiceInterfaceProps) {
     try {
       // Create audio URL for playback
       const audioUrl = URL.createObjectURL(audioBlob);
+      audioUrlRefs.current.push(audioUrl);
 
       // Transcribe audio to text (only available for OpenAI)
       let transcription = '';
@@ -148,6 +156,7 @@ export function VoiceInterface({ agent, onBack }: VoiceInterfaceProps) {
           const speechArrayBuffer = await apiClient.generateSpeech(response);
           const speechBlob = new Blob([speechArrayBuffer], { type: 'audio/mpeg' });
           responseAudioUrl = URL.createObjectURL(speechBlob);
+          audioUrlRefs.current.push(responseAudioUrl);
         } catch (error) {
           console.error('Speech generation failed:', error);
         }
