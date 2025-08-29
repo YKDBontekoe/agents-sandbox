@@ -2,12 +2,11 @@
 
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DragDropProvider } from './DragDropProvider';
 import { DraggableAgentCard } from './DraggableAgentCard';
-import { DropZone } from './DropZone';
 import { AgentForm } from './AgentForm';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { AgentConfig } from '@/types/agent';
 import { DragEndEvent } from '@dnd-kit/core';
 import { agentStore } from '@/lib/agent-store';
@@ -22,7 +21,9 @@ export function AgentDashboard({ onStartChat, onStartVoice }: AgentDashboardProp
   const [agents, setAgents] = useState<AgentConfig[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingAgent, setEditingAgent] = useState<AgentConfig | null>(null);
-  const [sessions, setSessions] = useState<any[]>([]);
+  const [sessions] = useState<unknown[]>([]);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [agentToDelete, setAgentToDelete] = useState<string | null>(null);
 
   useEffect(() => {
     // Load agents from store
@@ -56,10 +57,17 @@ export function AgentDashboard({ onStartChat, onStartVoice }: AgentDashboardProp
   };
 
   const handleDeleteAgent = (agentId: string) => {
-    if (confirm('Are you sure you want to delete this agent?')) {
-      agentStore.deleteAgent(agentId);
-      setAgents(prev => prev.filter(a => a.id !== agentId));
+    setAgentToDelete(agentId);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDeleteAgent = () => {
+    if (agentToDelete) {
+      agentStore.deleteAgent(agentToDelete);
+      setAgents(prev => prev.filter(a => a.id !== agentToDelete));
     }
+    setDeleteDialogOpen(false);
+    setAgentToDelete(null);
   };
 
   const handleCancelForm = () => {
@@ -110,6 +118,18 @@ export function AgentDashboard({ onStartChat, onStartVoice }: AgentDashboardProp
 
   return (
     <DragDropProvider agents={agents} onDragEnd={handleDragEnd}>
+        <ConfirmDialog
+          open={deleteDialogOpen}
+          title="Delete Agent"
+          description="Are you sure you want to delete this agent?"
+          confirmLabel="Delete"
+          cancelLabel="Cancel"
+          onConfirm={confirmDeleteAgent}
+          onCancel={() => {
+            setDeleteDialogOpen(false);
+            setAgentToDelete(null);
+          }}
+        />
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
         {/* Modern Header */}
         <div className="glass-effect border-b border-blue-100">
