@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AgentConfig, AgentType, ModelProvider } from '@/types/agent';
+import { getAgentTypePlugins } from '@/lib/plugin/agent-type';
 import { validateApiKey, getModelsByProvider } from '@/lib/utils';
 import { MessageCircle, Mic, Save, X } from 'lucide-react';
 
@@ -15,37 +16,53 @@ interface AgentFormProps {
   onCancel: () => void;
 }
 
-export function AgentForm({ agent, onSave, onCancel }: AgentFormProps) {
-  const [formData, setFormData] = useState({
-    name: agent?.name || '',
-    description: agent?.description || '',
-    category: agent?.category || 'general',
-    type: agent?.type || 'chat' as AgentType,
-    systemPrompt: agent?.systemPrompt || 'You are a helpful AI assistant.',
-    provider: agent?.modelConfig.provider || 'openai' as ModelProvider,
-    apiKey: agent?.modelConfig.apiKey || '',
-    model: agent?.modelConfig.model || 'gpt-3.5-turbo',
-    baseUrl: agent?.modelConfig.baseUrl || '',
-    apiVersion: agent?.modelConfig.apiVersion || '',
-    temperature: agent?.temperature || 0.7,
-    maxTokens: agent?.maxTokens || 1000,
-    voice: agent?.voiceSettings?.voice || 'alloy',
-    speed: agent?.voiceSettings?.speed || 1.0,
-    pitch: agent?.voiceSettings?.pitch || 1.0,
-  });
+  export function AgentForm({ agent, onSave, onCancel }: AgentFormProps) {
+    const mergePluginDefaults = (type: AgentType, data: Record<string, any>) => {
+      const plugins = getAgentTypePlugins(type);
+      plugins.forEach((p) => {
+        Object.assign(data, p.getDefaultConfig?.() ?? {});
+      });
+      return data;
+    };
+
+    const [formData, setFormData] = useState<Record<string, any>>(
+      mergePluginDefaults(agent?.type || ('chat' as AgentType), {
+        name: agent?.name || '',
+        description: agent?.description || '',
+        category: agent?.category || 'general',
+        type: agent?.type || ('chat' as AgentType),
+        systemPrompt: agent?.systemPrompt || 'You are a helpful AI assistant.',
+        provider: agent?.modelConfig.provider || ('openai' as ModelProvider),
+        apiKey: agent?.modelConfig.apiKey || '',
+        model: agent?.modelConfig.model || 'gpt-3.5-turbo',
+        baseUrl: agent?.modelConfig.baseUrl || '',
+        apiVersion: agent?.modelConfig.apiVersion || '',
+        temperature: agent?.temperature || 0.7,
+        maxTokens: agent?.maxTokens || 1000,
+        voice: agent?.voiceSettings?.voice || 'alloy',
+        speed: agent?.voiceSettings?.speed || 1.0,
+        pitch: agent?.voiceSettings?.pitch || 1.0,
+      }),
+    );
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const handleInputChange = (
-    field: keyof typeof formData,
-    value: string | number
-  ) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-    // Clear error when user starts typing
-    if (errors[field]) {
-      setErrors(prev => ({ ...prev, [field]: '' }));
-    }
-  };
+      field: string,
+      value: unknown
+    ) => {
+      setFormData((prev) => {
+        let updated = { ...prev, [field]: value };
+        if (field === 'type') {
+          updated = mergePluginDefaults(value as AgentType, updated);
+        }
+        return updated;
+      });
+      // Clear error when user starts typing
+      if (errors[field]) {
+        setErrors((prev) => ({ ...prev, [field]: '' }));
+      }
+    };
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
@@ -112,7 +129,8 @@ export function AgentForm({ agent, onSave, onCancel }: AgentFormProps) {
     onSave(agentData);
   };
 
-  const availableModels = getModelsByProvider(formData.provider);
+    const availableModels = getModelsByProvider(formData.provider);
+    const plugins = getAgentTypePlugins(formData.type);
 
   return (
     <Card className="w-full max-w-2xl mx-auto">
@@ -271,20 +289,26 @@ export function AgentForm({ agent, onSave, onCancel }: AgentFormProps) {
               </div>
             )}
 
-            {formData.provider === 'openrouter' && (
-              <div>
-                <label className="block text-sm font-medium mb-2">Base URL (Optional)</label>
-                <Input
-                  value={formData.baseUrl}
-                  onChange={(e) => handleInputChange('baseUrl', e.target.value)}
-                  placeholder="https://openrouter.ai/api/v1"
-                />
-              </div>
-            )}
-          </div>
+              {formData.provider === 'openrouter' && (
+                <div>
+                  <label className="block text-sm font-medium mb-2">Base URL (Optional)</label>
+                  <Input
+                    value={formData.baseUrl}
+                    onChange={(e) => handleInputChange('baseUrl', e.target.value)}
+                    placeholder="https://openrouter.ai/api/v1"
+                  />
+                </div>
+              )}
+            </div>
 
-          {/* Advanced Settings */}
-          <div className="space-y-4">
+            {plugins.map((plugin, i) => (
+              <React.Fragment key={i}>
+                {plugin.renderFormFields?.(formData, handleInputChange)}
+              </React.Fragment>
+            ))}
+
+            {/* Advanced Settings */}
+            <div className="space-y-4">
             <h3 className="text-lg font-medium">Advanced Settings</h3>
             
             <div className="grid grid-cols-2 gap-4">
