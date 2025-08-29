@@ -54,7 +54,7 @@ export function WorkflowBuilder() {
         id: e.id,
         source: e.source,
         target: e.target,
-        condition: e.data?.condition,
+        condition: (e.data as { condition?: string })?.condition,
       })),
     };
     await workflowStore.createWorkflow(template);
@@ -77,7 +77,8 @@ export function WorkflowBuilder() {
         source: e.source,
         target: e.target,
         data: { condition: e.condition },
-      })),
+        type: 'default',
+      })) as Edge[],
     );
   };
 

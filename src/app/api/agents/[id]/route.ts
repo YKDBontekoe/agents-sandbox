@@ -11,7 +11,7 @@ function parseAgent(raw: unknown): AgentConfig {
     updatedAt: string;
   };
   return {
-    ...(data as Omit<AgentConfig, 'createdAt' | 'updatedAt'>),
+    ...(data as unknown as Omit<AgentConfig, 'createdAt' | 'updatedAt'>),
     createdAt: new Date(data.createdAt),
     updatedAt: new Date(data.updatedAt),
   };

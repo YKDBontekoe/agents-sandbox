@@ -19,6 +19,7 @@ export function AgentForm({ agent, onSave, onCancel }: AgentFormProps) {
   const [formData, setFormData] = useState({
     name: agent?.name || '',
     description: agent?.description || '',
+    category: agent?.category || 'general',
     type: agent?.type || 'chat' as AgentType,
     systemPrompt: agent?.systemPrompt || 'You are a helpful AI assistant.',
     provider: agent?.modelConfig.provider || 'openai' as ModelProvider,
@@ -89,6 +90,7 @@ export function AgentForm({ agent, onSave, onCancel }: AgentFormProps) {
     const agentData: Omit<AgentConfig, 'id' | 'createdAt' | 'updatedAt'> = {
       name: formData.name.trim(),
       description: formData.description.trim(),
+      category: formData.category.trim(),
       type: formData.type,
       systemPrompt: formData.systemPrompt.trim(),
       modelConfig: {

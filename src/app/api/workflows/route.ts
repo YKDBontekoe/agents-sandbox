@@ -12,7 +12,7 @@ function parseWorkflow(raw: unknown): WorkflowTemplate {
     updatedAt: string;
   };
   return {
-    ...(data as Omit<WorkflowTemplate, 'createdAt' | 'updatedAt'>),
+    ...(data as unknown as Omit<WorkflowTemplate, 'createdAt' | 'updatedAt'>),
     createdAt: new Date(data.createdAt),
     updatedAt: new Date(data.updatedAt),
   };

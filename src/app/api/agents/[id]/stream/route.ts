@@ -4,9 +4,10 @@ import { AgentConfig, ChatMessage } from '@/types/agent';
 
 const KEY = 'agents';
 
-export async function GET(req: Request, { params }: { params: { id: string } }) {
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const data = await persistence.read<AgentConfig[]>(KEY, []);
-  const agent = data.find(a => a.id === params.id);
+  const agent = data.find(a => a.id === id);
   if (!agent) return new Response('Not found', { status: 404 });
 
   const { searchParams } = new URL(req.url);

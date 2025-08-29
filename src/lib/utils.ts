@@ -53,7 +53,7 @@ const encoders: Record<string, ReturnType<typeof encodingForModel>> = {};
 export function countTokens(text: string, model = 'gpt-3.5-turbo'): number {
   let encoder = encoders[model];
   if (!encoder) {
-    encoder = encodingForModel(model);
+    encoder = encodingForModel(model as any);
     encoders[model] = encoder;
   }
   return encoder.encode(text).length;

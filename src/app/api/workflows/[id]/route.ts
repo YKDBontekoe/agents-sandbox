@@ -11,7 +11,7 @@ function parseWorkflow(raw: unknown): WorkflowTemplate {
     updatedAt: string;
   };
   return {
-    ...(data as Omit<WorkflowTemplate, 'createdAt' | 'updatedAt'>),
+    ...(data as unknown as Omit<WorkflowTemplate, 'createdAt' | 'updatedAt'>),
     createdAt: new Date(data.createdAt),
     updatedAt: new Date(data.updatedAt),
   };
@@ -19,26 +19,28 @@ function parseWorkflow(raw: unknown): WorkflowTemplate {
 
 export async function GET(
   _req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   const data = await persistence.read<WorkflowTemplate[]>(KEY, []);
-  const workflow = data.find(w => w.id === params.id);
+  const workflow = data.find(w => w.id === id);
   if (!workflow) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  return NextResponse.json(parseWorkflow(workflow));
+  return NextResponse.json(parseWorkflow(workflow as unknown));
 }
 
 export async function PUT(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   const data = await persistence.read<WorkflowTemplate[]>(KEY, []);
-  const index = data.findIndex(w => w.id === params.id);
+  const index = data.findIndex(w => w.id === id);
   if (index === -1) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   const updates = await req.json();
   const updated: WorkflowTemplate = {
     ...data[index],
     ...updates,
-    id: params.id,
+    id: id,
     updatedAt: new Date(),
   };
   data[index] = updated;
@@ -48,10 +50,11 @@ export async function PUT(
 
 export async function DELETE(
   _req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   const data = await persistence.read<WorkflowTemplate[]>(KEY, []);
-  const filtered = data.filter(w => w.id !== params.id);
+  const filtered = data.filter(w => w.id !== id);
   const deleted = filtered.length !== data.length;
   if (deleted) {
     await persistence.write(KEY, filtered);
