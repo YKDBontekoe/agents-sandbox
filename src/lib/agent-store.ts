@@ -2,11 +2,11 @@ import { AgentConfig, AgentSession, ChatMessage } from '@/types/agent';
 import { generateId } from './utils';
 import { recordTokens } from './analytics';
 import { persistence } from './persistence/file';
+import { fetchJson } from './http';
 
 class AgentStore {
   private agents: AgentConfig[] = [];
   private sessions: Map<string, AgentSession> = new Map();
-  private baseUrl = '/api/agents';
   public ready: Promise<void>;
   private savePromise: Promise<void> = Promise.resolve();
 
@@ -18,8 +18,7 @@ class AgentStore {
 
   // Agent management
   async fetchAgents(): Promise<AgentConfig[]> {
-    const res = await fetch(this.baseUrl);
-    const data = (await res.json()) as AgentConfig[];
+    const data = await fetchJson<AgentConfig[]>('/agents');
     this.agents = data.map(a => this.parseAgent(a));
     return this.agents;
   }
@@ -29,37 +28,45 @@ class AgentStore {
   }
 
   async createAgent(config: Omit<AgentConfig, 'id' | 'createdAt' | 'updatedAt'>): Promise<AgentConfig> {
-    const res = await fetch(this.baseUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(config),
-    });
-    const agent = this.parseAgent((await res.json()) as AgentConfig);
+    const agent = this.parseAgent(
+      await fetchJson<AgentConfig>('/agents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config),
+      })
+    );
     this.agents.push(agent);
     return agent;
   }
 
   async updateAgent(id: string, updates: Partial<AgentConfig>): Promise<AgentConfig | null> {
-    const res = await fetch(`${this.baseUrl}/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updates),
-    });
-    if (!res.ok) return null;
-    const agent = this.parseAgent((await res.json()) as AgentConfig);
-    this.agents = this.agents.map(a => (a.id === id ? agent : a));
-    return agent;
+    try {
+      const agent = this.parseAgent(
+        await fetchJson<AgentConfig>(`/agents/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updates),
+        })
+      );
+      this.agents = this.agents.map(a => (a.id === id ? agent : a));
+      return agent;
+    } catch {
+      return null;
+    }
   }
 
   async deleteAgent(id: string): Promise<boolean> {
-    const res = await fetch(`${this.baseUrl}/${id}`, { method: 'DELETE' });
-    if (!res.ok) return false;
-    this.agents = this.agents.filter(a => a.id !== id);
-    // Remove sessions for this agent
-    Array.from(this.sessions.values())
-      .filter(s => s.agentId === id)
-      .forEach(s => this.sessions.delete(s.id));
-    return true;
+    try {
+      await fetchJson(`/agents/${id}`, { method: 'DELETE' });
+      this.agents = this.agents.filter(a => a.id !== id);
+      // Remove sessions for this agent
+      Array.from(this.sessions.values())
+        .filter(s => s.agentId === id)
+        .forEach(s => this.sessions.delete(s.id));
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   // Session management (in-memory)

@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { APIClient } from './api-client';
 import { getMetrics } from './analytics';
 
+vi.mock('./http', () => ({ fetchJson: vi.fn() }));
+
 describe('APIClient retry logic', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
