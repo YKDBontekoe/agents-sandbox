@@ -2,14 +2,15 @@
   "name": "agents-sandbox",
   "version": "0.1.0",
   "private": true,
-    "scripts": {
-      "dev": "next dev --turbopack",
-      "build": "next build --turbopack",
-      "start": "next start",
-      "lint": "eslint",
-      "plugins": "tsx src/lib/plugin-system.ts",
-      "scaffold:plugin": "tsx scripts/scaffold-plugin.ts"
-    },
+  "scripts": {
+    "dev": "next dev --turbopack",
+    "build": "next build --turbopack",
+    "start": "next start",
+    "lint": "eslint",
+    "plugins": "tsx src/lib/plugin-system.ts",
+    "scaffold:plugin": "tsx scripts/scaffold-plugin.ts",
+    "test": "vitest run"
+  },
   "dependencies": {
     "@azure/openai": "^2.0.0",
     "@dnd-kit/core": "^6.3.1",
@@ -32,7 +33,8 @@
     "reactflow": "^11.11.4",
     "tailwind-merge": "^3.3.1",
     "tailwindcss-animate": "^1.0.7",
-    "uuid": "^11.1.0"
+    "uuid": "^11.1.0",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
@@ -45,6 +47,7 @@
     "eslint-config-next": "15.5.2",
     "tailwindcss": "^4",
     "tsx": "^4.20.5",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^3.2.4"
   }
 }
