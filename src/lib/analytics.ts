@@ -1,3 +1,5 @@
+import { countTokens } from './utils';
+
 export interface AgentMetrics {
   responseTimes: number[];
   errorCount: number;
@@ -64,8 +66,10 @@ export function incrementError(agentId: string) {
   notifyUpdate();
 }
 
-export function recordTokens(agentId: string, tokens: number) {
+export function recordTokens(agentId: string, textOrTokens: string | number) {
   ensureAgent(agentId);
+  const tokens =
+    typeof textOrTokens === 'number' ? textOrTokens : countTokens(textOrTokens);
   metrics[agentId].tokensUsed += tokens;
   checkAlert(agentId, 'tokensUsed', metrics[agentId].tokensUsed);
   notifyUpdate();

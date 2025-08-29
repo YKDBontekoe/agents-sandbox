@@ -23,6 +23,7 @@
     "@radix-ui/react-toast": "^1.2.15",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "js-tiktoken": "^1.0.21",
     "lucide-react": "^0.542.0",
     "next": "15.5.2",
     "openai": "^5.16.0",
