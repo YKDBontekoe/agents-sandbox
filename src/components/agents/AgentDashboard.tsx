@@ -12,6 +12,8 @@ import { AgentConfig, AgentSession } from '@/types/agent';
 import { DragEndEvent } from '@dnd-kit/core';
 import { agentStore } from '@/lib/agent-store';
 import { Plus, Users, MessageSquare } from 'lucide-react';
+import { useTranslations } from 'next-intl';
+import { LocaleSwitcher } from '@/components/LocaleSwitcher';
 
 interface AgentDashboardProps {
   onStartChat?: (agent: AgentConfig) => void;
@@ -25,6 +27,7 @@ export function AgentDashboard({ onStartChat, onStartVoice }: AgentDashboardProp
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [agentToDelete, setAgentToDelete] = useState<string | null>(null);
   const [sessions, setSessions] = useState<AgentSession[]>([]);
+  const t = useTranslations('agentDashboard');
 
   useEffect(() => {
     // Load agents from store
@@ -147,10 +150,10 @@ export function AgentDashboard({ onStartChat, onStartVoice }: AgentDashboardProp
     <DragDropProvider agents={agents} onDragEnd={handleDragEnd}>
         <ConfirmDialog
           open={deleteDialogOpen}
-          title="Delete Agent"
-          description="Are you sure you want to delete this agent?"
-          confirmLabel="Delete"
-          cancelLabel="Cancel"
+          title={t('deleteAgentTitle')}
+          description={t('deleteAgentDescription')}
+          confirmLabel={t('delete')}
+          cancelLabel={t('cancel')}
           onConfirm={confirmDeleteAgent}
           onCancel={() => {
             setDeleteDialogOpen(false);
@@ -164,10 +167,10 @@ export function AgentDashboard({ onStartChat, onStartVoice }: AgentDashboardProp
             <div className="flex items-center justify-between">
               <div className="space-y-2">
                 <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-                  Agent Dashboard
+                  {t('title')}
                 </h1>
                 <p className="text-slate-600 text-lg font-medium">
-                  Create, manage, and deploy your AI agents
+                  {t('subtitle')}
                 </p>
               </div>
               <div className="flex items-center gap-4">
@@ -176,7 +179,7 @@ export function AgentDashboard({ onStartChat, onStartVoice }: AgentDashboardProp
                     variant="outline"
                     className="border-blue-200 text-blue-600 hover:bg-blue-50"
                   >
-                    Workflow Builder
+                    {t('workflowBuilder')}
                   </Button>
                 </Link>
                 <Button
@@ -184,8 +187,9 @@ export function AgentDashboard({ onStartChat, onStartVoice }: AgentDashboardProp
                   className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-6 py-3 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 flex items-center gap-3 text-base font-semibold"
                 >
                   <Plus className="h-5 w-5" />
-                  Create Agent
+                  {t('createAgent')}
                 </Button>
+                <LocaleSwitcher />
               </div>
             </div>
           </div>
@@ -196,7 +200,7 @@ export function AgentDashboard({ onStartChat, onStartVoice }: AgentDashboardProp
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <Card className="agent-card border-0 shadow-xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-1">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-                <CardTitle className="text-lg font-semibold text-slate-700">Total Agents</CardTitle>
+                <CardTitle className="text-lg font-semibold text-slate-700">{t('totalAgents')}</CardTitle>
                 <div className="p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl">
                   <Users className="h-6 w-6 text-white" />
                 </div>
@@ -206,11 +210,11 @@ export function AgentDashboard({ onStartChat, onStartVoice }: AgentDashboardProp
                 <div className="flex items-center gap-4 text-sm">
                   <div className="flex items-center gap-2">
                     <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-                    <span className="text-slate-600">{agents.filter(a => a.type === 'chat').length} chat</span>
+                    <span className="text-slate-600">{agents.filter(a => a.type === 'chat').length} {t('chat')}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <div className="w-3 h-3 bg-indigo-500 rounded-full"></div>
-                    <span className="text-slate-600">{agents.filter(a => a.type === 'voice').length} voice</span>
+                    <span className="text-slate-600">{agents.filter(a => a.type === 'voice').length} {t('voice')}</span>
                   </div>
                 </div>
               </CardContent>
@@ -218,7 +222,7 @@ export function AgentDashboard({ onStartChat, onStartVoice }: AgentDashboardProp
             
             <Card className="agent-card border-0 shadow-xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-1">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-                <CardTitle className="text-lg font-semibold text-slate-700">Active Sessions</CardTitle>
+                <CardTitle className="text-lg font-semibold text-slate-700">{t('activeSessions')}</CardTitle>
                 <div className="p-3 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl">
                   <MessageSquare className="h-6 w-6 text-white" />
                 </div>
@@ -226,14 +230,14 @@ export function AgentDashboard({ onStartChat, onStartVoice }: AgentDashboardProp
               <CardContent className="space-y-3">
                 <div className="text-4xl font-bold text-slate-800">{sessions.length}</div>
                 <p className="text-slate-600 font-medium">
-                  Running conversations
+                  {t('runningConversations')}
                 </p>
               </CardContent>
             </Card>
             
             <Card className="agent-card border-0 shadow-xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-1">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-                <CardTitle className="text-lg font-semibold text-slate-700">Providers</CardTitle>
+                <CardTitle className="text-lg font-semibold text-slate-700">{t('providers')}</CardTitle>
                 <div className="p-3 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl">
                   <div className="w-6 h-6 rounded-full bg-white flex items-center justify-center">
                     <div className="w-3 h-3 rounded-full bg-green-500" />
@@ -245,7 +249,7 @@ export function AgentDashboard({ onStartChat, onStartVoice }: AgentDashboardProp
                   {new Set(agents.map(a => a.modelConfig.provider)).size}
                 </div>
                 <p className="text-slate-600 font-medium">
-                  Connected services
+                  {t('connectedServices')}
                 </p>
               </CardContent>
             </Card>
@@ -256,28 +260,28 @@ export function AgentDashboard({ onStartChat, onStartVoice }: AgentDashboardProp
         <div className="container mx-auto px-8 py-8">
           <div className="flex items-center justify-between mb-8">
             <div>
-              <h2 className="text-3xl font-bold text-slate-800 mb-2">Your Agents</h2>
+              <h2 className="text-3xl font-bold text-slate-800 mb-2">{t('yourAgents')}</h2>
               <p className="text-slate-600 text-lg">
-                {agents.length === 0 ? 'No agents created yet' : `${agents.length} intelligent agents ready to work`}
+                {agents.length === 0 ? t('noAgents') : t('agentsReady', { count: agents.length })}
               </p>
             </div>
             <div className="flex items-center gap-4">
               <div className="text-right">
-                <div className="text-sm text-slate-500">Quick Actions</div>
+                <div className="text-sm text-slate-500">{t('quickActionsLabel')}</div>
                 <div className="flex gap-2 mt-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
+                  <Button
+                    variant="outline"
+                    size="sm"
                     className="border-blue-200 text-blue-600 hover:bg-blue-50"
                   >
-                    Import
+                    {t('import')}
                   </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
+                  <Button
+                    variant="outline"
+                    size="sm"
                     className="border-blue-200 text-blue-600 hover:bg-blue-50"
                   >
-                    Templates
+                    {t('templates')}
                   </Button>
                 </div>
               </div>
@@ -289,23 +293,23 @@ export function AgentDashboard({ onStartChat, onStartVoice }: AgentDashboardProp
               <div className="mx-auto w-32 h-32 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-3xl flex items-center justify-center mb-8 animate-float">
                 <Users className="h-16 w-16 text-white" />
               </div>
-              <h3 className="text-2xl font-bold text-slate-800 mb-4">Create Your First Agent</h3>
+              <h3 className="text-2xl font-bold text-slate-800 mb-4">{t('createYourFirstAgent')}</h3>
               <p className="text-slate-600 text-lg mb-8 max-w-md mx-auto">
-                Start building intelligent workflows with AI agents that can chat, analyze, and automate tasks for you.
+                {t('startBuilding')}
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Button 
+                <Button
                   onClick={handleCreateAgent}
                   className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-8 py-3 text-lg font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
                 >
                   <Plus className="mr-2 h-5 w-5" />
-                  Create Agent
+                  {t('createAgent')}
                 </Button>
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   className="border-2 border-blue-200 text-blue-600 hover:bg-blue-50 px-8 py-3 text-lg font-semibold rounded-xl"
                 >
-                  Browse Templates
+                  {t('browseTemplates')}
                 </Button>
               </div>
             </Card>
@@ -332,8 +336,8 @@ export function AgentDashboard({ onStartChat, onStartVoice }: AgentDashboardProp
             {/* Workflow Canvas */}
             <div className="lg:col-span-2">
               <div className="mb-6">
-                <h2 className="text-2xl font-bold text-slate-800 mb-2">Workflow Canvas</h2>
-                <p className="text-slate-600">Drag agents here to create multi-agent workflows</p>
+                <h2 className="text-2xl font-bold text-slate-800 mb-2">{t('workflowCanvas')}</h2>
+                <p className="text-slate-600">{t('dragAgents')}</p>
               </div>
               
               <Card className="agent-card border-0 shadow-xl p-12 text-center bg-gradient-to-br from-slate-50 to-blue-50 min-h-[400px] flex items-center justify-center">
@@ -342,15 +346,15 @@ export function AgentDashboard({ onStartChat, onStartVoice }: AgentDashboardProp
                     <Plus className="h-12 w-12 text-white" />
                   </div>
                   <div>
-                    <h3 className="text-xl font-bold text-slate-800 mb-2">Start Building Workflows</h3>
+                    <h3 className="text-xl font-bold text-slate-800 mb-2">{t('startBuildingWorkflows')}</h3>
                     <p className="text-slate-600 max-w-sm mx-auto">
-                      Drag agents from your collection to create powerful multi-agent workflows and automations
+                      {t('dragAgentsFromCollection')}
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2 justify-center">
-                    <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-medium">Sequential</span>
-                    <span className="px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full text-sm font-medium">Parallel</span>
-                    <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-sm font-medium">Conditional</span>
+                    <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-medium">{t('sequential')}</span>
+                    <span className="px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full text-sm font-medium">{t('parallel')}</span>
+                    <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-sm font-medium">{t('conditional')}</span>
                   </div>
                 </div>
               </Card>
@@ -359,8 +363,8 @@ export function AgentDashboard({ onStartChat, onStartVoice }: AgentDashboardProp
             {/* Enhanced Quick Actions */}
             <div className="space-y-6">
               <div>
-                <h2 className="text-2xl font-bold text-slate-800 mb-2">Quick Actions</h2>
-                <p className="text-slate-600">Get started with common tasks</p>
+                <h2 className="text-2xl font-bold text-slate-800 mb-2">{t('quickActionsTitle')}</h2>
+                <p className="text-slate-600">{t('quickActionsSubtitle')}</p>
               </div>
               
               <div className="space-y-4">
@@ -370,8 +374,8 @@ export function AgentDashboard({ onStartChat, onStartVoice }: AgentDashboardProp
                       <MessageSquare className="h-6 w-6 text-white" />
                     </div>
                     <div>
-                      <h3 className="font-semibold text-slate-800">Start Chat Session</h3>
-                      <p className="text-sm text-slate-600">Begin conversation with an agent</p>
+                      <h3 className="font-semibold text-slate-800">{t('startChatSession')}</h3>
+                      <p className="text-sm text-slate-600">{t('startChatDesc')}</p>
                     </div>
                   </div>
                 </Card>
@@ -382,8 +386,8 @@ export function AgentDashboard({ onStartChat, onStartVoice }: AgentDashboardProp
                       <Users className="h-6 w-6 text-white" />
                     </div>
                     <div>
-                      <h3 className="font-semibold text-slate-800">Create Workflow</h3>
-                      <p className="text-sm text-slate-600">Build multi-agent automation</p>
+                      <h3 className="font-semibold text-slate-800">{t('createWorkflow')}</h3>
+                      <p className="text-sm text-slate-600">{t('createWorkflowDesc')}</p>
                     </div>
                   </div>
                 </Card>
@@ -394,28 +398,28 @@ export function AgentDashboard({ onStartChat, onStartVoice }: AgentDashboardProp
                       <Plus className="h-6 w-6 text-white" />
                     </div>
                     <div>
-                      <h3 className="font-semibold text-slate-800">Import Template</h3>
-                      <p className="text-sm text-slate-600">Use pre-built agent templates</p>
+                      <h3 className="font-semibold text-slate-800">{t('importTemplate')}</h3>
+                      <p className="text-sm text-slate-600">{t('importTemplateDesc')}</p>
                     </div>
                   </div>
                 </Card>
               </div>
-              
+
               {/* Pro Tips */}
               <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-slate-800">Pro Tips</h3>
+                <h3 className="text-lg font-semibold text-slate-800">{t('proTips')}</h3>
                 <div className="space-y-3">
                   <div className="flex items-start gap-3 p-4 bg-blue-50 rounded-xl">
                     <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0" />
-                    <span className="text-sm text-slate-700 font-medium">Combine multiple agents for complex workflows</span>
+                    <span className="text-sm text-slate-700 font-medium">{t('tipCombineAgents')}</span>
                   </div>
                   <div className="flex items-start gap-3 p-4 bg-indigo-50 rounded-xl">
                     <div className="w-2 h-2 bg-indigo-500 rounded-full mt-2 flex-shrink-0" />
-                    <span className="text-sm text-slate-700 font-medium">Use voice agents for hands-free interactions</span>
+                    <span className="text-sm text-slate-700 font-medium">{t('tipVoiceAgents')}</span>
                   </div>
                   <div className="flex items-start gap-3 p-4 bg-purple-50 rounded-xl">
                     <div className="w-2 h-2 bg-purple-500 rounded-full mt-2 flex-shrink-0" />
-                    <span className="text-sm text-slate-700 font-medium">Save successful workflows as templates</span>
+                    <span className="text-sm text-slate-700 font-medium">{t('tipSaveTemplates')}</span>
                   </div>
                 </div>
               </div>

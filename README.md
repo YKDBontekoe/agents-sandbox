@@ -34,3 +34,12 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Translation Workflow
+
+Translations live in `src/app/i18n`. To add or update strings:
+
+1. Edit `en.json` and provide keys for new messages.
+2. Copy the keys into other locale files such as `es.json` and translate the values.
+3. Use `useTranslations` from `next-intl` inside components to access the strings.
+4. Run `npm run lint` to ensure formatting and `npm test` (if available) before submitting a pull request.
