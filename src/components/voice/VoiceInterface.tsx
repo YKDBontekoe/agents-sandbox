@@ -24,7 +24,9 @@ export function VoiceInterface({ agent, onBack }: VoiceInterfaceProps) {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [apiClient, setApiClient] = useState<APIClient | null>(null);
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
-  const [audioChunks, setAudioChunks] = useState<Blob[]>([]);
+  const [liveTranscript, setLiveTranscript] = useState('');
+  const [liveTranslation, setLiveTranslation] = useState('');
+  const [emotion, setEmotion] = useState('');
   const [speechSynthesis, setSpeechSynthesis] = useState<SpeechSynthesis | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const audioUrlRefs = useRef<string[]>([]);
@@ -69,18 +71,41 @@ export function VoiceInterface({ agent, onBack }: VoiceInterfaceProps) {
       recorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
           chunks.push(event.data);
+          if (apiClient) {
+            apiClient
+              .transcribeAudioStream(event.data)
+              .then(partial => {
+                if (partial) {
+                  setLiveTranscript(prev => `${prev} ${partial}`.trim());
+                  apiClient
+                    .translateText(partial)
+                    .then(t => setLiveTranslation(prev => `${prev} ${t}`.trim()))
+                    .catch(err => console.error('Translation error:', err));
+                  apiClient
+                    .analyzeEmotion(partial)
+                    .then(e => setEmotion(e.trim()))
+                    .catch(err => console.error('Emotion analysis error:', err));
+                }
+              })
+              .catch(err => console.error('Streaming transcription error:', err));
+          }
         }
       };
 
       recorder.onstop = async () => {
         const audioBlob = new Blob(chunks, { type: 'audio/wav' });
-        await handleAudioMessage(audioBlob);
+        await handleAudioMessage(audioBlob, liveTranscript);
         stream.getTracks().forEach(track => track.stop());
+        setLiveTranscript('');
+        setLiveTranslation('');
+        setEmotion('');
       };
 
       setMediaRecorder(recorder);
-      setAudioChunks(chunks);
-      recorder.start();
+      setLiveTranscript('');
+      setLiveTranslation('');
+      setEmotion('');
+      recorder.start(1000);
       setIsRecording(true);
     } catch (error) {
       console.error('Failed to start recording:', error);
@@ -95,7 +120,7 @@ export function VoiceInterface({ agent, onBack }: VoiceInterfaceProps) {
     }
   };
 
-  const handleAudioMessage = async (audioBlob: Blob) => {
+  const handleAudioMessage = async (audioBlob: Blob, existingTranscript: string = '') => {
     if (!apiClient || !session) return;
 
     setIsProcessing(true);
@@ -106,18 +131,20 @@ export function VoiceInterface({ agent, onBack }: VoiceInterfaceProps) {
       audioUrlRefs.current.push(audioUrl);
 
       // Transcribe audio to text (only available for OpenAI)
-      let transcription = '';
-      if (agent.modelConfig.provider === 'openai') {
-        try {
-          // Convert Blob to File for the API
-          const audioFile = new File([audioBlob], 'audio.wav', { type: 'audio/wav' });
-          transcription = await apiClient.transcribeAudio(audioFile);
-        } catch (error) {
-          console.error('Transcription failed:', error);
-          transcription = '[Audio message - transcription unavailable]';
+      let transcription = existingTranscript;
+      if (!transcription) {
+        if (agent.modelConfig.provider === 'openai') {
+          try {
+            // Convert Blob to File for the API
+            const audioFile = new File([audioBlob], 'audio.wav', { type: 'audio/wav' });
+            transcription = await apiClient.transcribeAudio(audioFile);
+          } catch (error) {
+            console.error('Transcription failed:', error);
+            transcription = '[Audio message - transcription unavailable]';
+          }
+        } else {
+          transcription = '[Audio message - transcription not supported for this provider]';
         }
-      } else {
-        transcription = '[Audio message - transcription not supported for this provider]';
       }
 
       // Add user voice message
@@ -392,6 +419,17 @@ export function VoiceInterface({ agent, onBack }: VoiceInterfaceProps) {
             </div>
             
             <div className="text-center">
+              {liveTranscript && (
+                <div className="mb-2 space-y-1">
+                  <p className="text-sm font-medium">Transcript: {liveTranscript}</p>
+                  {liveTranslation && (
+                    <p className="text-xs text-muted-foreground">Translation: {liveTranslation}</p>
+                  )}
+                  {emotion && (
+                    <p className="text-xs text-muted-foreground">Emotion: {emotion}</p>
+                  )}
+                </div>
+              )}
               <p className="text-sm font-medium">
                 {isRecording ? 'Release to send' : 'Hold to record'}
               </p>

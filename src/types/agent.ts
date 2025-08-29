@@ -24,6 +24,10 @@ export interface AgentConfig {
     speed: number;
     pitch: number;
   };
+  // Feature flags for extended capabilities
+  supportsImages?: boolean;
+  supportsVideo?: boolean;
+  supportsEmotion?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }

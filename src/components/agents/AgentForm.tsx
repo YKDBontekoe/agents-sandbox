@@ -35,7 +35,7 @@ export function AgentForm({ agent, onSave, onCancel }: AgentFormProps) {
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const handleInputChange = (field: string, value: any) => {
+  const handleInputChange = (field: string, value: string | number | boolean) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     // Clear error when user starts typing
     if (errors[field]) {
