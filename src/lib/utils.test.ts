@@ -8,7 +8,7 @@ describe('utils', () => {
   });
 
   it('recordTokens counts tokens from text', () => {
-    const agentId = 'test-agent';
+    const agentId = `test-agent-${Math.random()}`;
     recordTokens(agentId, 'Hello world from tests');
     const metrics = getMetrics(agentId);
     expect(metrics?.tokensUsed).toBe(countTokens('Hello world from tests'));

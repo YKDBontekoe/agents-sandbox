@@ -1,5 +1,4 @@
-import { test } from 'node:test';
-import assert from 'node:assert';
+import { it, expect } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
@@ -15,11 +14,11 @@ function createSandboxPluginDir(): string {
   return dir;
 }
 
-test('plugin cannot access process.env', async () => {
+it('plugin cannot access process.env', async () => {
   const dir = createSandboxPluginDir();
   await loadPlugins(dir);
   const plugin = getPlugins().find((p) => p.id.startsWith('sandbox'));
-  assert(plugin);
-  assert(plugin!.error);
-  assert.match(plugin!.error!, /env/);
+  expect(plugin).toBeDefined();
+  expect(plugin!.error).toBeDefined();
+  expect(plugin!.error).toMatch(/env/);
 });
