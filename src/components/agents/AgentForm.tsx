@@ -6,7 +6,8 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AgentConfig, AgentType, ModelProvider } from '@/types/agent';
-import { validateApiKey, getModelsByProvider } from '@/lib/utils';
+import { getModelsByProvider } from '@/lib/utils';
+import { AgentConfigFormSchema } from '@/types/agent-schema';
 import { MessageCircle, Mic, Save, X } from 'lucide-react';
 
 interface AgentFormProps {
@@ -36,56 +37,20 @@ export function AgentForm({ agent, onSave, onCancel }: AgentFormProps) {
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  
+
   const handleInputChange = (
     field: keyof typeof formData,
     value: string | number
   ) => {
     setFormData(prev => ({ ...prev, [field]: value }));
-    // Clear error when user starts typing
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }));
     }
   };
 
-  const validateForm = () => {
-    const newErrors: Record<string, string> = {};
-
-    if (!formData.name.trim()) {
-      newErrors.name = 'Agent name is required';
-    }
-
-    if (!formData.description.trim()) {
-      newErrors.description = 'Description is required';
-    }
-
-    if (!formData.systemPrompt.trim()) {
-      newErrors.systemPrompt = 'System prompt is required';
-    }
-
-    if (!formData.apiKey.trim()) {
-      newErrors.apiKey = 'API key is required';
-    } else if (!validateApiKey(formData.provider, formData.apiKey)) {
-      newErrors.apiKey = 'Invalid API key format';
-    }
-
-    if (!formData.model.trim()) {
-      newErrors.model = 'Model is required';
-    }
-
-    if (formData.provider === 'azure-openai' && !formData.baseUrl.trim()) {
-      newErrors.baseUrl = 'Base URL is required for Azure OpenAI';
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!validateForm()) {
-      return;
-    }
 
     const agentData: Omit<AgentConfig, 'id' | 'createdAt' | 'updatedAt'> = {
       name: formData.name.trim(),
@@ -109,7 +74,19 @@ export function AgentForm({ agent, onSave, onCancel }: AgentFormProps) {
       } : undefined,
     };
 
-    onSave(agentData);
+    const result = AgentConfigFormSchema.safeParse(agentData);
+
+    if (!result.success) {
+      const fieldErrors: Record<string, string> = {};
+      for (const issue of result.error.issues) {
+        const path = issue.path[issue.path.length - 1] as string;
+        fieldErrors[path] = issue.message;
+      }
+      setErrors(fieldErrors);
+      return;
+    }
+
+    onSave(result.data);
   };
 
   const availableModels = getModelsByProvider(formData.provider);
