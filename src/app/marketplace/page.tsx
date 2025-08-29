@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { Toaster, toast } from 'react-hot-toast';
 import { AgentConfig } from '@/types/agent';
 import { createAgent } from '@/lib/agents/repository';
 import { AgentMarketplaceCard } from '@/components/marketplace/AgentMarketplaceCard';
@@ -24,23 +25,47 @@ export default function MarketplacePage() {
     if (query) params.set('q', query);
     if (category) params.set('category', category);
     fetch(`/api/marketplace/agents?${params.toString()}`)
-      .then(res => res.json())
+      .then(async res => {
+        if (!res.ok) {
+          const errorText = await res.text();
+          throw new Error(
+            `Failed to load marketplace agents: ${res.status} ${res.statusText} - ${errorText}`
+          );
+        }
+        return res.json();
+      })
       .then((data: AgentConfig[]) => {
         setAgents(data);
         if (!query && !category) {
           setCategories([...new Set(data.map(a => a.category))]);
         }
       })
-      .catch(console.error);
+      .catch(error => {
+        console.error(error);
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : 'Failed to load marketplace agents'
+        );
+      });
   }, [query, category]);
 
   const handleImport = async (agent: AgentConfig) => {
     const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, ...rest } = agent;
-    await createAgent(rest);
+    try {
+      await createAgent(rest);
+      toast.success('Agent imported');
+    } catch (error) {
+      console.error(error);
+      toast.error(
+        error instanceof Error ? error.message : 'Failed to import agent'
+      );
+    }
   };
 
   return (
     <div className="container mx-auto p-6">
+      <Toaster />
       <h1 className="text-2xl font-bold mb-6">Agent Marketplace</h1>
       <div className="flex gap-4 mb-6">
         <Input

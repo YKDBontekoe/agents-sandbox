@@ -36,7 +36,16 @@ export function AgentDashboard({ onStartChat, onStartVoice }: AgentDashboardProp
   const [sharedAgents, setSharedAgents] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    fetchAgents().then(setAgents).catch(console.error);
+    fetchAgents()
+      .then(setAgents)
+      .catch(error => {
+        console.error(error);
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : 'Failed to fetch agents'
+        );
+      });
   }, []);
 
   useEffect(() => {
@@ -62,22 +71,24 @@ export function AgentDashboard({ onStartChat, onStartVoice }: AgentDashboardProp
   const handleSaveAgent = async (
     agentData: Omit<AgentConfig, 'id' | 'createdAt' | 'updatedAt'>
   ) => {
-    if (editingAgent) {
-      const updatedAgent = await updateAgent(
-        editingAgent.id,
-        agentData
-      );
-      if (updatedAgent) {
+    try {
+      if (editingAgent) {
+        const updatedAgent = await updateAgent(editingAgent.id, agentData);
         setAgents(prev =>
           prev.map(a => (a.id === editingAgent.id ? updatedAgent : a))
         );
+      } else {
+        const newAgent = await createAgent(agentData);
+        setAgents(prev => [...prev, newAgent]);
       }
-    } else {
-      const newAgent = await createAgent(agentData);
-      setAgents(prev => [...prev, newAgent]);
+      setShowForm(false);
+      setEditingAgent(null);
+    } catch (error) {
+      console.error(error);
+      toast.error(
+        error instanceof Error ? error.message : 'Failed to save agent'
+      );
     }
-    setShowForm(false);
-    setEditingAgent(null);
   };
 
   const handleDeleteAgent = (agentId: string) => {
@@ -125,8 +136,15 @@ export function AgentDashboard({ onStartChat, onStartVoice }: AgentDashboardProp
 
   const confirmDeleteAgent = async () => {
     if (agentToDelete) {
-      await deleteAgent(agentToDelete);
-      setAgents(prev => prev.filter(a => a.id !== agentToDelete));
+      try {
+        await deleteAgent(agentToDelete);
+        setAgents(prev => prev.filter(a => a.id !== agentToDelete));
+      } catch (error) {
+        console.error(error);
+        toast.error(
+          error instanceof Error ? error.message : 'Failed to delete agent'
+        );
+      }
     }
     setDeleteDialogOpen(false);
     setAgentToDelete(null);
