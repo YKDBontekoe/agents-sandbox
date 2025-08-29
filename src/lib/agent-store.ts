@@ -1,11 +1,20 @@
 import { AgentConfig, AgentSession, ChatMessage } from '@/types/agent';
 import { generateId } from './utils';
 import { recordTokens } from './analytics';
+import { persistence } from './persistence/file';
 
 class AgentStore {
   private agents: AgentConfig[] = [];
   private sessions: Map<string, AgentSession> = new Map();
   private baseUrl = '/api/agents';
+  public ready: Promise<void>;
+  private savePromise: Promise<void> = Promise.resolve();
+
+  constructor() {
+    this.ready = persistence.readSessions().then(sessions => {
+      sessions.forEach(s => this.sessions.set(s.id, s));
+    });
+  }
 
   // Agent management
   async fetchAgents(): Promise<AgentConfig[]> {
@@ -63,6 +72,7 @@ class AgentStore {
       updatedAt: new Date(),
     };
     this.sessions.set(session.id, session);
+    void this.persist();
     return session;
   }
 
@@ -97,16 +107,20 @@ class AgentStore {
     }
 
     this.sessions.set(sessionId, session);
+    void this.persist();
     return newMessage;
   }
 
   deleteSession(id: string): boolean {
-    return this.sessions.delete(id);
+    const deleted = this.sessions.delete(id);
+    if (deleted) void this.persist();
+    return deleted;
   }
 
   clearAll(): void {
     this.agents = [];
     this.sessions.clear();
+    void this.persist();
   }
 
   private parseAgent(raw: AgentConfig): AgentConfig {
@@ -115,6 +129,16 @@ class AgentStore {
       createdAt: new Date(raw.createdAt),
       updatedAt: new Date(raw.updatedAt),
     };
+  }
+
+  private persist(): Promise<void> {
+    const data = Array.from(this.sessions.values());
+    this.savePromise = persistence.writeSessions(data);
+    return this.savePromise;
+  }
+
+  async waitForPersistence(): Promise<void> {
+    await this.savePromise;
   }
 }
 

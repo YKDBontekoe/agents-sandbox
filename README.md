@@ -34,7 +34,7 @@ Agents Sandbox exposes a lightweight API layer for interacting with plugins and 
 
 ## Persistence Layers
 
-The project ships with an in-memory store for rapid prototyping. Additional persistence strategies can be added by implementing the persistence interface described in [docs/persistence-layers.md](docs/persistence-layers.md).
+The project ships with an in-memory store for rapid prototyping. Agent chat sessions are persisted to `data/sessions.json` so conversations survive server restarts. Additional persistence strategies can be added by implementing the persistence interface described in [docs/persistence-layers.md](docs/persistence-layers.md).
 
 ## Developer Guidelines
 
