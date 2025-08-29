@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { APIClient } from './api-client';
 import * as apiUtils from './api/utils';
+import * as analytics from './analytics';
 
 describe('APIClient retry logic', () => {
   beforeEach(() => {
@@ -9,11 +10,11 @@ describe('APIClient retry logic', () => {
   });
 
   it('retries on transient failure and succeeds', async () => {
-    const metrics = {
-      incrementError: vi.fn(),
-      recordResponseTime: vi.fn(),
-      recordTokens: vi.fn(),
-    };
+    const incSpy = vi
+      .spyOn(analytics, 'incrementError')
+      .mockImplementation(() => {});
+    vi.spyOn(analytics, 'recordResponseTime').mockImplementation(() => {});
+    vi.spyOn(analytics, 'recordTokens').mockImplementation(() => {});
     const client = new APIClient(
       { provider: 'openai', apiKey: 'x', model: 'gpt', maxRetries: 2, timeoutMs: 1000 },
       'agent-success'
@@ -26,22 +27,24 @@ describe('APIClient retry logic', () => {
       .mockResolvedValue({ choices: [{ message: { content: 'ok' } }], usage: { total_tokens: 1 } });
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (client as any).provider.client = {
+    (client as any).client = {
       chat: { completions: { create: mockCreate } },
     };
 
     const result = await client.sendMessage([], 'sys');
     expect(result).toBe('ok');
     expect(mockCreate).toHaveBeenCalledTimes(3);
-    expect(metrics.incrementError).toHaveBeenCalledTimes(2);
+    expect(incSpy).toHaveBeenCalledTimes(2);
   });
 
   it('fails after exceeding max retries', async () => {
-    const metrics = {
-      incrementError: vi.fn(),
-      recordResponseTime: vi.fn(),
-      recordTokens: vi.fn(),
-    };
+    const incSpy = vi
+      .spyOn(analytics, 'incrementError')
+      .mockImplementation(() => {});
+    const rrSpy = vi
+      .spyOn(analytics, 'recordResponseTime')
+      .mockImplementation(() => {});
+    vi.spyOn(analytics, 'recordTokens').mockImplementation(() => {});
     const client = new APIClient(
       { provider: 'openai', apiKey: 'x', model: 'gpt', maxRetries: 2, timeoutMs: 1000 },
       'agent-fail'
@@ -49,13 +52,13 @@ describe('APIClient retry logic', () => {
 
     const mockCreate = vi.fn().mockRejectedValue(new Error('always fail'));
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (client as any).provider.client = {
+    (client as any).client = {
       chat: { completions: { create: mockCreate } },
     };
 
     await expect(client.sendMessage([], 'sys')).rejects.toThrow(/Failed to send message/);
     expect(mockCreate).toHaveBeenCalledTimes(3);
-    expect(metrics.incrementError).toHaveBeenCalledTimes(3);
-    expect(metrics.recordResponseTime).not.toHaveBeenCalled();
+    expect(incSpy).toHaveBeenCalledTimes(3);
+    expect(rrSpy).not.toHaveBeenCalled();
   });
 });
