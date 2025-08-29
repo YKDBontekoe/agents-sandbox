@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { AgentConfig } from '@/types/agent';
-import { agentStore } from '@/lib/agent-store';
+import { createAgent } from '@/lib/agents/repository';
 import { AgentMarketplaceCard } from '@/components/marketplace/AgentMarketplaceCard';
 import { Input } from '@/components/ui/input';
 import {
@@ -36,7 +36,7 @@ export default function MarketplacePage() {
 
   const handleImport = async (agent: AgentConfig) => {
     const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, ...rest } = agent;
-    await agentStore.createAgent(rest);
+    await createAgent(rest);
   };
 
   return (

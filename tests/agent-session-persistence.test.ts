@@ -19,18 +19,18 @@ describe('agent session persistence', () => {
   });
 
   it('persists sessions across restarts', async () => {
-    const { agentStore } = await import('@/lib/agent-store');
-    await agentStore.ready;
-    const session = agentStore.createSession('agent-1');
-    agentStore.addMessageToSession(session.id, {
+    const { sessionStore } = await import('@/lib/agents/session-store');
+    await sessionStore.ready;
+    const session = sessionStore.createSession('agent-1');
+    sessionStore.addMessageToSession(session.id, {
       role: 'user',
       content: 'hello',
       agentId: 'agent-1',
     });
-    await agentStore.waitForPersistence();
+    await sessionStore.waitForPersistence();
 
     vi.resetModules();
-    const { agentStore: newStore } = await import('@/lib/agent-store');
+    const { sessionStore: newStore } = await import('@/lib/agents/session-store');
     await newStore.ready;
     const loaded = newStore.getSession(session.id);
     expect(loaded).not.toBeNull();

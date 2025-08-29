@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { getAllMetrics, AgentMetrics } from '@/lib/analytics';
-import { agentStore } from '@/lib/agent-store';
+import { fetchAgents } from '@/lib/agents/repository';
 import { AgentConfig } from '@/types/agent';
 import {
   Card,
@@ -30,7 +30,7 @@ export default function AnalyticsDashboard() {
   }, []);
 
   useEffect(() => {
-    agentStore.fetchAgents().then(setAgents).catch(console.error);
+    fetchAgents().then(setAgents).catch(console.error);
   }, []);
 
   const maxTokens = Math.max(1, ...Object.values(metrics).map(m => m.tokensUsed));
