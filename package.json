@@ -2,12 +2,14 @@
   "name": "agents-sandbox",
   "version": "0.1.0",
   "private": true,
-  "scripts": {
-    "dev": "next dev --turbopack",
-    "build": "next build --turbopack",
-    "start": "next start",
-    "lint": "eslint"
-  },
+    "scripts": {
+      "dev": "next dev --turbopack",
+      "build": "next build --turbopack",
+      "start": "next start",
+      "lint": "eslint",
+      "plugins": "tsx src/lib/plugin-system.ts",
+      "scaffold:plugin": "tsx scripts/scaffold-plugin.ts"
+    },
   "dependencies": {
     "@azure/openai": "^2.0.0",
     "@dnd-kit/core": "^6.3.1",
@@ -41,6 +43,7 @@
     "eslint": "^9",
     "eslint-config-next": "15.5.2",
     "tailwindcss": "^4",
+    "tsx": "^4.20.5",
     "typescript": "^5"
   }
 }
