@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { Toaster, toast } from 'react-hot-toast';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -25,6 +26,8 @@ export function AgentDashboard({ onStartChat, onStartVoice }: AgentDashboardProp
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [agentToDelete, setAgentToDelete] = useState<string | null>(null);
   const [sessions, setSessions] = useState<AgentSession[]>([]);
+  const [sharingAgents, setSharingAgents] = useState<Set<string>>(new Set());
+  const [sharedAgents, setSharedAgents] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     // Load agents from store
@@ -73,8 +76,10 @@ export function AgentDashboard({ onStartChat, onStartVoice }: AgentDashboardProp
   };
 
   const handleShareAgent = async (agent: AgentConfig) => {
+    if (sharingAgents.has(agent.id) || sharedAgents.has(agent.id)) return;
+    setSharingAgents(prev => new Set(prev).add(agent.id));
     try {
-      await fetch('/api/marketplace/agents', {
+      const response = await fetch('/api/marketplace/agents', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -83,8 +88,28 @@ export function AgentDashboard({ onStartChat, onStartVoice }: AgentDashboardProp
           version: agent.version || '1.0.0',
         }),
       });
+
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        const message =
+          data?.message ||
+          data?.error ||
+          (data?.errors && Object.values(data.errors).join(', ')) ||
+          'Failed to share agent';
+        toast.error(message);
+        return;
+      }
+
+      toast.success('Agent shared successfully');
+      setSharedAgents(prev => new Set(prev).add(agent.id));
     } catch (error) {
-      console.error('Failed to share agent:', error);
+      toast.error('Failed to share agent');
+    } finally {
+      setSharingAgents(prev => {
+        const next = new Set(prev);
+        next.delete(agent.id);
+        return next;
+      });
     }
   };
 
@@ -145,6 +170,7 @@ export function AgentDashboard({ onStartChat, onStartVoice }: AgentDashboardProp
 
   return (
     <DragDropProvider agents={agents} onDragEnd={handleDragEnd}>
+        <Toaster />
         <ConfirmDialog
           open={deleteDialogOpen}
           title="Delete Agent"
@@ -320,6 +346,9 @@ export function AgentDashboard({ onStartChat, onStartVoice }: AgentDashboardProp
                   onStartChat={handleStartChat}
                   onStartVoice={handleStartVoice}
                   onShare={handleShareAgent}
+                  shareDisabled={
+                    sharingAgents.has(agent.id) || sharedAgents.has(agent.id)
+                  }
                 />
               ))}
             </div>
