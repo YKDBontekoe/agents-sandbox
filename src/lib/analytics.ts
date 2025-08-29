@@ -34,6 +34,15 @@ function ensureAgent(agentId: string) {
 function notifyUpdate() {
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new Event('analytics-updated'));
+    try {
+      fetch('/api/events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'analytics', data: metrics }),
+      });
+    } catch (err) {
+      console.error('Failed to broadcast analytics update', err);
+    }
   }
 }
 
@@ -133,5 +142,20 @@ if (process.env.SLACK_WEBHOOK_URL) {
 if (process.env.EMAIL_WEBHOOK_URL) {
   onAlert((agentId, metric, value) => {
     sendEmailAlert(agentId, metric, value);
+  });
+}
+
+if (typeof window !== 'undefined') {
+  const source = new EventSource('/api/events');
+  source.addEventListener('analytics', event => {
+    const data: Record<string, AgentMetrics> = JSON.parse(event.data);
+    for (const [id, metric] of Object.entries(data)) {
+      metrics[id] = {
+        responseTimes: metric.responseTimes,
+        errorCount: metric.errorCount,
+        tokensUsed: metric.tokensUsed,
+      };
+    }
+    window.dispatchEvent(new Event('analytics-updated'));
   });
 }

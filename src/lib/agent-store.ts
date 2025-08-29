@@ -7,14 +7,45 @@ class AgentStore {
   private sessions: Map<string, AgentSession> = new Map();
   private storageKey = 'agentic-app-data';
 
-  private notifySessionsChanged(): void {
+  private async notifySessionsChanged(): Promise<void> {
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new Event('agent-sessions-changed'));
+      try {
+        await fetch('/api/events', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'session', data: this.getAllSessions() }),
+        });
+      } catch (err) {
+        console.error('Failed to broadcast session update', err);
+      }
     }
   }
 
   constructor() {
     this.loadFromStorage();
+    if (typeof window !== 'undefined') {
+      const source = new EventSource('/api/events');
+      source.addEventListener('session', event => {
+        const sessions: AgentSession[] = JSON.parse(event.data);
+        this.sessions = new Map(
+          sessions.map(session => [
+            session.id,
+            {
+              ...session,
+              createdAt: new Date(session.createdAt),
+              updatedAt: new Date(session.updatedAt),
+              messages: session.messages.map(msg => ({
+                ...msg,
+                timestamp: new Date(msg.timestamp),
+              })),
+            },
+          ]),
+        );
+        this.saveToStorage();
+        window.dispatchEvent(new Event('agent-sessions-changed'));
+      });
+    }
   }
 
   // Agent management
@@ -84,7 +115,7 @@ class AgentStore {
 
     this.sessions.set(session.id, session);
     this.saveToStorage();
-    this.notifySessionsChanged();
+    void this.notifySessionsChanged();
     return session;
   }
 
@@ -129,7 +160,7 @@ class AgentStore {
     const deleted = this.sessions.delete(id);
     if (deleted) {
       this.saveToStorage();
-      this.notifySessionsChanged();
+      void this.notifySessionsChanged();
     }
     return deleted;
   }
@@ -197,7 +228,7 @@ class AgentStore {
     this.agents.clear();
     this.sessions.clear();
     this.saveToStorage();
-    this.notifySessionsChanged();
+    void this.notifySessionsChanged();
   }
 }
 
