@@ -1,4 +1,5 @@
 import { type ClassValue, clsx } from "clsx";
+import { encodingForModel } from "js-tiktoken";
 import { twMerge } from "tailwind-merge";
 
 export function cn(...inputs: ClassValue[]) {
@@ -45,4 +46,15 @@ export function getModelsByProvider(provider: string): string[] {
     default:
       return [];
   }
+}
+
+const encoders: Record<string, ReturnType<typeof encodingForModel>> = {};
+
+export function countTokens(text: string, model = 'gpt-3.5-turbo'): number {
+  let encoder = encoders[model];
+  if (!encoder) {
+    encoder = encodingForModel(model);
+    encoders[model] = encoder;
+  }
+  return encoder.encode(text).length;
 }

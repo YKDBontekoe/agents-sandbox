@@ -114,10 +114,8 @@ class AgentStore {
     session.messages.push(newMessage);
     session.updatedAt = new Date();
 
-    // Approximate token usage by word count
     if (newMessage.agentId) {
-      const tokens = newMessage.content.split(/\s+/).filter(Boolean).length;
-      recordTokens(newMessage.agentId, tokens);
+      recordTokens(newMessage.agentId, newMessage.content);
     }
 
     this.sessions.set(sessionId, session);
