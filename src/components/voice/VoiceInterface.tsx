@@ -32,7 +32,7 @@ export function VoiceInterface({ agent, onBack }: VoiceInterfaceProps) {
   useEffect(() => {
     // Initialize API client
     try {
-      const client = new APIClient(agent.modelConfig);
+      const client = new APIClient(agent.modelConfig, agent.id);
       setApiClient(client);
     } catch (error) {
       console.error('Failed to initialize API client:', error);

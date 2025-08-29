@@ -1,5 +1,6 @@
 import { AgentConfig, AgentSession, ChatMessage } from '@/types/agent';
 import { generateId } from './utils';
+import { recordTokens } from './analytics';
 
 class AgentStore {
   private agents: Map<string, AgentConfig> = new Map();
@@ -112,7 +113,13 @@ class AgentStore {
 
     session.messages.push(newMessage);
     session.updatedAt = new Date();
-    
+
+    // Approximate token usage by word count
+    if (newMessage.agentId) {
+      const tokens = newMessage.content.split(/\s+/).filter(Boolean).length;
+      recordTokens(newMessage.agentId, tokens);
+    }
+
     this.sessions.set(sessionId, session);
     this.saveToStorage();
     return newMessage;
