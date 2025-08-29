@@ -22,6 +22,10 @@ class MarketplaceStore {
     this.agents.set(agent.id, agent);
     return agent;
   }
+
+  deleteAgent(id: string): boolean {
+    return this.agents.delete(id);
+  }
 }
 
 export const marketplaceStore = new MarketplaceStore();
