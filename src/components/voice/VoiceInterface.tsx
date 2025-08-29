@@ -21,6 +21,7 @@ export function VoiceInterface({ agent, onBack }: VoiceInterfaceProps) {
   const [audioUrls, setAudioUrls] = useState<Record<string, string>>({});
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [streamingContent, setStreamingContent] = useState<string | null>(null);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [apiClient, setApiClient] = useState<APIClient | null>(null);
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
@@ -133,57 +134,120 @@ export function VoiceInterface({ agent, onBack }: VoiceInterfaceProps) {
         setAudioUrls(prev => ({ ...prev, [userMessage.id]: audioUrl }));
       }
 
-      // Get AI text response
-      const chatMessages = messages.concat(userMessage ? [userMessage] : []).map(msg => ({
-        role: msg.role,
-        content: msg.content,
-        timestamp: msg.timestamp,
-        id: msg.id,
-        agentId: msg.agentId,
-      }));
-
-      const response = await apiClient.sendMessage(
-        chatMessages,
-        agent.systemPrompt,
-        agent.temperature,
-        agent.maxTokens
-      );
-
-      // Generate speech from response (only available for OpenAI)
-      let responseAudioUrl = '';
-      if (agent.modelConfig.provider === 'openai') {
-        try {
-          const speechArrayBuffer = await apiClient.generateSpeech(response);
-          const speechBlob = new Blob([speechArrayBuffer], { type: 'audio/mpeg' });
-          responseAudioUrl = URL.createObjectURL(speechBlob);
-          audioUrlRefs.current.push(responseAudioUrl);
-        } catch (error) {
-          console.error('Speech generation failed:', error);
+      const chatMessages = messages.concat(userMessage ? [userMessage] : []);
+      if (typeof window !== 'undefined' && window.EventSource) {
+        let full = '';
+        setStreamingContent('');
+        const es = new EventSource(
+          `/api/agents/${agent.id}/stream?messages=${encodeURIComponent(JSON.stringify(chatMessages))}`
+        );
+        es.onmessage = async e => {
+          if (e.data === '[DONE]') {
+            es.close();
+            const aiMessage = agentStore.addMessageToSession(session.id, {
+              role: 'assistant',
+              content: full,
+              agentId: agent.id,
+            });
+            if (aiMessage) {
+              setMessages(prev => [...prev, aiMessage]);
+              if (agent.modelConfig.provider === 'openai') {
+                try {
+                  const speechArrayBuffer = await apiClient.generateSpeech(full);
+                  const speechBlob = new Blob([speechArrayBuffer], { type: 'audio/mpeg' });
+                  const responseAudioUrl = URL.createObjectURL(speechBlob);
+                  audioUrlRefs.current.push(responseAudioUrl);
+                  setAudioUrls(prev => ({ ...prev, [aiMessage.id]: responseAudioUrl }));
+                  playAudio(responseAudioUrl);
+                } catch (err) {
+                  console.error('Speech generation failed:', err);
+                  speakText(full);
+                }
+              } else {
+                speakText(full);
+              }
+            }
+            setStreamingContent(null);
+            setIsProcessing(false);
+          } else {
+            full += e.data;
+            setStreamingContent(full);
+            speakText(e.data, false);
+          }
+        };
+        es.onerror = async () => {
+          es.close();
+          setStreamingContent(null);
+          try {
+            const response = await apiClient.sendMessage(
+              chatMessages,
+              agent.systemPrompt,
+              agent.temperature,
+              agent.maxTokens
+            );
+            const aiMessage = agentStore.addMessageToSession(session.id, {
+              role: 'assistant',
+              content: response,
+              agentId: agent.id,
+            });
+            if (aiMessage) {
+              setMessages(prev => [...prev, aiMessage]);
+              if (agent.modelConfig.provider === 'openai') {
+                try {
+                  const buf = await apiClient.generateSpeech(response);
+                  const blob = new Blob([buf], { type: 'audio/mpeg' });
+                  const url = URL.createObjectURL(blob);
+                  audioUrlRefs.current.push(url);
+                  setAudioUrls(prev => ({ ...prev, [aiMessage.id]: url }));
+                  playAudio(url);
+                } catch (err) {
+                  console.error('Speech generation failed:', err);
+                  speakText(response);
+                }
+              } else {
+                speakText(response);
+              }
+            }
+          } catch (err) {
+            console.error('Failed to process audio message:', err);
+          }
+          setIsProcessing(false);
+        };
+      } else {
+        const response = await apiClient.sendMessage(
+          chatMessages,
+          agent.systemPrompt,
+          agent.temperature,
+          agent.maxTokens
+        );
+        const aiMessage = agentStore.addMessageToSession(session.id, {
+          role: 'assistant',
+          content: response,
+          agentId: agent.id,
+        });
+        if (aiMessage) {
+          setMessages(prev => [...prev, aiMessage]);
+          if (agent.modelConfig.provider === 'openai') {
+            try {
+              const buf = await apiClient.generateSpeech(response);
+              const blob = new Blob([buf], { type: 'audio/mpeg' });
+              const url = URL.createObjectURL(blob);
+              audioUrlRefs.current.push(url);
+              setAudioUrls(prev => ({ ...prev, [aiMessage.id]: url }));
+              playAudio(url);
+            } catch (err) {
+              console.error('Speech generation failed:', err);
+              speakText(response);
+            }
+          } else {
+            speakText(response);
+          }
         }
-      }
-
-      // Add AI voice message
-      const aiMessage = agentStore.addMessageToSession(session.id, {
-        role: 'assistant',
-        content: response,
-        agentId: agent.id,
-      });
-
-      if (aiMessage) {
-        setMessages(prev => [...prev, aiMessage]);
-        
-        // Store audio URL for AI response if available
-        if (responseAudioUrl) {
-          setAudioUrls(prev => ({ ...prev, [aiMessage.id]: responseAudioUrl }));
-          playAudio(responseAudioUrl);
-        } else {
-          // Fallback to text-to-speech
-          speakText(response);
-        }
+        setIsProcessing(false);
       }
     } catch (error) {
       console.error('Failed to process audio message:', error);
-      
+
       const errorMessage = agentStore.addMessageToSession(session.id, {
         role: 'assistant',
         content: 'Sorry, I encountered an error while processing your voice message. Please try again.',
@@ -194,7 +258,6 @@ export function VoiceInterface({ agent, onBack }: VoiceInterfaceProps) {
         setMessages(prev => [...prev, errorMessage]);
         speakText(errorMessage.content);
       }
-    } finally {
       setIsProcessing(false);
     }
   };
@@ -218,10 +281,10 @@ export function VoiceInterface({ agent, onBack }: VoiceInterfaceProps) {
     });
   };
 
-  const speakText = (text: string) => {
+  const speakText = (text: string, cancel = true) => {
     if (!speechSynthesis) return;
-    
-    speechSynthesis.cancel();
+
+    if (cancel) speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
     
     utterance.onstart = () => setIsSpeaking(true);
@@ -346,20 +409,40 @@ export function VoiceInterface({ agent, onBack }: VoiceInterfaceProps) {
           ))
         )}
         
-        {isProcessing && (
+        {streamingContent !== null ? (
           <div className="flex gap-3 max-w-4xl mr-auto">
             <div className="w-8 h-8 bg-purple-500 rounded-full flex items-center justify-center flex-shrink-0">
               <Bot className="h-4 w-4 text-white" />
             </div>
             <div className="flex flex-col gap-1">
               <div className="px-4 py-2 bg-white border shadow-sm rounded-lg">
-                <div className="flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <span className="text-sm text-muted-foreground">Processing audio...</span>
-                </div>
+                {streamingContent ? (
+                  <p className="whitespace-pre-wrap">{streamingContent}</p>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span className="text-sm text-muted-foreground">Processing audio...</span>
+                  </div>
+                )}
               </div>
             </div>
           </div>
+        ) : (
+          isProcessing && (
+            <div className="flex gap-3 max-w-4xl mr-auto">
+              <div className="w-8 h-8 bg-purple-500 rounded-full flex items-center justify-center flex-shrink-0">
+                <Bot className="h-4 w-4 text-white" />
+              </div>
+              <div className="flex flex-col gap-1">
+                <div className="px-4 py-2 bg-white border shadow-sm rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span className="text-sm text-muted-foreground">Processing audio...</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )
         )}
         
         <div ref={messagesEndRef} />
