@@ -24,6 +24,10 @@ export interface AgentConfig {
     speed: number;
     pitch: number;
   };
+  version?: string;
+  visibility?: 'public' | 'private';
+  screenshots?: string[];
+  rating?: number;
   createdAt: Date;
   updatedAt: Date;
 }

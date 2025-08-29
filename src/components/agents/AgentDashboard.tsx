@@ -71,6 +71,22 @@ export function AgentDashboard({ onStartChat, onStartVoice }: AgentDashboardProp
     setDeleteDialogOpen(true);
   };
 
+  const handleShareAgent = async (agent: AgentConfig) => {
+    try {
+      await fetch('/api/marketplace/agents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...agent,
+          visibility: 'public',
+          version: agent.version || '1.0.0',
+        }),
+      });
+    } catch (error) {
+      console.error('Failed to share agent:', error);
+    }
+  };
+
   const confirmDeleteAgent = () => {
     if (agentToDelete) {
       agentStore.deleteAgent(agentToDelete);
@@ -292,6 +308,7 @@ export function AgentDashboard({ onStartChat, onStartVoice }: AgentDashboardProp
                   onDelete={handleDeleteAgent}
                   onStartChat={handleStartChat}
                   onStartVoice={handleStartVoice}
+                  onShare={handleShareAgent}
                 />
               ))}
             </div>
