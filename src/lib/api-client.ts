@@ -7,6 +7,19 @@ import {
   incrementError,
 } from './analytics';
 
+interface ChatCompletionResponse {
+  choices: { message?: { content?: string } }[];
+  usage?: { total_tokens?: number };
+}
+
+interface SpeechResponse {
+  arrayBuffer: () => Promise<ArrayBuffer>;
+}
+
+interface TranscriptionResponse {
+  text: string;
+}
+
 export class APIClient {
   private config: ModelConfig;
   private client!: OpenAI;
@@ -47,6 +60,49 @@ export class APIClient {
     }
   }
 
+  private async sleep(ms: number) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  private async withTimeout<T>(promise: Promise<T>, timeoutMs: number) {
+    if (!timeoutMs) return promise;
+    return new Promise<T>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        reject(new Error(`Request timed out after ${timeoutMs}ms`));
+      }, timeoutMs);
+      promise
+        .then(res => {
+          clearTimeout(timer);
+          resolve(res);
+        })
+        .catch(err => {
+          clearTimeout(timer);
+          reject(err);
+        });
+    });
+  }
+
+  private async retryWithBackoff<T>(operation: (attempt: number) => Promise<T>) {
+    const maxRetries = this.config.maxRetries ?? 3;
+    const baseDelay = 500;
+    let attempt = 0;
+    let lastError: unknown;
+    while (attempt <= maxRetries) {
+      try {
+        return await operation(attempt);
+      } catch (err) {
+        lastError = err;
+        if (this.agentId) incrementError(this.agentId);
+        if (attempt === maxRetries) break;
+        const delay = baseDelay * 2 ** attempt;
+        await this.sleep(delay);
+      }
+      attempt++;
+    }
+    const message = lastError instanceof Error ? lastError.message : String(lastError);
+    throw new Error(`Operation failed after ${maxRetries + 1} attempts: ${message}`);
+  }
+
   async sendMessage(
     messages: ChatMessage[],
     systemPrompt: string,
@@ -54,52 +110,37 @@ export class APIClient {
     maxTokens: number = 1000
   ): Promise<string> {
     const start = Date.now();
+    const formattedMessages = [
+      { role: 'system', content: systemPrompt },
+      ...messages.map(msg => ({
+        role: msg.role,
+        content: msg.content
+      }))
+    ];
+
+    const makeRequest = () =>
+      this.withTimeout<ChatCompletionResponse>(
+        this.client.chat.completions.create({
+          model: this.config.model,
+          messages: formattedMessages,
+          temperature,
+          max_tokens: maxTokens,
+        }) as Promise<ChatCompletionResponse>,
+        this.config.timeoutMs ?? 30000
+      );
+
     try {
-      const formattedMessages = [
-        { role: 'system', content: systemPrompt },
-        ...messages.map(msg => ({
-          role: msg.role,
-          content: msg.content
-        }))
-      ];
-
-      switch (this.config.provider) {
-        case 'openai':
-        case 'openrouter':
-          const response = await this.client.chat.completions.create({
-            model: this.config.model,
-            messages: formattedMessages,
-            temperature,
-            max_tokens: maxTokens,
-          });
-          if (this.agentId) {
-            recordResponseTime(this.agentId, Date.now() - start);
-            const tokens = response.usage?.total_tokens;
-            if (tokens) recordTokens(this.agentId, tokens);
-          }
-          return response.choices[0]?.message?.content || '';
-
-        case 'azure-openai':
-          const azureResponse = await this.client.chat.completions.create({
-            model: this.config.model,
-            messages: formattedMessages,
-            temperature,
-            max_tokens: maxTokens,
-          });
-          if (this.agentId) {
-            recordResponseTime(this.agentId, Date.now() - start);
-            const tokens = azureResponse.usage?.total_tokens;
-            if (tokens) recordTokens(this.agentId, tokens);
-          }
-          return azureResponse.choices[0]?.message?.content || '';
-
-        default:
-          throw new Error(`Unsupported provider: ${this.config.provider}`);
+      const response = await this.retryWithBackoff<ChatCompletionResponse>(makeRequest);
+      if (this.agentId) {
+        recordResponseTime(this.agentId, Date.now() - start);
+        const tokens = response.usage?.total_tokens;
+        if (tokens) recordTokens(this.agentId, tokens);
       }
+      return response.choices[0]?.message?.content || '';
     } catch (error) {
-      if (this.agentId) incrementError(this.agentId);
       console.error('API Error:', error);
-      throw new Error('Failed to send message to AI provider');
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to send message to AI provider: ${message}`);
     }
   }
 
@@ -112,20 +153,26 @@ export class APIClient {
     }
 
     const start = Date.now();
+    const makeRequest = () =>
+      this.withTimeout<SpeechResponse>(
+        this.client.audio.speech.create({
+          model: 'tts-1',
+          voice,
+          input: text,
+        }) as Promise<SpeechResponse>,
+        this.config.timeoutMs ?? 30000
+      );
+
     try {
-      const response = await this.client.audio.speech.create({
-        model: 'tts-1',
-        voice,
-        input: text,
-      });
+      const response = await this.retryWithBackoff<SpeechResponse>(makeRequest);
       if (this.agentId) {
         recordResponseTime(this.agentId, Date.now() - start);
       }
       return await response.arrayBuffer();
     } catch (error) {
-      if (this.agentId) incrementError(this.agentId);
       console.error('Speech generation error:', error);
-      throw new Error('Failed to generate speech');
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to generate speech: ${message}`);
     }
   }
 
@@ -135,19 +182,25 @@ export class APIClient {
     }
 
     const start = Date.now();
+    const makeRequest = () =>
+      this.withTimeout<TranscriptionResponse>(
+        this.client.audio.transcriptions.create({
+          file: audioFile,
+          model: 'whisper-1',
+        }) as Promise<TranscriptionResponse>,
+        this.config.timeoutMs ?? 30000
+      );
+
     try {
-      const response = await this.client.audio.transcriptions.create({
-        file: audioFile,
-        model: 'whisper-1',
-      });
+      const response = await this.retryWithBackoff<TranscriptionResponse>(makeRequest);
       if (this.agentId) {
         recordResponseTime(this.agentId, Date.now() - start);
       }
       return response.text;
     } catch (error) {
-      if (this.agentId) incrementError(this.agentId);
       console.error('Transcription error:', error);
-      throw new Error('Failed to transcribe audio');
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to transcribe audio: ${message}`);
     }
   }
 }
