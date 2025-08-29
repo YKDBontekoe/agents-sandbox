@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import type { Plugin } from '@/lib/plugin-system';
 import {
   Dialog,
   DialogTrigger,
@@ -11,8 +10,20 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 
+interface SerializablePlugin {
+  id: string;
+  name: string;
+  enabled?: boolean;
+  options?: Record<string, unknown>;
+  permissions?: string[];
+  logs?: string[];
+  errors?: string[];
+  warning?: string;
+  error?: string;
+}
+
 interface PluginSettingsProps {
-  plugin: Plugin;
+  plugin: SerializablePlugin;
   action: (formData: FormData) => void | Promise<void>;
 }
 

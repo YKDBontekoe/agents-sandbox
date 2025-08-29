@@ -32,11 +32,24 @@ export default async function PluginsPage() {
   await loadPlugins();
   const plugins = getPlugins();
 
+  // Create serializable plugin data without function properties
+  const serializablePlugins = plugins.map(plugin => ({
+    id: plugin.id,
+    name: plugin.name,
+    enabled: plugin.enabled,
+    options: plugin.options,
+    permissions: plugin.permissions,
+    logs: plugin.logs,
+    errors: plugin.errors,
+    warning: plugin.warning,
+    error: plugin.error
+  }));
+
   return (
     <div className="p-4">
       <h1 className="mb-4 text-xl font-bold">Installed Plugins</h1>
       <ul>
-        {plugins.map((plugin) => (
+        {serializablePlugins.map((plugin) => (
           <li key={plugin.id} className="py-2">
             <div className="flex items-center justify-between">
               <span>
