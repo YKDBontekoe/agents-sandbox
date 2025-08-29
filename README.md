@@ -1,36 +1,46 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Agents Sandbox
 
-## Getting Started
+Agents Sandbox is a Next.js playground for experimenting with plugin-driven agent interactions. It exposes a modular architecture that allows developers to build, test, and extend agent capabilities through reusable plugins.
 
-First, run the development server:
+## Installation
+
+1. **Install dependencies**
+   ```bash
+   npm install
+   ```
+2. **Start the development server**
+   ```bash
+   npm run dev
+   ```
+   The app runs at [http://localhost:3000](http://localhost:3000).
+
+## Architecture
+
+The application is structured around a plugin system. Core components live under `src/`, while optional capabilities are loaded from the `plugins/` directory. Each plugin can contribute UI elements, backend logic, or both, enabling rapid experimentation without touching the core codebase.
+
+## Plugin Authoring
+
+Plugins reside in the `plugins/` folder and are loaded at runtime. Scaffold a new plugin with:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm run scaffold:plugin
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Refer to [docs/plugin-authoring.md](docs/plugin-authoring.md) for a complete guide.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## API Usage
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Agents Sandbox exposes a lightweight API layer for interacting with plugins and core services. See [docs/api-usage.md](docs/api-usage.md) for request examples and integration tips.
 
-## Learn More
+## Persistence Layers
 
-To learn more about Next.js, take a look at the following resources:
+The project ships with an in-memory store for rapid prototyping. Additional persistence strategies can be added by implementing the persistence interface described in [docs/persistence-layers.md](docs/persistence-layers.md).
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Developer Guidelines
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- **Coding style:** follow the existing ESLint configuration and prefer modern TypeScript features.
+- **Testing:** run `npm test` (when available) and `npm run lint` before committing.
+- **Documentation:** update both the README and `docs/` directory whenever behavior or APIs change.
 
-## Deploy on Vercel
+For extended guidelines, consult [docs/developer-guidelines.md](docs/developer-guidelines.md).
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
