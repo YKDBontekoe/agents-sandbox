@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,7 +11,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { AgentConfig, AgentSession } from '@/types/agent';
 import { DragEndEvent } from '@dnd-kit/core';
 import { agentStore } from '@/lib/agent-store';
-import { Plus, Users, MessageSquare } from 'lucide-react';
+import { Plus, Users, MessageSquare, Download, Upload } from 'lucide-react';
 
 interface AgentDashboardProps {
   onStartChat?: (agent: AgentConfig) => void;
@@ -70,6 +70,48 @@ export function AgentDashboard({ onStartChat, onStartVoice }: AgentDashboardProp
   const handleDeleteAgent = (agentId: string) => {
     setAgentToDelete(agentId);
     setDeleteDialogOpen(true);
+  };
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleExportAgents = () => {
+    const exportAgents = agentStore
+      .getAllAgents()
+      .map(({ id, createdAt, updatedAt, ...rest }) => rest);
+    const blob = new Blob([JSON.stringify({ agents: exportAgents }, null, 2)], {
+      type: 'application/json',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'agents.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  type ImportedAgent = Omit<AgentConfig, 'id' | 'createdAt' | 'updatedAt'>;
+
+  const handleImportAgents = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const data = JSON.parse(event.target?.result as string);
+        if (!Array.isArray(data.agents)) throw new Error('Invalid agent file');
+        data.agents.forEach((agent: ImportedAgent) => {
+          if (typeof agent.name !== 'string' || typeof agent.type !== 'string') {
+            throw new Error('Invalid agent entry');
+          }
+          agentStore.createAgent(agent);
+        });
+        setAgents(agentStore.getAllAgents());
+      } catch (err) {
+        console.error('Failed to import agents:', err);
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
   };
 
   const handleShareAgent = async (agent: AgentConfig) => {
@@ -158,6 +200,13 @@ export function AgentDashboard({ onStartChat, onStartVoice }: AgentDashboardProp
           }}
         />
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="application/json"
+          onChange={handleImportAgents}
+          className="hidden"
+        />
         {/* Modern Header */}
         <div className="glass-effect border-b border-blue-100">
           <div className="container mx-auto px-8 py-6">
@@ -179,6 +228,15 @@ export function AgentDashboard({ onStartChat, onStartVoice }: AgentDashboardProp
                     Workflow Builder
                   </Button>
                 </Link>
+                <Button variant="outline" onClick={handleExportAgents}>
+                  <Download className="mr-2 h-4 w-4" /> Export
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Upload className="mr-2 h-4 w-4" /> Import
+                </Button>
                 <Button
                   onClick={handleCreateAgent}
                   className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-6 py-3 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 flex items-center gap-3 text-base font-semibold"
