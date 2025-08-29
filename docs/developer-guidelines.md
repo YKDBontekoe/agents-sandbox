@@ -18,7 +18,7 @@ Update both this `docs/` directory and the root `README.md` whenever APIs or beh
 
 ## Analytics
 
-Metrics collected by `src/lib/analytics.ts` are persisted to `data/analytics-metrics.json`.
+ Metrics collected by `src/lib/analytics/index.ts` are persisted to `data/analytics-metrics.json`.
 The module flushes metrics to disk after each update and reloads them on startup so
 counts survive server restarts. A real-time dashboard is available at `/analytics` and
 refreshes automatically on `analytics-updated` events.
