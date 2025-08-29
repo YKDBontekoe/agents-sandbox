@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
 import type { AudioSpeechCreateParams } from 'openai/resources/audio/speech';
+import type { ChatCompletionChunk } from 'openai/resources/chat/completions';
 import { ModelConfig, ChatMessage } from '@/types/agent';
 import {
   recordResponseTime,
@@ -141,6 +142,58 @@ export class APIClient {
       console.error('API Error:', error);
       const message = error instanceof Error ? error.message : String(error);
       throw new Error(`Failed to send message to AI provider: ${message}`);
+    }
+  }
+
+  async *streamMessage(
+    messages: ChatMessage[],
+    systemPrompt: string,
+    temperature: number = 0.7,
+    maxTokens: number = 1000
+  ): AsyncGenerator<string> {
+    if (!['openai', 'openrouter'].includes(this.config.provider)) {
+      yield await this.sendMessage(messages, systemPrompt, temperature, maxTokens);
+      return;
+    }
+
+    const start = Date.now();
+    const formattedMessages = [
+      { role: 'system', content: systemPrompt },
+      ...messages.map(m => ({ role: m.role, content: m.content }))
+    ];
+
+    const makeRequest = () =>
+      this.withTimeout<AsyncIterable<ChatCompletionChunk>>(
+        this.client.chat.completions.create({
+          model: this.config.model,
+          messages: formattedMessages,
+          temperature,
+          max_tokens: maxTokens,
+          stream: true,
+        }) as AsyncIterable<ChatCompletionChunk>,
+        this.config.timeoutMs ?? 30000
+      );
+
+    try {
+      const stream = await this.retryWithBackoff<AsyncIterable<ChatCompletionChunk>>(
+        () => makeRequest()
+      );
+      let full = '';
+      for await (const part of stream) {
+        const token = part.choices?.[0]?.delta?.content;
+        if (token) {
+          full += token;
+          yield token;
+        }
+      }
+      if (this.agentId) {
+        recordResponseTime(this.agentId, Date.now() - start);
+        recordTokens(this.agentId, full);
+      }
+    } catch (error) {
+      console.error('Streaming API error:', error);
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to stream message from AI provider: ${message}`);
     }
   }
 

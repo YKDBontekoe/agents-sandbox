@@ -21,6 +21,7 @@ export function ChatInterface({ agent, onBack }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [streamingContent, setStreamingContent] = useState<string | null>(null);
   const [apiClient, setApiClient] = useState<APIClient | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -55,7 +56,6 @@ export function ChatInterface({ agent, onBack }: ChatInterfaceProps) {
     setIsLoading(true);
 
     try {
-      // Add user message
       const newUserMessage = agentStore.addMessageToSession(session.id, {
         role: 'user',
         content: userMessage,
@@ -66,37 +66,88 @@ export function ChatInterface({ agent, onBack }: ChatInterfaceProps) {
         setMessages(prev => [...prev, newUserMessage]);
       }
 
-      // Get AI response
-      const response = await apiClient.sendMessage(
-        messages.concat(newUserMessage ? [newUserMessage] : []),
-        agent.systemPrompt,
-        agent.temperature,
-        agent.maxTokens
-      );
+      const history = messages.concat(newUserMessage ? [newUserMessage] : []);
 
-      // Add AI response
-      const aiMessage = agentStore.addMessageToSession(session.id, {
-        role: 'assistant',
-        content: response,
-        agentId: agent.id,
-      });
-
-      if (aiMessage) {
-        setMessages(prev => [...prev, aiMessage]);
+      if (typeof window !== 'undefined' && window.EventSource) {
+        let full = '';
+        setStreamingContent('');
+        const es = new EventSource(
+          `/api/agents/${agent.id}/stream?messages=${encodeURIComponent(JSON.stringify(history))}`
+        );
+        es.onmessage = e => {
+          if (e.data === '[DONE]') {
+            es.close();
+            const aiMessage = agentStore.addMessageToSession(session.id, {
+              role: 'assistant',
+              content: full,
+              agentId: agent.id,
+            });
+            if (aiMessage) setMessages(prev => [...prev, aiMessage]);
+            setStreamingContent(null);
+            setIsLoading(false);
+            inputRef.current?.focus();
+          } else {
+            full += e.data;
+            setStreamingContent(full);
+          }
+        };
+        es.onerror = async () => {
+          es.close();
+          setStreamingContent(null);
+          try {
+            const response = await apiClient.sendMessage(
+              history,
+              agent.systemPrompt,
+              agent.temperature,
+              agent.maxTokens
+            );
+            const aiMessage = agentStore.addMessageToSession(session.id, {
+              role: 'assistant',
+              content: response,
+              agentId: agent.id,
+            });
+            if (aiMessage) setMessages(prev => [...prev, aiMessage]);
+          } catch (err) {
+            console.error('Failed to send message:', err);
+            const errorMessage = agentStore.addMessageToSession(session.id, {
+              role: 'assistant',
+              content:
+                'Sorry, I encountered an error while processing your message. Please check your API configuration and try again.',
+              agentId: agent.id,
+            });
+            if (errorMessage) setMessages(prev => [...prev, errorMessage]);
+          } finally {
+            setIsLoading(false);
+            inputRef.current?.focus();
+          }
+        };
+      } else {
+        const response = await apiClient.sendMessage(
+          history,
+          agent.systemPrompt,
+          agent.temperature,
+          agent.maxTokens
+        );
+        const aiMessage = agentStore.addMessageToSession(session.id, {
+          role: 'assistant',
+          content: response,
+          agentId: agent.id,
+        });
+        if (aiMessage) {
+          setMessages(prev => [...prev, aiMessage]);
+        }
+        setIsLoading(false);
+        inputRef.current?.focus();
       }
     } catch (error) {
       console.error('Failed to send message:', error);
-      // Add error message
       const errorMessage = agentStore.addMessageToSession(session.id, {
         role: 'assistant',
-        content: 'Sorry, I encountered an error while processing your message. Please check your API configuration and try again.',
+        content:
+          'Sorry, I encountered an error while processing your message. Please check your API configuration and try again.',
         agentId: agent.id,
       });
-
-      if (errorMessage) {
-        setMessages(prev => [...prev, errorMessage]);
-      }
-    } finally {
+      if (errorMessage) setMessages(prev => [...prev, errorMessage]);
       setIsLoading(false);
       inputRef.current?.focus();
     }
@@ -196,17 +247,21 @@ export function ChatInterface({ agent, onBack }: ChatInterfaceProps) {
           ))
         )}
         
-        {isLoading && (
+        {streamingContent !== null && (
           <div className="flex gap-3 max-w-4xl mr-auto">
             <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
               <Bot className="h-4 w-4 text-white" />
             </div>
             <div className="flex flex-col gap-1">
               <div className="px-4 py-2 bg-white border shadow-sm rounded-lg">
-                <div className="flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <span className="text-sm text-muted-foreground">Thinking...</span>
-                </div>
+                {streamingContent ? (
+                  <p className="whitespace-pre-wrap">{streamingContent}</p>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span className="text-sm text-muted-foreground">Thinking...</span>
+                  </div>
+                )}
               </div>
             </div>
           </div>
