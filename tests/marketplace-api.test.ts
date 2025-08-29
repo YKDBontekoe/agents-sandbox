@@ -2,20 +2,21 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { promises as fs } from 'fs';
 import path from 'path';
 import os from 'os';
+import { createDefaultAgentConfig } from '@/lib/agents/agent-builder';
 
+const baseAgent = createDefaultAgentConfig();
 const validAgent = {
+  ...baseAgent,
   name: 'Test Agent',
-  type: 'chat',
   description: 'desc',
   category: 'utilities',
   systemPrompt: 'prompt',
   modelConfig: {
-    provider: 'openai',
+    ...baseAgent.modelConfig,
     apiKey: 'key',
     model: 'gpt-4',
   },
   temperature: 0.5,
-  maxTokens: 1000,
 };
 
 let tempFile: string;

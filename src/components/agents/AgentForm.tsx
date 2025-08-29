@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { AgentConfig, AgentType, ModelProvider } from '@/types/agent';
 import { validateApiKey, getModelsByProvider } from '@/lib/utils';
 import { MessageCircle, Mic, Save, X } from 'lucide-react';
+import { createDefaultAgentConfig } from '@/lib/agents/agent-builder';
 
 interface AgentFormProps {
   agent?: AgentConfig;
@@ -16,22 +17,23 @@ interface AgentFormProps {
 }
 
 export function AgentForm({ agent, onSave, onCancel }: AgentFormProps) {
+  const defaults = createDefaultAgentConfig();
   const [formData, setFormData] = useState({
-    name: agent?.name || '',
-    description: agent?.description || '',
-    category: agent?.category || 'general',
-    type: agent?.type || 'chat' as AgentType,
-    systemPrompt: agent?.systemPrompt || 'You are a helpful AI assistant.',
-    provider: agent?.modelConfig.provider || 'openai' as ModelProvider,
-    apiKey: agent?.modelConfig.apiKey || '',
-    model: agent?.modelConfig.model || 'gpt-3.5-turbo',
-    baseUrl: agent?.modelConfig.baseUrl || '',
-    apiVersion: agent?.modelConfig.apiVersion || '',
-    temperature: agent?.temperature || 0.7,
-    maxTokens: agent?.maxTokens || 1000,
-    voice: agent?.voiceSettings?.voice || 'alloy',
-    speed: agent?.voiceSettings?.speed || 1.0,
-    pitch: agent?.voiceSettings?.pitch || 1.0,
+    name: agent?.name ?? defaults.name,
+    description: agent?.description ?? defaults.description,
+    category: agent?.category ?? defaults.category,
+    type: (agent?.type ?? defaults.type) as AgentType,
+    systemPrompt: agent?.systemPrompt ?? defaults.systemPrompt,
+    provider: (agent?.modelConfig.provider ?? defaults.modelConfig.provider) as ModelProvider,
+    apiKey: agent?.modelConfig.apiKey ?? defaults.modelConfig.apiKey,
+    model: agent?.modelConfig.model ?? defaults.modelConfig.model,
+    baseUrl: agent?.modelConfig.baseUrl ?? defaults.modelConfig.baseUrl,
+    apiVersion: agent?.modelConfig.apiVersion ?? defaults.modelConfig.apiVersion,
+    temperature: agent?.temperature ?? defaults.temperature,
+    maxTokens: agent?.maxTokens ?? defaults.maxTokens,
+    voice: agent?.voiceSettings?.voice ?? defaults.voiceSettings?.voice ?? 'alloy',
+    speed: agent?.voiceSettings?.speed ?? defaults.voiceSettings?.speed ?? 1.0,
+    pitch: agent?.voiceSettings?.pitch ?? defaults.voiceSettings?.pitch ?? 1.0,
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});

@@ -2,20 +2,24 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { promises as fs } from 'fs';
 import path from 'path';
 import os from 'os';
+import { createDefaultAgentConfig } from '@/lib/agents/agent-builder';
 
 let tempDir: string;
 let originalCwd: string;
 let streamRoute: typeof import('../src/app/api/agents/[id]/stream/route');
 
+const defaultConfig = createDefaultAgentConfig();
 const agent = {
   id: 'a1',
+  ...defaultConfig,
   name: 'Test',
-  type: 'chat',
   description: 'desc',
   systemPrompt: 'system',
-  modelConfig: { provider: 'openai', apiKey: 'key', model: 'gpt-4' },
-  temperature: 0.7,
-  maxTokens: 1000,
+  modelConfig: {
+    ...defaultConfig.modelConfig,
+    apiKey: 'key',
+    model: 'gpt-4',
+  },
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
 };
