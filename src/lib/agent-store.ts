@@ -19,6 +19,10 @@ class AgentStore {
   // Agent management
   createAgent(config: Omit<AgentConfig, 'id' | 'createdAt' | 'updatedAt'>): AgentConfig {
     const agent: AgentConfig = {
+      version: '1.0.0',
+      visibility: 'private',
+      screenshots: [],
+      rating: 0,
       ...config,
       id: generateId(),
       createdAt: new Date(),

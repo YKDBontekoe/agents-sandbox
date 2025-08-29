@@ -13,7 +13,7 @@ import {
   DropdownMenuTrigger,
 } from '../ui/dropdown-menu';
 import { AgentConfig } from '@/types/agent';
-import { MessageSquare, Mic, Edit, Trash2, GripVertical, MoreHorizontal, Settings } from 'lucide-react';
+import { MessageSquare, Mic, Edit, Trash2, GripVertical, MoreHorizontal, Settings, Share2 } from 'lucide-react';
 
 interface DraggableAgentCardProps {
   agent: AgentConfig;
@@ -21,6 +21,7 @@ interface DraggableAgentCardProps {
   onDelete?: (agentId: string) => void;
   onStartChat?: (agent: AgentConfig) => void;
   onStartVoice?: (agent: AgentConfig) => void;
+  onShare?: (agent: AgentConfig) => void;
 }
 
 export const DraggableAgentCard: React.FC<DraggableAgentCardProps> = ({
@@ -28,7 +29,8 @@ export const DraggableAgentCard: React.FC<DraggableAgentCardProps> = ({
   onEdit,
   onDelete,
   onStartChat,
-  onStartVoice
+  onStartVoice,
+  onShare
 }) => {
   const {
     attributes,
@@ -125,16 +127,23 @@ export const DraggableAgentCard: React.FC<DraggableAgentCardProps> = ({
                    <Settings className="mr-2 h-4 w-4" />
                    Edit Agent
                  </DropdownMenuItem>
-                 <DropdownMenuItem 
-                   onClick={() => onDelete?.(agent.id)}
-                   className="text-red-600 hover:bg-red-50 hover:text-red-700"
-                 >
-                   <Trash2 className="mr-2 h-4 w-4" />
-                   Delete Agent
-                 </DropdownMenuItem>
-               </DropdownMenuContent>
-             </DropdownMenu>
-          </div>
+                <DropdownMenuItem
+                  onClick={() => onDelete?.(agent.id)}
+                  className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete Agent
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => onShare?.(agent)}
+                  className="hover:bg-green-50 hover:text-green-700"
+                >
+                  <Share2 className="mr-2 h-4 w-4" />
+                  Share to Marketplace
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+         </div>
           
           <p className="text-slate-600 mb-6 line-clamp-3 leading-relaxed">
              {agent.systemPrompt || 'This agent is ready to assist with various tasks and conversations.'}
