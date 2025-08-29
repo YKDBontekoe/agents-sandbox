@@ -20,6 +20,10 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## API Rate Limiting
+
+All API routes are limited to 100 requests per minute per IP address. Clients exceeding this limit will receive a `429 Too Many Requests` response.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:
