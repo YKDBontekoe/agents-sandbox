@@ -40,7 +40,7 @@ export function WorkflowBuilder() {
     ]);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const template: Omit<WorkflowTemplate, 'id' | 'createdAt' | 'updatedAt'> = {
       name,
       nodes: nodes.map((n) => ({
@@ -57,11 +57,11 @@ export function WorkflowBuilder() {
         condition: e.data?.condition,
       })),
     };
-    workflowStore.createWorkflow(template);
+    await workflowStore.createWorkflow(template);
   };
 
-  const handleLoad = () => {
-    const [existing] = workflowStore.getAllWorkflows();
+  const handleLoad = async () => {
+    const [existing] = await workflowStore.fetchWorkflows();
     if (!existing) return;
     setName(existing.name);
     setNodes(

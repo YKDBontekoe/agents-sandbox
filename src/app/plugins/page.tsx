@@ -1,15 +1,30 @@
-import { loadPlugins, getPlugins, enablePlugin, disablePlugin } from '@/lib/plugin-system';
+import {
+  loadPlugins,
+  getPlugins,
+  enablePlugin,
+  disablePlugin,
+  updatePluginOptions,
+} from '@/lib/plugin-system';
 import { revalidatePath } from 'next/cache';
+import PluginSettings from './plugin-settings';
 
-async function togglePlugin(formData: FormData) {
+async function updatePlugin(formData: FormData) {
   'use server';
   const id = formData.get('id') as string;
-  const enabled = formData.get('enabled') === 'true';
-  if (enabled) {
-    await disablePlugin(id);
-  } else {
-    await enablePlugin(id);
+  const enabled = formData.get('enabled') === 'on';
+  const optionsRaw = formData.get('options') as string;
+  let options: Record<string, unknown> = {};
+  try {
+    options = optionsRaw ? JSON.parse(optionsRaw) : {};
+  } catch {
+    // ignore invalid JSON
   }
+  if (enabled) {
+    await enablePlugin(id);
+  } else {
+    await disablePlugin(id);
+  }
+  await updatePluginOptions(id, options);
   revalidatePath('/plugins');
 }
 
@@ -22,18 +37,22 @@ export default async function PluginsPage() {
       <h1 className="mb-4 text-xl font-bold">Installed Plugins</h1>
       <ul>
         {plugins.map((plugin) => (
-          <li key={plugin.id} className="flex items-center justify-between py-2">
-            <span>{plugin.name}</span>
-            <form action={togglePlugin}>
-              <input type="hidden" name="id" value={plugin.id} />
-              <input type="hidden" name="enabled" value={plugin.enabled ? 'true' : 'false'} />
-              <button
-                type="submit"
-                className="rounded border px-2 py-1 text-sm"
-              >
-                {plugin.enabled ? 'Disable' : 'Enable'}
-              </button>
-            </form>
+          <li key={plugin.id} className="py-2">
+            <div className="flex items-center justify-between">
+              <span>
+                {plugin.name}{' '}
+                <span className="text-xs text-muted-foreground">
+                  ({plugin.enabled ? 'enabled' : 'disabled'})
+                </span>
+              </span>
+              <PluginSettings plugin={plugin} action={updatePlugin} />
+            </div>
+            {plugin.error && (
+              <div className="text-xs text-red-600">{plugin.error}</div>
+            )}
+            {plugin.warning && (
+              <div className="text-xs text-yellow-600">{plugin.warning}</div>
+            )}
           </li>
         ))}
       </ul>
