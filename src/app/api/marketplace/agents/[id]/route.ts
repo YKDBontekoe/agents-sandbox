@@ -1,11 +1,12 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { marketplaceStore } from '@/lib/marketplace-store';
 
 export async function GET(
-  request: Request,
-  { params }: { params: { id: string } }
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const agent = marketplaceStore.getAgent(params.id);
+  const { id } = await params;
+  const agent = marketplaceStore.getAgent(id);
   if (!agent) {
     return NextResponse.json({ error: 'Agent not found' }, { status: 404 });
   }
