@@ -32,6 +32,10 @@ Refer to [docs/plugin-authoring.md](docs/plugin-authoring.md) for a complete gui
 
 Agents Sandbox exposes a lightweight API layer for interacting with plugins and core services. See [docs/api-usage.md](docs/api-usage.md) for request examples and integration tips.
 
+### Marketplace
+
+The agent marketplace supports server-side search and category filtering via `q` and `category` query parameters. Agents can also be rated, and each rating updates the agent's average score.
+
 ## Persistence Layers
 
 The project ships with an in-memory store for rapid prototyping. Additional persistence strategies can be added by implementing the persistence interface described in [docs/persistence-layers.md](docs/persistence-layers.md).

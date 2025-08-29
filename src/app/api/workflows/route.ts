@@ -5,12 +5,17 @@ import { generateId } from '@/lib/utils';
 
 const KEY = 'workflows';
 
-function parseWorkflow(raw: any): WorkflowTemplate {
+function parseWorkflow(raw: unknown): WorkflowTemplate {
+  const data = raw as {
+    [key: string]: unknown;
+    createdAt: string;
+    updatedAt: string;
+  };
   return {
-    ...raw,
-    createdAt: new Date(raw.createdAt),
-    updatedAt: new Date(raw.updatedAt),
-  } as WorkflowTemplate;
+    ...(data as Omit<WorkflowTemplate, 'createdAt' | 'updatedAt'>),
+    createdAt: new Date(data.createdAt),
+    updatedAt: new Date(data.updatedAt),
+  };
 }
 
 export async function GET() {

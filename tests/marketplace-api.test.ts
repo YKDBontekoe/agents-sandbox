@@ -1,4 +1,3 @@
-/// <reference types="vitest" />
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { promises as fs } from 'fs';
 import path from 'path';
@@ -8,6 +7,7 @@ const validAgent = {
   name: 'Test Agent',
   type: 'chat',
   description: 'desc',
+  category: 'utilities',
   systemPrompt: 'prompt',
   modelConfig: {
     provider: 'openai',
@@ -41,7 +41,7 @@ describe('marketplace API', () => {
     const res = await agentsRoute.POST(new Request('http://test', { method: 'POST', body: JSON.stringify(validAgent) }));
     expect(res.status).toBe(201);
     const created = await res.json();
-    const listRes = await agentsRoute.GET();
+    const listRes = await agentsRoute.GET(new Request('http://test'));
     const list = await listRes.json();
     expect(list).toHaveLength(1);
     expect(list[0].id).toBe(created.id);
