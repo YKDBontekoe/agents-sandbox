@@ -6,6 +6,12 @@ class AgentStore {
   private sessions: Map<string, AgentSession> = new Map();
   private storageKey = 'agentic-app-data';
 
+  private notifySessionsChanged(): void {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('agent-sessions-changed'));
+    }
+  }
+
   constructor() {
     this.loadFromStorage();
   }
@@ -73,11 +79,16 @@ class AgentStore {
 
     this.sessions.set(session.id, session);
     this.saveToStorage();
+    this.notifySessionsChanged();
     return session;
   }
 
   getSession(id: string): AgentSession | null {
     return this.sessions.get(id) || null;
+  }
+
+  getAllSessions(): AgentSession[] {
+    return Array.from(this.sessions.values());
   }
 
   getSessionsByAgent(agentId: string): AgentSession[] {
@@ -107,6 +118,7 @@ class AgentStore {
     const deleted = this.sessions.delete(id);
     if (deleted) {
       this.saveToStorage();
+      this.notifySessionsChanged();
     }
     return deleted;
   }
@@ -133,29 +145,33 @@ class AgentStore {
       const data = JSON.parse(stored);
       
       if (data.agents) {
-        this.agents = new Map(data.agents.map(([id, agent]: [string, any]) => [
-          id,
-          {
-            ...agent,
-            createdAt: new Date(agent.createdAt),
-            updatedAt: new Date(agent.updatedAt),
-          }
-        ]));
+        this.agents = new Map(
+          data.agents.map(([id, agent]: [string, AgentConfig]) => [
+            id,
+            {
+              ...agent,
+              createdAt: new Date(agent.createdAt),
+              updatedAt: new Date(agent.updatedAt),
+            },
+          ]),
+        );
       }
-      
+
       if (data.sessions) {
-        this.sessions = new Map(data.sessions.map(([id, session]: [string, any]) => [
-          id,
-          {
-            ...session,
-            createdAt: new Date(session.createdAt),
-            updatedAt: new Date(session.updatedAt),
-            messages: session.messages.map((msg: any) => ({
-              ...msg,
-              timestamp: new Date(msg.timestamp),
-            })),
-          }
-        ]));
+        this.sessions = new Map(
+          data.sessions.map(([id, session]: [string, AgentSession]) => [
+            id,
+            {
+              ...session,
+              createdAt: new Date(session.createdAt),
+              updatedAt: new Date(session.updatedAt),
+              messages: session.messages.map((msg: ChatMessage) => ({
+                ...msg,
+                timestamp: new Date(msg.timestamp),
+              })),
+            },
+          ]),
+        );
       }
     } catch (error) {
       console.error('Failed to load data from storage:', error);
@@ -166,6 +182,7 @@ class AgentStore {
     this.agents.clear();
     this.sessions.clear();
     this.saveToStorage();
+    this.notifySessionsChanged();
   }
 }
 

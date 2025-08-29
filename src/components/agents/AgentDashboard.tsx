@@ -2,13 +2,11 @@
 
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DragDropProvider } from './DragDropProvider';
 import { DraggableAgentCard } from './DraggableAgentCard';
-import { DropZone } from './DropZone';
 import { AgentForm } from './AgentForm';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { AgentConfig } from '@/types/agent';
+import { AgentConfig, AgentSession } from '@/types/agent';
 import { DragEndEvent } from '@dnd-kit/core';
 import { agentStore } from '@/lib/agent-store';
 import { Plus, Users, MessageSquare } from 'lucide-react';
@@ -22,11 +20,21 @@ export function AgentDashboard({ onStartChat, onStartVoice }: AgentDashboardProp
   const [agents, setAgents] = useState<AgentConfig[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingAgent, setEditingAgent] = useState<AgentConfig | null>(null);
-  const [sessions, setSessions] = useState<any[]>([]);
+  const [sessions, setSessions] = useState<AgentSession[]>([]);
 
   useEffect(() => {
     // Load agents from store
     setAgents(agentStore.getAllAgents());
+  }, []);
+
+  useEffect(() => {
+    const loadSessions = () => {
+      setSessions(agentStore.getAllSessions());
+    };
+
+    loadSessions();
+    window.addEventListener('agent-sessions-changed', loadSessions);
+    return () => window.removeEventListener('agent-sessions-changed', loadSessions);
   }, []);
 
   const handleCreateAgent = () => {
