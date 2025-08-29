@@ -12,7 +12,7 @@ interface Thresholds {
   tokensUsed?: number;
 }
 
-const metrics: Record<string, AgentMetrics> = {};
+let metrics: Record<string, AgentMetrics> = {};
 let thresholds: Thresholds = {
   responseTimeMs: Number(process.env.ANALYTICS_RESPONSE_TIME_THRESHOLD) || undefined,
   errorCount: Number(process.env.ANALYTICS_ERROR_THRESHOLD) || undefined,
@@ -27,6 +27,25 @@ export type AlertHandler = (
 
 const alertHandlers: AlertHandler[] = [];
 
+export async function readMetrics(): Promise<Record<string, AgentMetrics>> {
+  if (typeof window !== 'undefined') return {};
+  const { persistence } = await import('./persistence/file');
+  return persistence.read<Record<string, AgentMetrics>>(
+    'analytics-metrics',
+    {}
+  );
+}
+
+export async function writeMetrics(): Promise<void> {
+  if (typeof window !== 'undefined') return;
+  const { persistence } = await import('./persistence/file');
+  await persistence.write('analytics-metrics', metrics);
+}
+
+if (typeof window === 'undefined') {
+  metrics = await readMetrics();
+}
+
 function ensureAgent(agentId: string) {
   if (!metrics[agentId]) {
     metrics[agentId] = { responseTimes: [], errorCount: 0, tokensUsed: 0 };
@@ -37,6 +56,10 @@ function notifyUpdate() {
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new Event('analytics-updated'));
   }
+}
+
+function persist() {
+  writeMetrics().catch(err => console.error('Failed to write metrics', err));
 }
 
 function checkAlert(agentId: string, metric: keyof Thresholds, value: number) {
@@ -57,6 +80,7 @@ export function recordResponseTime(agentId: string, ms: number) {
   metrics[agentId].responseTimes.push(ms);
   checkAlert(agentId, 'responseTimeMs', ms);
   notifyUpdate();
+  persist();
 }
 
 export function incrementError(agentId: string) {
@@ -64,6 +88,7 @@ export function incrementError(agentId: string) {
   metrics[agentId].errorCount += 1;
   checkAlert(agentId, 'errorCount', metrics[agentId].errorCount);
   notifyUpdate();
+  persist();
 }
 
 export function recordTokens(agentId: string, textOrTokens: string | number) {
@@ -73,6 +98,7 @@ export function recordTokens(agentId: string, textOrTokens: string | number) {
   metrics[agentId].tokensUsed += tokens;
   checkAlert(agentId, 'tokensUsed', metrics[agentId].tokensUsed);
   notifyUpdate();
+  persist();
 }
 
 export function getMetrics(agentId: string): AgentMetrics | undefined {
