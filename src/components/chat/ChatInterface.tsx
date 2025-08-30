@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Container, Stack, Inline, Center } from '@/components/ui/layout';
 import { AgentConfig, ChatMessage, AgentSession } from '@/types/agent';
 import { APIClient } from '@/lib/api-client';
 import { sessionStore } from '@/lib/agents/session-store';
@@ -161,145 +162,144 @@ export function ChatInterface({ agent, onBack }: ChatInterfaceProps) {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-gray-50">
+    <div className="flex flex-col h-screen bg-background-primary">
       {/* Header */}
-      <Card className="rounded-none border-b">
+      <Card variant="outlined" className="rounded-none border-b border-border-primary">
         <CardHeader className="py-4">
-          <div className="flex items-center gap-3">
-            {onBack && (
-              <Button variant="ghost" size="icon" onClick={onBack}>
-                <ArrowLeft className="h-4 w-4" />
-              </Button>
-            )}
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
-                <Bot className="h-4 w-4 text-white" />
-              </div>
-              <div>
-                <CardTitle className="text-lg">{agent.name}</CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  {agent.modelConfig.provider} • {agent.modelConfig.model}
-                </p>
-              </div>
-            </div>
-            <div className="ml-auto">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <div className="w-2 h-2 bg-green-500 rounded-full" />
-                Online
-              </div>
-            </div>
-          </div>
+          <Inline align="center" justify="between" spacing="md">
+            <Inline align="center" spacing="sm">
+              {onBack && (
+                <Button variant="ghost" size="sm" onClick={onBack} leftIcon={<ArrowLeft className="h-4 w-4" />} />
+              )}
+              <Inline align="center" spacing="sm">
+                <div className="w-8 h-8 bg-interactive-primary rounded-full flex items-center justify-center">
+                  <Bot className="h-4 w-4 text-white" />
+                </div>
+                <Stack spacing="xs">
+                  <CardTitle className="text-lg text-text-primary">{agent.name}</CardTitle>
+                  <p className="text-sm text-text-secondary">
+                    {agent.modelConfig.provider} • {agent.modelConfig.model}
+                  </p>
+                </Stack>
+              </Inline>
+            </Inline>
+            <Inline align="center" spacing="xs" className="text-sm text-text-secondary">
+              <div className="w-2 h-2 bg-status-success rounded-full" />
+              Online
+            </Inline>
+          </Inline>
         </CardHeader>
       </Card>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
-            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center">
-              <Bot className="h-8 w-8 text-blue-500" />
-            </div>
-            <div>
-              <h3 className="text-lg font-medium text-gray-700">Start a conversation</h3>
-              <p className="text-sm text-gray-500 mt-1">
-                Send a message to {agent.name} to begin chatting
-              </p>
-            </div>
-          </div>
-        ) : (
-          messages.map((message) => (
-            <div
-              key={message.id}
-              className={cn(
-                "flex gap-3 max-w-4xl",
-                message.role === 'user' ? "ml-auto flex-row-reverse" : "mr-auto"
-              )}
-            >
-              <div className={cn(
-                "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0",
-                message.role === 'user' 
-                  ? "bg-green-500" 
-                  : "bg-blue-500"
-              )}>
-                {message.role === 'user' ? (
-                  <User className="h-4 w-4 text-white" />
-                ) : (
-                  <Bot className="h-4 w-4 text-white" />
-                )}
-              </div>
-              <div className={cn(
-                "flex flex-col gap-1 max-w-[70%]",
-                message.role === 'user' ? "items-end" : "items-start"
-              )}>
-                <div className={cn(
-                  "px-4 py-2 rounded-lg text-sm",
-                  message.role === 'user'
-                    ? "bg-green-500 text-white"
-                    : "bg-white border shadow-sm"
-                )}>
-                  <p className="whitespace-pre-wrap">{message.content}</p>
+      <Container size="full" padding="md" className="flex-1 overflow-y-auto">
+        <Stack spacing="md">
+          {messages.length === 0 ? (
+            <Center className="h-full">
+              <Stack align="center" spacing="md" className="text-center">
+                <div className="w-16 h-16 bg-background-secondary rounded-full flex items-center justify-center">
+                  <Bot className="h-8 w-8 text-interactive-primary" />
                 </div>
-                <span className="text-xs text-muted-foreground px-1">
-                  {formatDate(message.timestamp)}
-                </span>
-              </div>
-            </div>
-          ))
-        )}
-        
-        {streamingContent !== null && (
-          <div className="flex gap-3 max-w-4xl mr-auto">
-            <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
-              <Bot className="h-4 w-4 text-white" />
-            </div>
-            <div className="flex flex-col gap-1">
-              <div className="px-4 py-2 bg-white border shadow-sm rounded-lg">
-                {streamingContent ? (
-                  <p className="whitespace-pre-wrap">{streamingContent}</p>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <span className="text-sm text-muted-foreground">Thinking...</span>
-                  </div>
+                <Stack spacing="xs">
+                  <h3 className="text-lg font-medium text-text-primary">Start a conversation</h3>
+                  <p className="text-sm text-text-secondary">
+                    Send a message to {agent.name} to begin chatting
+                  </p>
+                </Stack>
+              </Stack>
+            </Center>
+          ) : (
+            messages.map((message) => (
+              <div
+                key={message.id}
+                className={cn(
+                  "flex gap-3 max-w-4xl",
+                  message.role === 'user' ? "ml-auto flex-row-reverse" : "mr-auto"
                 )}
+              >
+                <div className={cn(
+                  "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0",
+                  message.role === 'user' 
+                    ? "bg-status-success" 
+                    : "bg-interactive-primary"
+                )}>
+                  {message.role === 'user' ? (
+                    <User className="h-4 w-4 text-white" />
+                  ) : (
+                    <Bot className="h-4 w-4 text-white" />
+                  )}
+                </div>
+                <Stack spacing="xs" className={cn(
+                  "max-w-[70%]",
+                  message.role === 'user' ? "items-end" : "items-start"
+                )}>
+                  <div className={cn(
+                    "px-4 py-2 rounded-lg text-sm",
+                    message.role === 'user'
+                      ? "bg-status-success text-white"
+                      : "bg-background-primary border border-border-primary shadow-sm"
+                  )}>
+                    <p className="whitespace-pre-wrap text-text-primary">{message.content}</p>
+                  </div>
+                  <span className="text-xs text-text-tertiary px-1">
+                    {formatDate(message.timestamp)}
+                  </span>
+                </Stack>
               </div>
-            </div>
-          </div>
+            ))
         )}
-        
-        <div ref={messagesEndRef} />
-      </div>
-
-      {/* Input */}
-      <Card className="rounded-none border-t">
-        <CardContent className="p-4">
-          <div className="flex gap-2">
-            <Input
-              ref={inputRef}
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder={`Message ${agent.name}...`}
-              disabled={isLoading || !apiClient}
-              className="flex-1"
-            />
-            <Button 
-              onClick={handleSendMessage}
-              disabled={!inputValue.trim() || isLoading || !apiClient}
-              size="icon"
-            >
-              {isLoading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Send className="h-4 w-4" />
-              )}
-            </Button>
-          </div>
-          {!apiClient && (
-            <p className="text-sm text-red-500 mt-2">
-              Failed to initialize API client. Please check your agent configuration.
-            </p>
+          
+          {streamingContent !== null && (
+            <div className="flex gap-3 max-w-4xl mr-auto">
+              <div className="w-8 h-8 bg-interactive-primary rounded-full flex items-center justify-center flex-shrink-0">
+                <Bot className="h-4 w-4 text-white" />
+              </div>
+              <Stack spacing="xs">
+                <div className="px-4 py-2 bg-background-primary border border-border-primary shadow-sm rounded-lg">
+                  {streamingContent ? (
+                    <p className="whitespace-pre-wrap text-text-primary">{streamingContent}</p>
+                  ) : (
+                    <Inline align="center" spacing="xs">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span className="text-sm text-text-secondary">Thinking...</span>
+                    </Inline>
+                  )}
+                </div>
+              </Stack>
+            </div>
           )}
+          
+          <div ref={messagesEndRef} />
+        </Stack>
+      </Container>
+      {/* Input */}
+      <Card variant="outlined" className="rounded-none border-t border-border-primary">
+        <CardContent className="p-4">
+          <Stack spacing="sm">
+            <Inline spacing="sm">
+              <Input
+                ref={inputRef}
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyPress={handleKeyPress}
+                placeholder={`Message ${agent.name}...`}
+                disabled={isLoading || !apiClient}
+                className="flex-1"
+                size="md"
+              />
+              <Button 
+                onClick={handleSendMessage}
+                disabled={!inputValue.trim() || isLoading || !apiClient}
+                size="md"
+                leftIcon={isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              />
+            </Inline>
+            {!apiClient && (
+              <p className="text-sm text-status-error">
+                Failed to initialize API client. Please check your agent configuration.
+              </p>
+            )}
+          </Stack>
         </CardContent>
       </Card>
     </div>

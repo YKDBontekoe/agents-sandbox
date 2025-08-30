@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Toaster, toast } from 'react-hot-toast';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Container, Stack, Inline } from '@/components/ui/layout';
 import { DragDropProvider } from './DragDropProvider';
 import { DraggableAgentCard } from './DraggableAgentCard';
 import { AgentForm } from './AgentForm';
@@ -18,7 +19,15 @@ import {
   deleteAgent,
 } from '@/lib/agents/repository';
 import { sessionStore } from '@/lib/agents/session-store';
-import { Plus, Users, MessageSquare } from 'lucide-react';
+import { Plus, Users, MessageSquare, Workflow, Upload, Download, Bot, Search, Filter } from 'lucide-react';
+
+interface DashboardState {
+  showCreateAgent: boolean;
+  showWorkflowBuilder: boolean;
+  activeView: 'dashboard' | 'agents' | 'workflows' | 'chat';
+  searchQuery: string;
+  filterStatus: 'all' | 'active' | 'inactive';
+}
 
 interface AgentDashboardProps {
   onStartChat?: (agent: AgentConfig) => void;
@@ -34,6 +43,13 @@ export function AgentDashboard({ onStartChat, onStartVoice }: AgentDashboardProp
   const [sessions, setSessions] = useState<AgentSession[]>([]);
   const [sharingAgents, setSharingAgents] = useState<Set<string>>(new Set());
   const [sharedAgents, setSharedAgents] = useState<Set<string>>(new Set());
+  const [dashboardState, setDashboardState] = useState<DashboardState>({
+    showCreateAgent: false,
+    showWorkflowBuilder: false,
+    activeView: 'dashboard',
+    searchQuery: '',
+    filterStatus: 'all'
+  });
 
   useEffect(() => {
     fetchAgents()
@@ -134,6 +150,31 @@ export function AgentDashboard({ onStartChat, onStartVoice }: AgentDashboardProp
     }
   };
 
+  const handleSearchChange = (query: string) => {
+    setDashboardState(prev => ({ ...prev, searchQuery: query }));
+  };
+
+  const handleFilterChange = (status: 'all' | 'active' | 'inactive') => {
+    setDashboardState(prev => ({ ...prev, filterStatus: status }));
+  };
+
+  // Filter agents based on search and status
+  const filteredAgents = agents.filter(agent => {
+    const matchesSearch = agent.name.toLowerCase().includes(dashboardState.searchQuery.toLowerCase()) ||
+                         agent.description.toLowerCase().includes(dashboardState.searchQuery.toLowerCase());
+    
+    if (dashboardState.filterStatus === 'all') return matchesSearch;
+    
+    // For now, consider agents with recent sessions as 'active'
+    const hasRecentSessions = sessions.some(session => 
+      session.agentId === agent.id && 
+      new Date(session.createdAt).getTime() > Date.now() - 24 * 60 * 60 * 1000
+    );
+    
+    const isActive = hasRecentSessions;
+    return matchesSearch && (dashboardState.filterStatus === 'active' ? isActive : !isActive);
+  });
+
   const confirmDeleteAgent = async () => {
     if (agentToDelete) {
       try {
@@ -184,6 +225,45 @@ export function AgentDashboard({ onStartChat, onStartVoice }: AgentDashboardProp
     }
   };
 
+  const handleImportAgents = useCallback(() => {
+    toast.success('Import functionality coming soon!');
+  }, []);
+
+  const handleBrowseTemplates = useCallback(() => {
+    toast.success('Template browser coming soon!');
+  }, []);
+
+  const handleCreateWorkflow = useCallback(() => {
+    setDashboardState(prev => ({ ...prev, showWorkflowBuilder: true }));
+  }, []);
+
+  const handleExportAgents = useCallback(() => {
+     const dataStr = JSON.stringify(agents, null, 2);
+     const dataBlob = new Blob([dataStr], { type: 'application/json' });
+     const url = URL.createObjectURL(dataBlob);
+     const link = document.createElement('a');
+     link.href = url;
+     link.download = 'agents-export.json';
+     link.click();
+     URL.revokeObjectURL(url);
+     toast.success('Agents exported successfully!');
+   }, [agents]);
+
+   const handleStartChatSession = useCallback(() => {
+     if (agents.length === 0) {
+       toast.error('Create an agent first to start a chat session');
+       return;
+     }
+     // Use the first available agent for quick start
+     const firstAgent = agents[0];
+     if (onStartChat) {
+       onStartChat(firstAgent);
+     } else {
+       setDashboardState(prev => ({ ...prev, activeView: 'chat' }));
+       toast.success(`Starting chat with ${firstAgent.name}`);
+     }
+   }, [agents, onStartChat]);
+
   if (showForm) {
     return (
       <div className="container mx-auto p-6">
@@ -211,275 +291,408 @@ export function AgentDashboard({ onStartChat, onStartVoice }: AgentDashboardProp
             setAgentToDelete(null);
           }}
         />
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
-        {/* Modern Header */}
-        <div className="glass-effect border-b border-blue-100">
-          <div className="container mx-auto px-8 py-6">
-            <div className="flex items-center justify-between">
+      <Container size="full" className="min-h-screen bg-transparent">
+        {/* Apple Header with Breadcrumbs */}
+        <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
+          <Container size="full" padding="lg">
+            {/* Breadcrumb Navigation */}
+            <nav className="py-2" aria-label="Breadcrumb">
+              <ol className="flex items-center space-x-2 text-sm">
+                <li>
+                  <a href="/" className="apple-text-secondary hover:text-blue-600 transition-colors">
+                    Home
+                  </a>
+                </li>
+                <li className="apple-text-secondary">/</li>
+                <li className="apple-text-primary font-medium" aria-current="page">
+                  Agent Dashboard
+                </li>
+              </ol>
+            </nav>
+            
+            <div className="flex items-center justify-between py-4">
               <div className="space-y-2">
-                <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+                <h1 className="text-4xl font-bold apple-text-primary">
                   Agent Dashboard
                 </h1>
-                <p className="text-slate-600 text-lg font-medium">
-                  Create, manage, and deploy your AI agents
+                <p className="apple-text-secondary text-base max-w-2xl">
+                  Design, deploy, and orchestrate intelligent AI agents
                 </p>
+                <div className="flex items-center gap-4 mt-3">
+                  <span className="inline-flex items-center gap-1 text-xs apple-text-secondary">
+                    <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                    {agents.length} Active Agent{agents.length !== 1 ? 's' : ''}
+                  </span>
+                  <span className="inline-flex items-center gap-1 text-xs apple-text-secondary">
+                    <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+                    {sessions.length} Active Session{sessions.length !== 1 ? 's' : ''}
+                  </span>
+                </div>
               </div>
-              <div className="flex items-center gap-4">
-                <Link href="/workflows">
-                  <Button
-                    variant="outline"
-                    className="border-blue-200 text-blue-600 hover:bg-blue-50"
-                  >
-                    Workflow Builder
-                  </Button>
-                </Link>
-                <Button
-                  onClick={handleCreateAgent}
-                  className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-6 py-3 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 flex items-center gap-3 text-base font-semibold"
+              <div className="flex items-center gap-3">
+                <button 
+                  className="apple-button-secondary flex items-center gap-2" 
+                  onClick={handleCreateWorkflow}
+                  title="Open workflow builder"
                 >
-                  <Plus className="h-5 w-5" />
+                  <Workflow className="h-4 w-4" />
+                  Workflow Builder
+                </button>
+                <button 
+                  className="apple-button flex items-center gap-2" 
+                  onClick={handleCreateAgent}
+                  title="Create a new AI agent"
+                >
+                  <Plus className="h-4 w-4" />
                   Create Agent
-                </Button>
+                </button>
               </div>
             </div>
-          </div>
+          </Container>
         </div>
 
-        {/* Modern Statistics Cards */}
-        <div className="container mx-auto px-8 py-8">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <Card className="agent-card border-0 shadow-xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-1">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-                <CardTitle className="text-lg font-semibold text-slate-700">Total Agents</CardTitle>
-                <div className="p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl">
-                  <Users className="h-6 w-6 text-white" />
+        {/* Apple Statistics Cards */}
+        <Container size="full" padding="lg">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
+            <div className="apple-card-elevated p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-sm apple-text-secondary mb-1">Total Agents</h3>
+                  <div className="apple-stats-number">{agents.length}</div>
                 </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="text-4xl font-bold text-slate-800">{agents.length}</div>
-                <div className="flex items-center gap-4 text-sm">
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-                    <span className="text-slate-600">{agents.filter(a => a.type === 'chat').length} chat</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 bg-indigo-500 rounded-full"></div>
-                    <span className="text-slate-600">{agents.filter(a => a.type === 'voice').length} voice</span>
-                  </div>
+                <div className="apple-icon-container bg-blue-500">
+                  <Bot className="h-5 w-5 text-white" />
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+              <div className="flex items-center gap-6">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                  <span className="apple-text-secondary text-sm">{agents.filter(a => a.type === 'chat').length} Chat</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                  <span className="apple-text-secondary text-sm">{agents.filter(a => a.type === 'voice').length} Voice</span>
+                </div>
+              </div>
+            </div>
             
-            <Card className="agent-card border-0 shadow-xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-1">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-                <CardTitle className="text-lg font-semibold text-slate-700">Active Sessions</CardTitle>
-                <div className="p-3 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl">
-                  <MessageSquare className="h-6 w-6 text-white" />
+            <div className="apple-card-elevated p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-sm apple-text-secondary mb-1">Active Sessions</h3>
+                  <div className="apple-stats-number">{sessions.length}</div>
                 </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="text-4xl font-bold text-slate-800">{sessions.length}</div>
-                <p className="text-slate-600 font-medium">
-                  Running conversations
-                </p>
-              </CardContent>
-            </Card>
-            
-            <Card className="agent-card border-0 shadow-xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-1">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-                <CardTitle className="text-lg font-semibold text-slate-700">Providers</CardTitle>
-                <div className="p-3 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl">
-                  <div className="w-6 h-6 rounded-full bg-white flex items-center justify-center">
-                    <div className="w-3 h-3 rounded-full bg-green-500" />
-                  </div>
+                <div className="apple-icon-container bg-green-500">
+                  <MessageSquare className="h-5 w-5 text-white" />
                 </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="text-4xl font-bold text-slate-800">
-                  {new Set(agents.map(a => a.modelConfig.provider)).size}
-                </div>
-                <p className="text-slate-600 font-medium">
-                  Connected services
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-
-        {/* Modern Agents Section */}
-        <div className="container mx-auto px-8 py-8">
-          <div className="flex items-center justify-between mb-8">
-            <div>
-              <h2 className="text-3xl font-bold text-slate-800 mb-2">Your Agents</h2>
-              <p className="text-slate-600 text-lg">
-                {agents.length === 0 ? 'No agents created yet' : `${agents.length} intelligent agents ready to work`}
+              </div>
+              <p className="apple-text-secondary text-sm">
+                Running conversations
               </p>
             </div>
-            <div className="flex items-center gap-4">
-              <div className="text-right">
-                <div className="text-sm text-slate-500">Quick Actions</div>
-                <div className="flex gap-2 mt-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="border-blue-200 text-blue-600 hover:bg-blue-50"
-                  >
-                    Import
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="border-blue-200 text-blue-600 hover:bg-blue-50"
-                  >
-                    Templates
-                  </Button>
+            
+            <div className="apple-card-elevated p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-sm apple-text-secondary mb-1">Providers</h3>
+                  <div className="apple-stats-number">
+                    {new Set(agents.map(a => a.modelConfig.provider)).size}
+                  </div>
                 </div>
+                <div className="apple-icon-container bg-purple-500">
+                   <Users className="h-5 w-5 text-white" />
+                 </div>
               </div>
+              <p className="apple-text-secondary text-sm">
+                Connected services
+              </p>
             </div>
           </div>
-          
-          {agents.length === 0 ? (
-            <Card className="agent-card border-0 shadow-xl p-16 text-center bg-gradient-to-br from-blue-50 to-indigo-50">
-              <div className="mx-auto w-32 h-32 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-3xl flex items-center justify-center mb-8 animate-float">
-                <Users className="h-16 w-16 text-white" />
-              </div>
-              <h3 className="text-2xl font-bold text-slate-800 mb-4">Create Your First Agent</h3>
-              <p className="text-slate-600 text-lg mb-8 max-w-md mx-auto">
-                Start building intelligent workflows with AI agents that can chat, analyze, and automate tasks for you.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Button 
-                  onClick={handleCreateAgent}
-                  className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-8 py-3 text-lg font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
-                >
-                  <Plus className="mr-2 h-5 w-5" />
-                  Create Agent
-                </Button>
-                <Button 
-                  variant="outline" 
-                  className="border-2 border-blue-200 text-blue-600 hover:bg-blue-50 px-8 py-3 text-lg font-semibold rounded-xl"
-                >
-                  Browse Templates
-                </Button>
-              </div>
-            </Card>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
-              {agents.map((agent) => (
-                <DraggableAgentCard
-                  key={agent.id}
-                  agent={agent}
-                  onEdit={handleEditAgent}
-                  onDelete={handleDeleteAgent}
-                  onStartChat={handleStartChat}
-                  onStartVoice={handleStartVoice}
-                  onShare={handleShareAgent}
-                  shareDisabled={
-                    sharingAgents.has(agent.id) || sharedAgents.has(agent.id)
-                  }
-                />
-              ))}
-            </div>
-          )}
-        </div>
+        </Container>
  
-        {/* Modern Workflow Section */}
-        <div className="container mx-auto px-8 py-8">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Apple Agents Section */}
+        <Container size="xl" padding="lg">
+          <div className="apple-card p-6">
+            <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6 mb-6">
+              <div>
+                <h2 className="apple-text-primary text-xl font-semibold mb-2">Your Agents</h2>
+                <p className="apple-text-secondary text-sm">
+                  {agents.length === 0 ? 'No agents created yet' : `${filteredAgents.length} of ${agents.length} agents shown`}
+                </p>
+              </div>
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                {/* Search Bar */}
+                {agents.length > 0 && (
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 apple-text-secondary" />
+                    <input
+                      type="text"
+                      placeholder="Search agents..."
+                      value={dashboardState.searchQuery}
+                      onChange={(e) => handleSearchChange(e.target.value)}
+                      className="pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent apple-text-primary bg-white min-w-[200px]"
+                      aria-label="Search agents"
+                      role="searchbox"
+                    />
+                  </div>
+                )}
+                
+                {/* Filter Dropdown */}
+                {agents.length > 0 && (
+                  <div className="relative">
+                    <select
+                       value={dashboardState.filterStatus}
+                       onChange={(e) => handleFilterChange(e.target.value as 'all' | 'active' | 'inactive')}
+                       className="appearance-none pl-3 pr-8 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent apple-text-primary bg-white cursor-pointer"
+                       aria-label="Filter agents by status"
+                     >
+                      <option value="all">All Agents</option>
+                      <option value="active">Active</option>
+                      <option value="inactive">Inactive</option>
+                    </select>
+                    <Filter className="absolute right-2 top-1/2 transform -translate-y-1/2 h-4 w-4 apple-text-secondary pointer-events-none" />
+                  </div>
+                )}
+                
+                <div className="text-right">
+                  <div className="apple-text-secondary text-xs font-medium mb-2">Quick Actions</div>
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={handleImportAgents}
+                      className="apple-button-secondary text-sm px-3 py-2 flex items-center gap-2"
+                      title="Import agent from file"
+                    >
+                      <Upload className="h-3 w-3" />
+                      Import
+                    </button>
+                    <button 
+                      onClick={handleBrowseTemplates}
+                      className="apple-button-secondary text-sm px-3 py-2 flex items-center gap-2"
+                      title="Browse agent templates"
+                    >
+                      <Download className="h-3 w-3" />
+                      Templates
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            {agents.length === 0 ? (
+              <div className="apple-card-glass p-12 text-center">
+                <div className="mx-auto w-24 h-24 apple-icon-container bg-blue-500 mb-6">
+                  <Bot className="h-12 w-12 text-white" />
+                </div>
+                <h3 className="apple-text-primary text-2xl font-semibold mb-3">Welcome to Agent Dashboard</h3>
+                <p className="apple-text-secondary text-sm mb-6 max-w-lg mx-auto leading-relaxed">
+                  Create your first AI agent to get started. Agents can help you automate tasks, analyze data, provide customer support, and much more.
+                </p>
+                
+                {/* Getting Started Steps */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8 max-w-2xl mx-auto">
+                  <div className="apple-card-subtle p-4 text-left">
+                    <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center mb-3">
+                      <span className="text-blue-600 font-semibold text-sm">1</span>
+                    </div>
+                    <h4 className="apple-text-primary font-medium text-sm mb-2">Create Agent</h4>
+                    <p className="apple-text-secondary text-xs leading-relaxed">Define your agent's role, capabilities, and personality</p>
+                  </div>
+                  <div className="apple-card-subtle p-4 text-left">
+                    <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center mb-3">
+                      <span className="text-green-600 font-semibold text-sm">2</span>
+                    </div>
+                    <h4 className="apple-text-primary font-medium text-sm mb-2">Configure</h4>
+                    <p className="apple-text-secondary text-xs leading-relaxed">Set up tools, knowledge base, and behavior settings</p>
+                  </div>
+                  <div className="apple-card-subtle p-4 text-left">
+                    <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center mb-3">
+                      <span className="text-purple-600 font-semibold text-sm">3</span>
+                    </div>
+                    <h4 className="apple-text-primary font-medium text-sm mb-2">Deploy</h4>
+                    <p className="apple-text-secondary text-xs leading-relaxed">Start chatting and integrate into your workflows</p>
+                  </div>
+                </div>
+                
+                <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                  <button 
+                    onClick={handleCreateAgent}
+                    className="apple-button px-6 py-3 text-sm font-medium flex items-center gap-2"
+                    title="Create your first AI agent"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Create Your First Agent
+                  </button>
+                  <button 
+                    onClick={handleBrowseTemplates}
+                    className="apple-button-secondary px-6 py-3 text-sm font-medium flex items-center gap-2"
+                    title="Browse pre-built agent templates"
+                  >
+                    <Download className="h-4 w-4" />
+                    Browse Templates
+                  </button>
+                </div>
+                
+                <p className="apple-text-secondary text-xs mt-6">
+                  Need help? Check out our <a href="#" className="text-blue-600 hover:text-blue-700 underline">getting started guide</a>
+                </p>
+              </div>
+            ) : filteredAgents.length === 0 ? (
+              <div className="apple-card-glass p-12 text-center">
+                <div className="mx-auto w-20 h-20 apple-icon-container bg-gray-400 mb-6">
+                  <Search className="h-10 w-10 text-white" />
+                </div>
+                <h3 className="apple-text-primary text-lg font-semibold mb-2">No agents found</h3>
+                <p className="apple-text-secondary text-sm max-w-md mx-auto leading-relaxed mb-4">
+                  {dashboardState.searchQuery ? 
+                    `No agents match "${dashboardState.searchQuery}"` : 
+                    `No ${dashboardState.filterStatus} agents found`
+                  }
+                </p>
+                <div className="flex flex-col sm:flex-row gap-2 justify-center">
+                  <button 
+                    onClick={() => {
+                      handleSearchChange('');
+                      handleFilterChange('all');
+                    }}
+                    className="apple-button-secondary px-4 py-2 text-sm font-medium"
+                    aria-label="Clear all filters and search"
+                  >
+                    Clear Filters
+                  </button>
+                  <button 
+                    onClick={handleCreateAgent}
+                    className="apple-button px-4 py-2 text-sm font-medium flex items-center gap-2"
+                    aria-label="Create a new agent"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Create Agent
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {filteredAgents.map((agent) => (
+                  <DraggableAgentCard
+                    key={agent.id}
+                    agent={agent}
+                    onEdit={handleEditAgent}
+                    onDelete={handleDeleteAgent}
+                    onStartChat={handleStartChat}
+                    onStartVoice={handleStartVoice}
+                    onShare={handleShareAgent}
+                    shareDisabled={
+                      sharingAgents.has(agent.id) || sharedAgents.has(agent.id)
+                    }
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </Container>
+ 
+        {/* Apple Workflow Section */}
+        <Container size="xl" padding="lg">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Workflow Canvas */}
             <div className="lg:col-span-2">
               <div className="mb-6">
-                <h2 className="text-2xl font-bold text-slate-800 mb-2">Workflow Canvas</h2>
-                <p className="text-slate-600">Drag agents here to create multi-agent workflows</p>
+                <h2 className="apple-text-primary text-2xl font-semibold mb-2">Workflow Canvas</h2>
+                <p className="apple-text-secondary text-sm">Drag agents here to create multi-agent workflows</p>
               </div>
               
-              <Card className="agent-card border-0 shadow-xl p-12 text-center bg-gradient-to-br from-slate-50 to-blue-50 min-h-[400px] flex items-center justify-center">
+              <div className="apple-card-glass p-12 text-center min-h-[350px] flex items-center justify-center">
                 <div className="space-y-6">
-                  <div className="mx-auto w-24 h-24 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center animate-float">
-                    <Plus className="h-12 w-12 text-white" />
+                  <div className="mx-auto w-20 h-20 apple-icon-container bg-gray-500">
+                    <Plus className="h-10 w-10 text-white" />
                   </div>
                   <div>
-                    <h3 className="text-xl font-bold text-slate-800 mb-2">Start Building Workflows</h3>
-                    <p className="text-slate-600 max-w-sm mx-auto">
+                    <h3 className="apple-text-primary text-lg font-semibold mb-2">Start Building Workflows</h3>
+                    <p className="apple-text-secondary text-sm max-w-md mx-auto leading-relaxed">
                       Drag agents from your collection to create powerful multi-agent workflows and automations
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2 justify-center">
-                    <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-medium">Sequential</span>
-                    <span className="px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full text-sm font-medium">Parallel</span>
-                    <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-sm font-medium">Conditional</span>
+                    <span className="apple-badge-blue">Sequential</span>
+                    <span className="apple-badge-green">Parallel</span>
+                    <span className="apple-badge-purple">Conditional</span>
                   </div>
                 </div>
-              </Card>
+              </div>
             </div>
             
-            {/* Enhanced Quick Actions */}
+            {/* Apple Quick Actions */}
             <div className="space-y-6">
               <div>
-                <h2 className="text-2xl font-bold text-slate-800 mb-2">Quick Actions</h2>
-                <p className="text-slate-600">Get started with common tasks</p>
+                <h2 className="apple-text-primary text-xl font-semibold mb-2">Quick Actions</h2>
+                <p className="apple-text-secondary text-sm">Get started with common tasks</p>
               </div>
               
               <div className="space-y-4">
-                <Card className="agent-card border-0 shadow-lg p-6 hover:shadow-xl transition-all duration-300 cursor-pointer group">
-                  <div className="flex items-center gap-4">
-                    <div className="p-3 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl group-hover:scale-110 transition-transform">
-                      <MessageSquare className="h-6 w-6 text-white" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-slate-800">Start Chat Session</h3>
-                      <p className="text-sm text-slate-600">Begin conversation with an agent</p>
-                    </div>
-                  </div>
-                </Card>
-                
-                <Card className="agent-card border-0 shadow-lg p-6 hover:shadow-xl transition-all duration-300 cursor-pointer group">
-                  <div className="flex items-center gap-4">
-                    <div className="p-3 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl group-hover:scale-110 transition-transform">
-                      <Users className="h-6 w-6 text-white" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-slate-800">Create Workflow</h3>
-                      <p className="text-sm text-slate-600">Build multi-agent automation</p>
+                <div className="apple-card-elevated p-6 hover:shadow-lg transition-all duration-200 cursor-pointer group" onClick={handleStartChatSession}>
+                    <div className="flex items-center gap-4">
+                      <div className="p-3 apple-icon-container bg-green-500 group-hover:scale-105 transition-all duration-200">
+                        <MessageSquare className="h-5 w-5 text-white" />
+                      </div>
+                      <div>
+                        <h3 className="apple-text-primary text-sm font-medium mb-1">Start Chat Session</h3>
+                        <p className="apple-text-secondary text-xs">Begin a conversation with your AI agents</p>
+                      </div>
                     </div>
                   </div>
-                </Card>
-                
-                <Card className="agent-card border-0 shadow-lg p-6 hover:shadow-xl transition-all duration-300 cursor-pointer group">
-                  <div className="flex items-center gap-4">
-                    <div className="p-3 bg-gradient-to-br from-orange-500 to-red-600 rounded-xl group-hover:scale-110 transition-transform">
-                      <Plus className="h-6 w-6 text-white" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-slate-800">Import Template</h3>
-                      <p className="text-sm text-slate-600">Use pre-built agent templates</p>
-                    </div>
-                  </div>
-                </Card>
+                 
+                 <div className="apple-card-elevated p-6 hover:shadow-lg transition-all duration-200 cursor-pointer group" onClick={handleCreateWorkflow}>
+                   <div className="flex items-center gap-4">
+                     <div className="p-3 apple-icon-container bg-purple-500 group-hover:scale-105 transition-all duration-200">
+                       <Workflow className="h-5 w-5 text-white" />
+                     </div>
+                     <div>
+                       <h3 className="apple-text-primary text-sm font-medium mb-1">Create Workflow</h3>
+                       <p className="apple-text-secondary text-xs">Build multi-agent automation</p>
+                     </div>
+                   </div>
+                 </div>
+                 
+                 <div className="apple-card-elevated p-6 hover:shadow-lg transition-all duration-200 cursor-pointer group" onClick={handleBrowseTemplates}>
+                   <div className="flex items-center gap-4">
+                     <div className="p-3 apple-icon-container bg-orange-500 group-hover:scale-105 transition-all duration-200">
+                       <Download className="h-5 w-5 text-white" />
+                     </div>
+                     <div>
+                       <h3 className="apple-text-primary text-sm font-medium mb-1">Import Template</h3>
+                       <p className="apple-text-secondary text-xs">Use pre-built agent templates</p>
+                     </div>
+                   </div>
+                 </div>
               </div>
               
               {/* Pro Tips */}
               <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-slate-800">Pro Tips</h3>
+                <h3 className="apple-text-primary text-lg font-semibold">Pro Tips</h3>
                 <div className="space-y-3">
-                  <div className="flex items-start gap-3 p-4 bg-blue-50 rounded-xl">
-                    <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0" />
-                    <span className="text-sm text-slate-700 font-medium">Combine multiple agents for complex workflows</span>
-                  </div>
-                  <div className="flex items-start gap-3 p-4 bg-indigo-50 rounded-xl">
-                    <div className="w-2 h-2 bg-indigo-500 rounded-full mt-2 flex-shrink-0" />
-                    <span className="text-sm text-slate-700 font-medium">Use voice agents for hands-free interactions</span>
-                  </div>
-                  <div className="flex items-start gap-3 p-4 bg-purple-50 rounded-xl">
-                    <div className="w-2 h-2 bg-purple-500 rounded-full mt-2 flex-shrink-0" />
-                    <span className="text-sm text-slate-700 font-medium">Save successful workflows as templates</span>
-                  </div>
+                  <div className="apple-card-glass p-4 hover:shadow-md transition-all duration-200">
+                     <div className="flex items-start gap-3">
+                       <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0" />
+                       <span className="apple-text-primary text-xs font-medium">Combine multiple agents for complex workflows</span>
+                     </div>
+                   </div>
+                   <div className="apple-card-glass p-4 hover:shadow-md transition-all duration-200">
+                     <div className="flex items-start gap-3">
+                       <div className="w-2 h-2 bg-green-500 rounded-full mt-2 flex-shrink-0" />
+                       <span className="apple-text-primary text-xs font-medium">Use voice agents for hands-free interactions</span>
+                     </div>
+                   </div>
+                   <div className="apple-card-glass p-4 hover:shadow-md transition-all duration-200">
+                     <div className="flex items-start gap-3">
+                       <div className="w-2 h-2 bg-purple-500 rounded-full mt-2 flex-shrink-0" />
+                       <span className="apple-text-primary text-xs font-medium">Save successful workflows as templates</span>
+                     </div>
+                   </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      </div>
+        </Container>
+      </Container>
     </DragDropProvider>
   );
 }

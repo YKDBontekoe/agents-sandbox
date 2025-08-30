@@ -1,7 +1,7 @@
 import { AgentSession, ChatMessage } from '@/types/agent';
 import { generateId } from '../utils';
 import { recordTokens } from '../analytics';
-import { sessionPersistence } from '../persistence/file';
+import { unifiedSessionPersistence } from '../persistence/unified';
 import { SessionPersistence } from './session-persistence';
 
 function parseSession(raw: AgentSession): AgentSession {
@@ -111,5 +111,5 @@ class SessionStore {
   }
 }
 
-export const sessionStore = new SessionStore(sessionPersistence);
+export const sessionStore = new SessionStore(unifiedSessionPersistence);
 

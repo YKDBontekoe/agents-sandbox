@@ -1,60 +1,143 @@
 @import "tailwindcss";
 @plugin "tailwindcss-animate";
 
-@theme {
-  --color-background: 0 0% 100%;
-  --color-foreground: 222.2 84% 4.9%;
-  --color-card: 0 0% 100%;
-  --color-card-foreground: 222.2 84% 4.9%;
-  --color-popover: 0 0% 100%;
-  --color-popover-foreground: 222.2 84% 4.9%;
-  --color-primary: 221.2 83.2% 53.3%;
-  --color-primary-foreground: 210 40% 98%;
-  --color-secondary: 210 40% 96%;
-  --color-secondary-foreground: 222.2 84% 4.9%;
-  --color-muted: 210 40% 96%;
-  --color-muted-foreground: 215.4 16.3% 46.9%;
-  --color-accent: 210 40% 96%;
-  --color-accent-foreground: 222.2 84% 4.9%;
-  --color-destructive: 0 84.2% 60.2%;
-  --color-destructive-foreground: 210 40% 98%;
-  --color-border: 214.3 31.8% 91.4%;
-  --color-input: 214.3 31.8% 91.4%;
-  --color-ring: 221.2 83.2% 53.3%;
+/* Design System CSS Variables */
+:root {
+  /* Legacy Tailwind variables for compatibility */
+  --background: 0 0% 100%;
+  --foreground: 222.2 84% 4.9%;
+  --card: 0 0% 100%;
+  --card-foreground: 222.2 84% 4.9%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222.2 84% 4.9%;
+  --primary: 221.2 83.2% 53.3%;
+  --primary-foreground: 210 40% 98%;
+  --secondary: 210 40% 96%;
+  --secondary-foreground: 222.2 84% 4.9%;
+  --muted: 210 40% 96%;
+  --muted-foreground: 215.4 16.3% 46.9%;
+  --accent: 210 40% 96%;
+  --accent-foreground: 222.2 84% 4.9%;
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 214.3 31.8% 91.4%;
+  --input: 214.3 31.8% 91.4%;
+  --ring: 221.2 83.2% 53.3%;
   --radius: 0.75rem;
   --chart-1: 12 76% 61%;
   --chart-2: 173 58% 39%;
   --chart-3: 197 37% 24%;
   --chart-4: 43 74% 66%;
   --chart-5: 27 87% 67%;
+
+  /* New Design System Variables - Light Theme */
+  --color-background-primary: #ffffff;
+  --color-background-secondary: #f8fafc;
+  --color-background-tertiary: #f1f5f9;
+  --color-background-input: #ffffff;
+  --color-background-card: #ffffff;
+  --color-background-popover: #ffffff;
+  
+  --color-text-primary: #0f172a;
+  --color-text-secondary: #475569;
+  --color-text-tertiary: #94a3b8;
+  --color-text-error: #dc2626;
+  --color-text-success: #16a34a;
+  --color-text-warning: #d97706;
+  
+  --color-border-primary: #e2e8f0;
+  --color-border-secondary: #cbd5e1;
+  --color-border-input: #d1d5db;
+  --color-border-input-hover: #9ca3af;
+  --color-border-input-focus: #3b82f6;
+  --color-border-error: #dc2626;
+  --color-border-success: #16a34a;
+  --color-border-warning: #d97706;
+  
+  --color-interactive-primary: #3b82f6;
+  --color-interactive-primary-hover: #2563eb;
+  --color-interactive-primary-active: #1d4ed8;
+  --color-interactive-secondary: #6b7280;
+  --color-interactive-secondary-hover: #4b5563;
+  --color-interactive-secondary-active: #374151;
+  
+  --color-status-error: #fef2f2;
+  --color-status-error-border: #fecaca;
+  --color-status-success: #f0fdf4;
+  --color-status-success-border: #bbf7d0;
+  --color-status-warning: #fffbeb;
+  --color-status-warning-border: #fed7aa;
+  --color-status-info: #eff6ff;
+  --color-status-info-border: #bfdbfe;
 }
 
 @layer base {
   .dark {
-    --color-background: 222.2 84% 4.9%;
-    --color-foreground: 210 40% 98%;
-    --color-card: 222.2 84% 4.9%;
-    --color-card-foreground: 210 40% 98%;
-    --color-popover: 222.2 84% 4.9%;
-    --color-popover-foreground: 210 40% 98%;
-    --color-primary: 217.2 91.2% 59.8%;
-    --color-primary-foreground: 222.2 84% 4.9%;
-    --color-secondary: 217.2 32.6% 17.5%;
-    --color-secondary-foreground: 210 40% 98%;
-    --color-muted: 217.2 32.6% 17.5%;
-    --color-muted-foreground: 215 20.2% 65.1%;
-    --color-accent: 217.2 32.6% 17.5%;
-    --color-accent-foreground: 210 40% 98%;
-    --color-destructive: 0 62.8% 30.6%;
-    --color-destructive-foreground: 210 40% 98%;
-    --color-border: 217.2 32.6% 17.5%;
-    --color-input: 217.2 32.6% 17.5%;
-    --color-ring: 224.3 76.3% 94.1%;
+    /* Legacy Tailwind variables for compatibility */
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 217.2 91.2% 59.8%;
+    --primary-foreground: 222.2 84% 4.9%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 224.3 76.3% 94.1%;
     --chart-1: 220 70% 50%;
     --chart-2: 160 60% 45%;
     --chart-3: 30 80% 55%;
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
+
+    /* New Design System Variables - Dark Theme */
+    --color-background-primary: #0f172a;
+    --color-background-secondary: #1e293b;
+    --color-background-tertiary: #334155;
+    --color-background-input: #1e293b;
+    --color-background-card: #1e293b;
+    --color-background-popover: #1e293b;
+    
+    --color-text-primary: #f8fafc;
+    --color-text-secondary: #cbd5e1;
+    --color-text-tertiary: #64748b;
+    --color-text-error: #f87171;
+    --color-text-success: #4ade80;
+    --color-text-warning: #fbbf24;
+    
+    --color-border-primary: #334155;
+    --color-border-secondary: #475569;
+    --color-border-input: #475569;
+    --color-border-input-hover: #64748b;
+    --color-border-input-focus: #60a5fa;
+    --color-border-error: #f87171;
+    --color-border-success: #4ade80;
+    --color-border-warning: #fbbf24;
+    
+    --color-interactive-primary: #60a5fa;
+    --color-interactive-primary-hover: #3b82f6;
+    --color-interactive-primary-active: #2563eb;
+    --color-interactive-secondary: #64748b;
+    --color-interactive-secondary-hover: #94a3b8;
+    --color-interactive-secondary-active: #cbd5e1;
+    
+    --color-status-error: #1f2937;
+    --color-status-error-border: #374151;
+    --color-status-success: #064e3b;
+    --color-status-success-border: #065f46;
+    --color-status-warning: #451a03;
+    --color-status-warning-border: #78350f;
+    --color-status-info: #1e3a8a;
+    --color-status-info-border: #1e40af;
   }
 }
 
@@ -63,40 +146,103 @@
     border-color: hsl(var(--color-border));
   }
   body {
-    @apply bg-background text-foreground;
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
     /* Temporary debug: ensure global CSS is applied visually */
-    background-color: #f0f9ff;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 }
 
-/* Custom FlowChain-inspired styles */
-.gradient-bg {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+/* Apple-Inspired Clean Design System */
+.apple-card {
+  @apply bg-white border border-gray-200 rounded-xl shadow-sm transition-all duration-200;
 }
 
-.glass-effect {
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+/* Mobile optimizations */
+@media (max-width: 640px) {
+  .apple-card {
+    @apply rounded-lg;
+  }
+  
+  .apple-button {
+    @apply text-sm px-3 py-2;
+  }
+  
+  .apple-button-secondary {
+    @apply text-sm px-3 py-2;
+  }
 }
 
-.agent-card {
-  background: linear-gradient(145deg, #ffffff 0%, #f8fafc 100%);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-  border: 1px solid rgba(59, 130, 246, 0.1);
+.apple-card-elevated {
+  @apply bg-white border border-gray-200 rounded-xl shadow-md hover:shadow-lg transition-all duration-200;
 }
 
-.workflow-node {
-  background: linear-gradient(145deg, #3b82f6 0%, #1d4ed8 100%);
-  box-shadow: 0 4px 20px rgba(59, 130, 246, 0.3);
+.apple-card-subtle {
+  @apply bg-gray-50 border-0 rounded-xl transition-all duration-200;
 }
 
-.animate-float {
-  animation: float 6s ease-in-out infinite;
+.apple-card-glass {
+  @apply bg-white/80 backdrop-blur-sm border border-gray-200/50 rounded-xl shadow-sm transition-all duration-200;
 }
 
-@keyframes float {
-  0%, 100% { transform: translateY(0px); }
-  50% { transform: translateY(-10px); }
+.apple-button {
+  @apply bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-lg px-4 py-2 transition-colors duration-200;
+}
+
+.apple-button-secondary {
+  @apply bg-gray-100 hover:bg-gray-200 text-gray-900 font-medium rounded-lg px-4 py-2 transition-colors duration-200;
+}
+
+.apple-icon-container {
+  @apply w-12 h-12 rounded-lg flex items-center justify-center;
+}
+
+.apple-text-primary {
+  @apply text-gray-900 font-semibold;
+}
+
+.apple-text-secondary {
+  @apply text-gray-600;
+}
+
+.apple-stats-number {
+  @apply text-3xl font-bold text-gray-900;
+}
+
+.apple-badge-blue {
+  @apply px-3 py-1 bg-blue-100 text-blue-800 rounded-md text-sm font-medium;
+}
+
+.apple-badge-green {
+  @apply px-3 py-1 bg-green-100 text-green-800 rounded-md text-sm font-medium;
+}
+
+.apple-badge-purple {
+  @apply px-3 py-1 bg-purple-100 text-purple-800 rounded-md text-sm font-medium;
+}
+
+@keyframes material-ripple {
+  0% {
+    transform: scale(0);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(4);
+    opacity: 0;
+  }
+}
+
+.animate-slide-up {
+  animation: slide-up 0.6s ease-out;
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }

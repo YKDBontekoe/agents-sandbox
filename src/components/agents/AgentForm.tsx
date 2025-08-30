@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Stack, Inline, Container } from '@/components/ui/layout';
 import { AgentConfig, AgentType, ModelProvider } from '@/types/agent';
 import { getModelsByProvider } from '@/lib/utils';
 import { AgentConfigFormSchema } from '@/types/agent-schema';
@@ -64,8 +65,8 @@ export function AgentForm({ agent, onSave, onCancel }: AgentFormProps) {
         provider: formData.provider,
         apiKey: formData.apiKey.trim(),
         model: formData.model.trim(),
-        baseUrl: formData.baseUrl.trim() || undefined,
-        apiVersion: formData.apiVersion.trim() || undefined,
+        baseUrl: formData.baseUrl?.trim() || undefined,
+        apiVersion: formData.apiVersion?.trim() || undefined,
       },
       temperature: formData.temperature,
       maxTokens: formData.maxTokens,
@@ -94,270 +95,278 @@ export function AgentForm({ agent, onSave, onCancel }: AgentFormProps) {
   const availableModels = getModelsByProvider(formData.provider);
 
   return (
-    <Card className="w-full max-w-2xl mx-auto">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          {formData.type === 'chat' ? (
-            <MessageCircle className="h-5 w-5" />
-          ) : (
-            <Mic className="h-5 w-5" />
-          )}
-          {agent ? 'Edit Agent' : 'Create New Agent'}
-        </CardTitle>
-        <CardDescription>
-          Configure your AI agent with the desired settings and capabilities.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Basic Information */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-medium">Basic Information</h3>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium mb-2">Agent Name</label>
+    <Container size="md">
+      <Card variant="elevated" size="lg">
+        <CardHeader>
+          <CardTitle>
+            <Inline align="center" spacing="sm">
+              {formData.type === 'chat' ? (
+                <MessageCircle className="h-5 w-5" />
+              ) : (
+                <Mic className="h-5 w-5" />
+              )}
+              {agent ? 'Edit Agent' : 'Create New Agent'}
+            </Inline>
+          </CardTitle>
+          <CardDescription>
+            Configure your AI agent with the desired settings and capabilities.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit}>
+            <Stack spacing="lg">
+              {/* Basic Information */}
+              <Stack spacing="md">
+                <h3 className="text-lg font-medium text-text-primary">Basic Information</h3>
+                
+                <Inline spacing="md" wrap="wrap">
+                  <div className="flex-1 min-w-0">
+                    <Input
+                      label="Agent Name"
+                      value={formData.name}
+                      onChange={(e) => handleInputChange('name', e.target.value)}
+                      placeholder="My AI Assistant"
+                      error={errors.name}
+                      size="md"
+                    />
+                  </div>
+                  
+                  <div className="flex-1 min-w-0">
+                    <label className="block text-sm font-medium mb-2 text-text-secondary">Agent Type</label>
+                    <Select
+                      value={formData.type}
+                      onValueChange={(value) => handleInputChange('type', value as AgentType)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select agent type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="chat">Chat Agent</SelectItem>
+                        <SelectItem value="voice">Voice Agent</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </Inline>
+
                 <Input
-                  value={formData.name}
-                  onChange={(e) => handleInputChange('name', e.target.value)}
-                  placeholder="My AI Assistant"
-                  className={errors.name ? 'border-red-500' : ''}
+                  label="Description"
+                  value={formData.description}
+                  onChange={(e) => handleInputChange('description', e.target.value)}
+                  placeholder="A helpful AI assistant for general tasks"
+                  error={errors.description}
+                  size="md"
                 />
-                {errors.name && <p className="text-red-500 text-sm mt-1">{errors.name}</p>}
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium mb-2">Agent Type</label>
-                <Select
-                  value={formData.type}
-                  onValueChange={(value) => handleInputChange('type', value as AgentType)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select agent type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="chat">Chat Agent</SelectItem>
-                    <SelectItem value="voice">Voice Agent</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
 
-            <div>
-              <label className="block text-sm font-medium mb-2">Description</label>
-              <Input
-                value={formData.description}
-                onChange={(e) => handleInputChange('description', e.target.value)}
-                placeholder="A helpful AI assistant for general tasks"
-                className={errors.description ? 'border-red-500' : ''}
-              />
-              {errors.description && <p className="text-red-500 text-sm mt-1">{errors.description}</p>}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-2">System Prompt</label>
-              <textarea
-                value={formData.systemPrompt}
-                onChange={(e) => handleInputChange('systemPrompt', e.target.value)}
-                placeholder="You are a helpful AI assistant..."
-                rows={3}
-                className={`w-full px-3 py-2 border border-input bg-background rounded-md text-sm resize-none ${errors.systemPrompt ? 'border-red-500' : ''}`}
-              />
-              {errors.systemPrompt && <p className="text-red-500 text-sm mt-1">{errors.systemPrompt}</p>}
-            </div>
-          </div>
-
-          {/* Model Configuration */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-medium">Model Configuration</h3>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium mb-2">Provider</label>
-                <Select
-                  value={formData.provider}
-                  onValueChange={(provider: ModelProvider) => {
-                    handleInputChange('provider', provider);
-                    // Reset model when provider changes
-                    const models = getModelsByProvider(provider);
-                    if (models.length > 0) {
-                      handleInputChange('model', models[0]);
-                    }
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select provider" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="openai">OpenAI</SelectItem>
-                    <SelectItem value="azure-openai">Azure OpenAI</SelectItem>
-                    <SelectItem value="openrouter">OpenRouter</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium mb-2">Model</label>
-                <Select
-                  value={formData.model}
-                  onValueChange={(model) => handleInputChange('model', model)}
-                >
-                  <SelectTrigger className={errors.model ? 'border-red-500' : ''}>
-                    <SelectValue placeholder="Select model" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableModels.map(model => (
-                      <SelectItem key={model} value={model}>{model}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {errors.model && <p className="text-red-500 text-sm mt-1">{errors.model}</p>}
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-2">API Key</label>
-              <Input
-                type="password"
-                value={formData.apiKey}
-                onChange={(e) => handleInputChange('apiKey', e.target.value)}
-                placeholder="sk-..."
-                className={errors.apiKey ? 'border-red-500' : ''}
-              />
-              {errors.apiKey && <p className="text-red-500 text-sm mt-1">{errors.apiKey}</p>}
-            </div>
-
-            {formData.provider === 'azure-openai' && (
-              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium mb-2">Base URL</label>
+                  <label className="block text-sm font-medium mb-2 text-text-secondary">System Prompt</label>
+                  <textarea
+                    value={formData.systemPrompt}
+                    onChange={(e) => handleInputChange('systemPrompt', e.target.value)}
+                    placeholder="You are a helpful AI assistant..."
+                    rows={3}
+                    className={`w-full px-3 py-2 border bg-background-secondary text-text-primary rounded-md text-sm resize-none transition-colors focus:outline-none focus:ring-2 focus:ring-interactive-primary focus:border-transparent ${
+                      errors.systemPrompt ? 'border-status-error' : 'border-border-primary hover:border-border-secondary'
+                    }`}
+                  />
+                  {errors.systemPrompt && (
+                    <p className="text-status-error text-sm mt-1">{errors.systemPrompt}</p>
+                  )}
+                </div>
+              </Stack>
+
+              {/* Model Configuration */}
+              <Stack spacing="md">
+                <h3 className="text-lg font-medium text-text-primary">Model Configuration</h3>
+                
+                <Inline spacing="md" wrap="wrap">
+                  <div className="flex-1 min-w-0">
+                    <label className="block text-sm font-medium mb-2 text-text-secondary">Provider</label>
+                    <Select
+                      value={formData.provider}
+                      onValueChange={(provider: ModelProvider) => {
+                        handleInputChange('provider', provider);
+                        // Reset model when provider changes
+                        const models = getModelsByProvider(provider);
+                        if (models.length > 0) {
+                          handleInputChange('model', models[0]);
+                        }
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select provider" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="openai">OpenAI</SelectItem>
+                        <SelectItem value="azure-openai">Azure OpenAI</SelectItem>
+                        <SelectItem value="openrouter">OpenRouter</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div className="flex-1 min-w-0">
+                    <label className="block text-sm font-medium mb-2 text-text-secondary">Model</label>
+                    <Select
+                      value={formData.model}
+                      onValueChange={(model) => handleInputChange('model', model)}
+                    >
+                      <SelectTrigger className={errors.model ? 'border-status-error' : ''}>
+                        <SelectValue placeholder="Select model" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableModels.map(model => (
+                          <SelectItem key={model} value={model}>{model}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {errors.model && <p className="text-status-error text-sm mt-1">{errors.model}</p>}
+                  </div>
+                </Inline>
+
+                <Input
+                  label="API Key"
+                  type="password"
+                  value={formData.apiKey}
+                  onChange={(e) => handleInputChange('apiKey', e.target.value)}
+                  placeholder="sk-..."
+                  error={errors.apiKey}
+                  size="md"
+                />
+
+                {formData.provider === 'azure-openai' && (
+                  <Inline spacing="md" wrap="wrap">
+                    <div className="flex-1 min-w-0">
+                      <Input
+                        label="Base URL"
+                        value={formData.baseUrl || ''}
+                        onChange={(e) => handleInputChange('baseUrl', e.target.value)}
+                        placeholder="https://your-resource.openai.azure.com"
+                        error={errors.baseUrl}
+                        size="md"
+                      />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <Input
+                        label="API Version"
+                        value={formData.apiVersion || ''}
+                        onChange={(e) => handleInputChange('apiVersion', e.target.value)}
+                        placeholder="2023-12-01-preview"
+                        size="md"
+                      />
+                    </div>
+                  </Inline>
+                )}
+
+                {formData.provider === 'openrouter' && (
                   <Input
-                    value={formData.baseUrl}
+                    label="Base URL (Optional)"
+                    value={formData.baseUrl || ''}
                     onChange={(e) => handleInputChange('baseUrl', e.target.value)}
-                    placeholder="https://your-resource.openai.azure.com"
-                    className={errors.baseUrl ? 'border-red-500' : ''}
+                    placeholder="https://openrouter.ai/api/v1"
+                    size="md"
                   />
-                  {errors.baseUrl && <p className="text-red-500 text-sm mt-1">{errors.baseUrl}</p>}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-2">API Version</label>
-                  <Input
-                    value={formData.apiVersion}
-                    onChange={(e) => handleInputChange('apiVersion', e.target.value)}
-                    placeholder="2023-12-01-preview"
-                  />
-                </div>
-              </div>
-            )}
+                )}
+              </Stack>
 
-            {formData.provider === 'openrouter' && (
-              <div>
-                <label className="block text-sm font-medium mb-2">Base URL (Optional)</label>
-                <Input
-                  value={formData.baseUrl}
-                  onChange={(e) => handleInputChange('baseUrl', e.target.value)}
-                  placeholder="https://openrouter.ai/api/v1"
-                />
-              </div>
-            )}
-          </div>
-
-          {/* Advanced Settings */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-medium">Advanced Settings</h3>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium mb-2">Temperature</label>
-                <Input
-                  type="number"
-                  min="0"
-                  max="2"
-                  step="0.1"
-                  value={formData.temperature}
-                  onChange={(e) => handleInputChange('temperature', parseFloat(e.target.value))}
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium mb-2">Max Tokens</label>
-                <Input
-                  type="number"
-                  min="1"
-                  max="4000"
-                  value={formData.maxTokens}
-                  onChange={(e) => handleInputChange('maxTokens', parseInt(e.target.value))}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Voice Settings */}
-          {formData.type === 'voice' && (
-            <div className="space-y-4">
-              <h3 className="text-lg font-medium">Voice Settings</h3>
-              
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-2">Voice</label>
-                  <Select
-                    value={formData.voice}
-                    onValueChange={(voice) => handleInputChange('voice', voice)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select voice" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="alloy">Alloy</SelectItem>
-                      <SelectItem value="echo">Echo</SelectItem>
-                      <SelectItem value="fable">Fable</SelectItem>
-                      <SelectItem value="onyx">Onyx</SelectItem>
-                      <SelectItem value="nova">Nova</SelectItem>
-                      <SelectItem value="shimmer">Shimmer</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+              {/* Advanced Settings */}
+              <Stack spacing="md">
+                <h3 className="text-lg font-medium text-text-primary">Advanced Settings</h3>
                 
-                <div>
-                  <label className="block text-sm font-medium mb-2">Speed</label>
-                  <Input
-                    type="number"
-                    min="0.25"
-                    max="4.0"
-                    step="0.25"
-                    value={formData.speed}
-                    onChange={(e) => handleInputChange('speed', parseFloat(e.target.value))}
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium mb-2">Pitch</label>
-                  <Input
-                    type="number"
-                    min="0.5"
-                    max="2.0"
-                    step="0.1"
-                    value={formData.pitch}
-                    onChange={(e) => handleInputChange('pitch', parseFloat(e.target.value))}
-                  />
-                </div>
-              </div>
-            </div>
-          )}
+                <Inline spacing="md" wrap="wrap">
+                  <div className="flex-1 min-w-0">
+                    <Input
+                      label="Temperature"
+                      type="number"
+                      min="0"
+                      max="2"
+                      step="0.1"
+                      value={formData.temperature}
+                      onChange={(e) => handleInputChange('temperature', parseFloat(e.target.value))}
+                      size="md"
+                    />
+                  </div>
+                  
+                  <div className="flex-1 min-w-0">
+                    <Input
+                      label="Max Tokens"
+                      type="number"
+                      min="1"
+                      max="4000"
+                      value={formData.maxTokens}
+                      onChange={(e) => handleInputChange('maxTokens', parseInt(e.target.value))}
+                      size="md"
+                    />
+                  </div>
+                </Inline>
+              </Stack>
 
-          {/* Form Actions */}
-          <div className="flex justify-end gap-3 pt-6 border-t">
-            <Button type="button" variant="outline" onClick={onCancel}>
-              <X className="h-4 w-4 mr-2" />
-              Cancel
-            </Button>
-            <Button type="submit">
-              <Save className="h-4 w-4 mr-2" />
-              {agent ? 'Update Agent' : 'Create Agent'}
-            </Button>
-          </div>
-        </form>
-      </CardContent>
-    </Card>
+              {/* Voice Settings */}
+              {formData.type === 'voice' && (
+                <Stack spacing="md">
+                  <h3 className="text-lg font-medium text-text-primary">Voice Settings</h3>
+                  
+                  <Inline spacing="md" wrap="wrap">
+                    <div className="flex-1 min-w-0">
+                      <label className="block text-sm font-medium mb-2 text-text-secondary">Voice</label>
+                      <Select
+                        value={formData.voice}
+                        onValueChange={(voice) => handleInputChange('voice', voice)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select voice" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="alloy">Alloy</SelectItem>
+                          <SelectItem value="echo">Echo</SelectItem>
+                          <SelectItem value="fable">Fable</SelectItem>
+                          <SelectItem value="onyx">Onyx</SelectItem>
+                          <SelectItem value="nova">Nova</SelectItem>
+                          <SelectItem value="shimmer">Shimmer</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    
+                    <div className="flex-1 min-w-0">
+                      <Input
+                        label="Speed"
+                        type="number"
+                        min="0.25"
+                        max="4.0"
+                        step="0.25"
+                        value={formData.speed}
+                        onChange={(e) => handleInputChange('speed', parseFloat(e.target.value))}
+                        size="md"
+                      />
+                    </div>
+                    
+                    <div className="flex-1 min-w-0">
+                      <Input
+                        label="Pitch"
+                        type="number"
+                        min="0.5"
+                        max="2.0"
+                        step="0.1"
+                        value={formData.pitch}
+                        onChange={(e) => handleInputChange('pitch', parseFloat(e.target.value))}
+                        size="md"
+                      />
+                    </div>
+                  </Inline>
+                </Stack>
+              )}
+
+              {/* Form Actions */}
+              <div className="flex justify-end gap-3 pt-6 border-t border-border-primary">
+                <Button type="button" variant="outline" onClick={onCancel} leftIcon={<X className="h-4 w-4" />}>
+                  Cancel
+                </Button>
+                <Button type="submit" leftIcon={<Save className="h-4 w-4" />}>
+                  {agent ? 'Update Agent' : 'Create Agent'}
+                </Button>
+              </div>
+            </Stack>
+          </form>
+        </CardContent>
+      </Card>
+    </Container>
   );
 }
