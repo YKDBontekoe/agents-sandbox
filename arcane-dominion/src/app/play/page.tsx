@@ -339,7 +339,7 @@ export default function PlayPage() {
   }, 0);
 
   return (
-    <div className="relative w-full h-screen bg-black overflow-hidden">
+    <div className="h-screen bg-neutral-50 overflow-hidden relative">
       {/* Game Canvas */}
       <GameRenderer
         onTileHover={handleTileHover}

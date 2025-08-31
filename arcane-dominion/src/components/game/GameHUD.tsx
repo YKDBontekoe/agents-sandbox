@@ -62,20 +62,20 @@ const TimeDisplay: React.FC<{ time: GameTime; isPaused?: boolean }> = ({ time, i
   };
 
   return (
-    <div className="flex items-center gap-2 bg-gray-800 rounded-lg px-3 py-2">
+    <div className="flex items-center gap-2 bg-neutral-100 rounded-lg px-3 py-2">
       <div className="text-center">
-        <div className="text-xs text-gray-400">Cycle</div>
-        <div className="font-bold text-white">{time.cycle}</div>
+        <div className="text-xs text-neutral-500">Cycle</div>
+        <div className="font-bold text-neutral-800">{time.cycle}</div>
       </div>
-      <div className="w-px h-8 bg-gray-600" />
+      <div className="w-px h-8 bg-neutral-300" />
       <div className="text-center">
-        <div className="text-xs text-gray-400">Season</div>
-        <div className="font-medium text-white capitalize">{time.season}</div>
+        <div className="text-xs text-neutral-500">Season</div>
+        <div className="font-medium text-neutral-800 capitalize">{time.season}</div>
       </div>
-      <div className="w-px h-8 bg-gray-600" />
+      <div className="w-px h-8 bg-neutral-300" />
       <div className="text-center">
-        <div className="text-xs text-gray-400">Time</div>
-        <div className={`font-mono text-sm ${isPaused ? 'text-yellow-400' : 'text-green-400'}`}>
+        <div className="text-xs text-neutral-500">Time</div>
+        <div className={`font-mono text-sm ${isPaused ? 'text-amber-600' : 'text-emerald-600'}`}>
           {isPaused ? 'PAUSED' : formatTime(time.timeRemaining)}
         </div>
       </div>
@@ -92,11 +92,11 @@ const ActionButton: React.FC<{
   const getVariantClasses = () => {
     switch (variant) {
       case 'primary':
-        return 'bg-blue-600 hover:bg-blue-700 text-white';
+        return 'btn-primary';
       case 'danger':
-        return 'bg-red-600 hover:bg-red-700 text-white';
+        return 'btn-danger';
       default:
-        return 'bg-gray-600 hover:bg-gray-700 text-white';
+        return 'btn-secondary';
     }
   };
 
@@ -105,7 +105,7 @@ const ActionButton: React.FC<{
       onClick={onClick}
       disabled={disabled}
       className={`
-        px-3 py-2 rounded-md text-sm font-medium transition-colors
+        px-3 py-2 text-sm font-medium transition-colors
         ${getVariantClasses()}
         ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
       `}
@@ -131,7 +131,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
       {/* Top HUD Bar */}
       <div className="flex justify-between items-start p-4">
         {/* Resources Panel */}
-        <div className="bg-black/80 backdrop-blur-sm rounded-lg p-3 pointer-events-auto">
+        <div className="card-elevated bg-white/95 backdrop-blur-sm p-3 pointer-events-auto">
           <div className="grid grid-cols-3 gap-3">
             <ResourceIcon type="grain" value={resources.grain} />
             <ResourceIcon type="coin" value={resources.coin} />
@@ -143,7 +143,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
         </div>
 
         {/* Time Controls */}
-        <div className="bg-black/80 backdrop-blur-sm rounded-lg p-3 pointer-events-auto">
+        <div className="card-elevated bg-white/95 backdrop-blur-sm p-3 pointer-events-auto">
           <div className="flex items-center gap-3">
             <TimeDisplay time={time} isPaused={isPaused} />
             <div className="flex gap-2">
@@ -181,14 +181,14 @@ export const GameHUD: React.FC<GameHUDProps> = ({
 
       {/* Bottom Status Bar */}
       <div className="absolute bottom-4 left-4 right-4">
-        <div className="bg-black/60 backdrop-blur-sm rounded-lg p-2 pointer-events-auto">
-          <div className="flex justify-between items-center text-sm text-gray-300">
+        <div className="card-elevated bg-white/90 backdrop-blur-sm p-2 pointer-events-auto">
+          <div className="flex justify-between items-center text-sm text-neutral-600">
             <div className="flex items-center gap-4">
               <span>🎯 Click tiles to select • 🖱️ Drag to pan • 🔍 Scroll to zoom</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-xs">FPS:</span>
-              <span className="font-mono text-green-400">60</span>
+              <span className="font-mono text-emerald-600">60</span>
             </div>
           </div>
         </div>

@@ -264,16 +264,16 @@ export const OmenPanel: React.FC<OmenPanelProps> = ({
     <Dialog.Root open={isOpen} onOpenChange={onClose}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40" />
-        <Dialog.Content className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-gray-900 rounded-lg shadow-xl z-50 w-full max-w-6xl max-h-[90vh] overflow-hidden">
+        <Dialog.Content className="card-elevated fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white/95 backdrop-blur-sm z-50 w-full max-w-6xl max-h-[90vh] overflow-hidden">
           {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b border-gray-700">
+          <div className="flex items-center justify-between p-6 border-b border-neutral-200">
             <div className="flex items-center gap-3">
               <span className="text-2xl">🔮</span>
               <div>
-                <Dialog.Title className="text-xl font-bold text-white">
+                <Dialog.Title className="text-heading-2 text-neutral-900">
                   Omen Readings
                 </Dialog.Title>
-                <Dialog.Description className="text-gray-400 text-sm">
+                <Dialog.Description className="text-neutral-600 text-sm">
                   Glimpses of future seasons and events • Current: {currentSeason} (Cycle {currentCycle})
                 </Dialog.Description>
               </div>
@@ -286,10 +286,10 @@ export const OmenPanel: React.FC<OmenPanelProps> = ({
                       <button
                         onClick={onRequestReading}
                         disabled={!canRequestReading || !canAffordReading}
-                        className={`px-4 py-2 rounded text-sm font-medium transition-colors ${
+                        className={`btn-primary text-sm ${
                           canRequestReading && canAffordReading
-                            ? 'bg-purple-600 hover:bg-purple-700 text-white'
-                            : 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                            ? ''
+                            : 'opacity-50 cursor-not-allowed'
                         }`}
                       >
                         🔮 Divine Reading (✨ {readingCost})
@@ -298,11 +298,11 @@ export const OmenPanel: React.FC<OmenPanelProps> = ({
                     {(!canRequestReading || !canAffordReading) && (
                       <Tooltip.Portal>
                         <Tooltip.Content
-                          className="bg-gray-900 text-white px-2 py-1 rounded text-xs"
+                          className="bg-neutral-900 text-white px-2 py-1 rounded text-xs"
                           sideOffset={5}
                         >
                           {!canAffordReading ? 'Insufficient mana' : 'Reading not available'}
-                          <Tooltip.Arrow className="fill-gray-900" />
+                          <Tooltip.Arrow className="fill-neutral-900" />
                         </Tooltip.Content>
                       </Tooltip.Portal>
                     )}
@@ -310,8 +310,10 @@ export const OmenPanel: React.FC<OmenPanelProps> = ({
                 </Tooltip.Provider>
               )}
               <Dialog.Close asChild>
-                <button className="p-2 hover:bg-gray-800 rounded text-gray-400 hover:text-white transition-colors">
-                  ✕
+                <button className="p-2 hover:bg-neutral-100 rounded text-neutral-500 hover:text-neutral-700 transition-colors">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
                 </button>
               </Dialog.Close>
             </div>
@@ -330,7 +332,7 @@ export const OmenPanel: React.FC<OmenPanelProps> = ({
                 {/* Imminent Events */}
                 {imminentEvents.length > 0 && (
                   <div>
-                    <h3 className="text-lg font-semibold text-yellow-400 mb-4 flex items-center gap-2">
+                    <h3 className="text-lg font-semibold text-warning-600 mb-4 flex items-center gap-2">
                       ⚠️ Imminent Events
                     </h3>
                     <div className="grid gap-4">
@@ -344,7 +346,7 @@ export const OmenPanel: React.FC<OmenPanelProps> = ({
                 {/* Revealed Events */}
                 {revealedEvents.length > 0 && (
                   <div>
-                    <h3 className="text-lg font-semibold text-white mb-4">🔍 Known Events</h3>
+                    <h3 className="text-lg font-semibold text-neutral-900 mb-4">🔍 Known Events</h3>
                     <div className="grid gap-4">
                       {revealedEvents
                         .filter(e => !imminentEvents.includes(e))
@@ -359,7 +361,7 @@ export const OmenPanel: React.FC<OmenPanelProps> = ({
                 {/* Hidden Events */}
                 {hiddenEvents.length > 0 && (
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-400 mb-4">❓ Mysterious Portents</h3>
+                    <h3 className="text-lg font-semibold text-neutral-600 mb-4">❓ Mysterious Portents</h3>
                     <div className="grid gap-4">
                       {hiddenEvents.slice(0, 3).map(event => (
                         <EventCard key={event.id} event={event} currentCycle={currentCycle} />
@@ -371,7 +373,7 @@ export const OmenPanel: React.FC<OmenPanelProps> = ({
                 {/* Omen Readings */}
                 {omenReadings.length > 0 && (
                   <div>
-                    <h3 className="text-lg font-semibold text-purple-300 mb-4">📜 Recent Visions</h3>
+                    <h3 className="text-lg font-semibold text-primary-600 mb-4">📜 Recent Visions</h3>
                     <div className="space-y-3">
                       {omenReadings
                         .sort((a, b) => b.revealedAt - a.revealedAt)
@@ -387,8 +389,8 @@ export const OmenPanel: React.FC<OmenPanelProps> = ({
                 {upcomingEvents.length === 0 && omenReadings.length === 0 && (
                   <div className="text-center py-12">
                     <div className="text-6xl mb-4">🔮</div>
-                    <h3 className="text-xl font-medium text-white mb-2">The Future is Unclear</h3>
-                    <p className="text-gray-400 mb-4">
+                    <h3 className="text-xl font-medium text-neutral-900 mb-2">The Future is Unclear</h3>
+                    <p className="text-neutral-600 mb-4">
                       The mists of time obscure what is to come. Request a divine reading to glimpse future events.
                     </p>
                   </div>
