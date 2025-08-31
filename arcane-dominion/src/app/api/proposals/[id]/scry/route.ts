@@ -5,9 +5,12 @@ import { createOpenAI } from '@ai-sdk/openai'
 
 const openai = createOpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
-interface Params { params: { id: string } }
+interface RouteContext {
+  params: Promise<{ id: string }>
+}
 
-export async function POST(_req: NextRequest, { params }: Params) {
+export async function POST(_req: NextRequest, context: RouteContext) {
+  const params = await context.params
   const supabase = createSupabaseServerClient()
   const { id } = params
 

@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 
-interface Params { params: { id: string } }
+interface RouteContext {
+  params: Promise<{ id: string }>
+}
 
-export async function POST(req: NextRequest, { params }: Params) {
+export async function POST(req: NextRequest, context: RouteContext) {
+  const params = await context.params
   const supabase = createSupabaseServerClient()
   const { id } = params
   const { decision, comment } = await req.json().catch(() => ({}))

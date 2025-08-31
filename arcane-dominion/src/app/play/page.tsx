@@ -1,6 +1,13 @@
-"use client";
+'use client';
 
-import { useEffect, useMemo, useState } from "react";
+import { useState, useEffect } from 'react';
+import GameRenderer from '@/components/game/GameRenderer';
+import { GameHUD, GameResources, GameTime } from '@/components/game/GameHUD';
+import { CouncilPanel, CouncilProposal } from '@/components/game/CouncilPanel';
+import { EdictsPanel, EdictSetting } from '@/components/game/EdictsPanel';
+import { OmenPanel, SeasonalEvent, OmenReading } from '@/components/game/OmenPanel';
+import DistrictSprites, { District, DistrictType, DistrictTier, DistrictState } from '@/components/game/DistrictSprites';
+import { LeylineSystem, Leyline } from '@/components/game/LeylineSystem';
 
 interface GameState {
   id: string;
@@ -23,6 +30,26 @@ export default function PlayPage() {
   const [loading, setLoading] = useState(false);
   const [guild, setGuild] = useState("Wardens");
   const [error, setError] = useState<string | null>(null);
+  const [isPaused, setIsPaused] = useState(false);
+  const [timeRemaining, setTimeRemaining] = useState(120); // 2 minutes per cycle
+  
+  // Panel states
+  const [isCouncilOpen, setIsCouncilOpen] = useState(false);
+  const [isEdictsOpen, setIsEdictsOpen] = useState(false);
+  const [isOmensOpen, setIsOmensOpen] = useState(false);
+  
+  // Game world state
+  const [districts, setDistricts] = useState<District[]>([]);
+  const [leylines, setLeylines] = useState<Leyline[]>([]);
+  const [selectedTile, setSelectedTile] = useState<{ x: number; y: number } | null>(null);
+  const [selectedLeyline, setSelectedLeyline] = useState<Leyline | null>(null);
+  const [isDrawingMode, setIsDrawingMode] = useState(false);
+  
+  // Mock data for panels
+  const [edicts, setEdicts] = useState<EdictSetting[]>([]);
+  const [pendingEdictChanges, setPendingEdictChanges] = useState<Record<string, number>>({});
+  const [upcomingEvents, setUpcomingEvents] = useState<SeasonalEvent[]>([]);
+  const [omenReadings, setOmenReadings] = useState<OmenReading[]>([]);
 
   async function fetchState() {
     const res = await fetch("/api/state");
@@ -44,10 +71,120 @@ export default function PlayPage() {
         await fetchState();
         await fetchProposals();
       } catch (e: any) {
-        setError(e.message);
+        // If API fails, use mock data to allow the game to run
+        console.warn('API failed, using mock data:', e.message);
+        setState({
+          id: 'mock-game',
+          cycle: 1,
+          resources: {
+            grain: 100,
+            coin: 50,
+            mana: 75,
+            favor: 25,
+            unrest: 10,
+            threat: 5
+          }
+        });
+        setProposals([]);
+        setError(null); // Clear error since we're handling it with mock data
       }
+      initializeMockData();
     })();
   }, []);
+
+  // Timer for cycle progression
+  useEffect(() => {
+    if (!isPaused && timeRemaining > 0) {
+      const timer = setTimeout(() => {
+        setTimeRemaining(prev => prev - 1);
+      }, 1000);
+      return () => clearTimeout(timer);
+    } else if (timeRemaining === 0) {
+      tick();
+    }
+  }, [timeRemaining, isPaused]);
+
+  const initializeMockData = () => {
+    // Initialize districts
+    const mockDistricts: District[] = [
+      { id: '1', gridX: 5, gridY: 5, worldX: 320, worldY: 160, type: DistrictType.FARM, tier: DistrictTier.TIER_1, state: DistrictState.NORMAL },
+      { id: '2', gridX: 7, gridY: 6, worldX: 448, worldY: 192, type: DistrictType.MARKET, tier: DistrictTier.TIER_2, state: DistrictState.EMPOWERED },
+      { id: '3', gridX: 3, gridY: 8, worldX: 192, worldY: 256, type: DistrictType.SANCTUM, tier: DistrictTier.TIER_1, state: DistrictState.NORMAL },
+      { id: '4', gridX: 9, gridY: 4, worldX: 576, worldY: 128, type: DistrictType.FORGE, tier: DistrictTier.TIER_3, state: DistrictState.DISABLED },
+      { id: '5', gridX: 6, gridY: 9, worldX: 384, worldY: 288, type: DistrictType.WELL, tier: DistrictTier.TIER_2, state: DistrictState.NORMAL },
+      { id: '6', gridX: 2, gridY: 3, worldX: 128, worldY: 96, type: DistrictType.WATCHTOWER, tier: DistrictTier.TIER_1, state: DistrictState.NORMAL },
+    ];
+    setDistricts(mockDistricts);
+
+    // Initialize leylines
+    const mockLeylines: Leyline[] = [
+      { id: '1', fromX: 5, fromY: 5, toX: 7, toY: 6, capacity: 100, currentFlow: 75, isActive: true },
+      { id: '2', fromX: 7, fromY: 6, toX: 3, toY: 8, capacity: 80, currentFlow: 40, isActive: true },
+      { id: '3', fromX: 9, fromY: 4, toX: 6, toY: 9, capacity: 120, currentFlow: 0, isActive: false },
+    ];
+    setLeylines(mockLeylines);
+
+    // Initialize edicts
+    const mockEdicts: EdictSetting[] = [
+      {
+        id: 'tax_rate',
+        name: 'Tax Rate',
+        description: 'Adjust the taxation level on citizens',
+        type: 'slider',
+        category: 'economic',
+        currentValue: 50,
+        defaultValue: 50,
+        cost: 10,
+        effects: [
+          { resource: 'Coin', impact: '+2 per 10% tax rate' },
+          { resource: 'Unrest', impact: '+1 per 20% above 50%' }
+        ]
+      },
+      {
+        id: 'military_patrol',
+        name: 'Military Patrols',
+        description: 'Enable regular military patrols in the realm',
+        type: 'toggle',
+        category: 'military',
+        currentValue: 1,
+        defaultValue: 0,
+        cost: 15,
+        effects: [
+          { resource: 'Threat', impact: '-2 per cycle' },
+          { resource: 'Coin', impact: '-5 per cycle' }
+        ]
+      }
+    ];
+    setEdicts(mockEdicts);
+
+    // Initialize events and omens
+    const mockEvents: SeasonalEvent[] = [
+      {
+        id: '1',
+        name: 'Harvest Festival',
+        description: 'A bountiful harvest brings prosperity to the realm',
+        type: 'blessing',
+        season: 'autumn',
+        cycleOffset: 2,
+        probability: 85,
+        effects: [{ resource: 'Grain', impact: '+50' }, { resource: 'Favor', impact: '+10' }],
+        isRevealed: true
+      },
+      {
+        id: '2',
+        name: 'Mysterious Plague',
+        description: 'A strange sickness spreads through the land',
+        type: 'curse',
+        season: 'winter',
+        cycleOffset: 5,
+        probability: 60,
+        effects: [{ resource: 'Grain', impact: '-30' }, { resource: 'Unrest', impact: '+15' }],
+        duration: 3,
+        isRevealed: false
+      }
+    ];
+    setUpcomingEvents(mockEvents);
+  };
 
   async function generate() {
     setLoading(true);
@@ -110,6 +247,7 @@ export default function PlayPage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Failed to tick");
       setState(json);
+      setTimeRemaining(120); // Reset timer
       await fetchProposals();
     } catch (e: any) {
       setError(e.message);
@@ -118,72 +256,167 @@ export default function PlayPage() {
     }
   }
 
-  const resourceKeys = useMemo(() => Object.keys(state?.resources || {}), [state]);
+  const handleTileHover = (x: number, y: number) => {
+    // Handle tile hover effects
+  };
+
+  const handleTileClick = (x: number, y: number) => {
+    setSelectedTile({ x, y });
+  };
+
+  const handleLeylineCreate = (fromX: number, fromY: number, toX: number, toY: number) => {
+    const newLeyline: Leyline = {
+      id: `leyline_${Date.now()}`,
+      fromX,
+      fromY,
+      toX,
+      toY,
+      capacity: 100,
+      currentFlow: 0,
+      isActive: false
+    };
+    setLeylines(prev => [...prev, newLeyline]);
+    setIsDrawingMode(false);
+  };
+
+  const handleEdictChange = (edictId: string, value: number) => {
+    setPendingEdictChanges(prev => ({ ...prev, [edictId]: value }));
+  };
+
+  const applyEdictChanges = () => {
+    setEdicts(prev => prev.map(edict => ({
+      ...edict,
+      currentValue: pendingEdictChanges[edict.id] ?? edict.currentValue
+    })));
+    setPendingEdictChanges({});
+  };
+
+  const resetEdictChanges = () => {
+    setPendingEdictChanges({});
+  };
+
+  if (!state) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-slate-900 to-slate-800 flex items-center justify-center">
+        <div className="text-white text-xl">Loading game...</div>
+      </div>
+    );
+  }
+
+  const resources: GameResources = {
+    grain: state.resources.grain || 0,
+    coin: state.resources.coin || 0,
+    mana: state.resources.mana || 0,
+    favor: state.resources.favor || 0,
+    unrest: state.resources.unrest || 0,
+    threat: state.resources.threat || 0
+  };
+
+  const gameTime: GameTime = {
+    cycle: state.cycle,
+    season: 'spring', // This would come from game logic
+    timeRemaining
+  };
+
+  const councilProposals: CouncilProposal[] = proposals.map(p => ({
+    id: p.id,
+    title: p.title,
+    description: p.description,
+    type: p.guild.toLowerCase() as any,
+    cost: p.predicted_delta,
+    benefit: p.predicted_delta,
+    risk: 25,
+    duration: 1,
+    canScry: true
+  }));
+
+  const totalEdictCost = Object.entries(pendingEdictChanges).reduce((total, [edictId, value]) => {
+    const edict = edicts.find(e => e.id === edictId);
+    if (edict && edict.currentValue !== value) {
+      return total + (edict.cost || 0);
+    }
+    return total;
+  }, 0);
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-200">
-      <div className="mx-auto max-w-6xl p-6 space-y-6">
-        <header className="flex items-center justify-between border-b border-slate-800 pb-4">
-          <div>
-            <h1 className="text-2xl font-serif">The Council</h1>
-            <p className="text-slate-400">Cycle {state?.cycle ?? 1}</p>
-          </div>
-          <div className="flex gap-2">
-            <select className="bg-slate-900 border border-slate-700 rounded px-2 py-1" value={guild} onChange={e=>setGuild(e.target.value)}>
-              <option>Wardens</option>
-              <option>Alchemists</option>
-              <option>Scribes</option>
-              <option>Stewards</option>
-            </select>
-            <button onClick={generate} disabled={loading} className="rounded bg-indigo-600 px-3 py-1.5 hover:bg-indigo-500 disabled:opacity-50">Summon Proposals</button>
-            <button onClick={tick} disabled={loading} className="rounded bg-emerald-600 px-3 py-1.5 hover:bg-emerald-500 disabled:opacity-50">Advance Cycle</button>
-          </div>
-        </header>
+    <div className="relative w-full h-screen bg-black overflow-hidden">
+      {/* Game Canvas */}
+      <GameRenderer
+        onTileHover={handleTileHover}
+        onTileClick={handleTileClick}
+      >
+        <DistrictSprites districts={districts} />
+        <LeylineSystem
+          leylines={leylines}
+          onLeylineCreate={handleLeylineCreate}
+          onLeylineSelect={setSelectedLeyline}
+          selectedLeyline={selectedLeyline}
+          isDrawingMode={isDrawingMode}
+        />
+      </GameRenderer>
 
-        {error && <div className="text-red-400">{error}</div>}
+      {/* HUD Overlay */}
+      <GameHUD
+        resources={resources}
+        time={gameTime}
+        isPaused={isPaused}
+        onPause={() => setIsPaused(true)}
+        onResume={() => setIsPaused(false)}
+        onAdvanceCycle={tick}
+        onOpenCouncil={() => setIsCouncilOpen(true)}
+        onOpenEdicts={() => setIsEdictsOpen(true)}
+        onOpenOmens={() => setIsOmensOpen(true)}
+      />
 
-        <section className="grid grid-cols-2 md:grid-cols-6 gap-3">
-          {resourceKeys.map((k) => (
-            <div key={k} className="rounded border border-slate-800 bg-slate-900 p-3">
-              <div className="text-xs uppercase text-slate-400">{k}</div>
-              <div className="text-xl font-semibold">{state?.resources?.[k] ?? 0}</div>
-            </div>
-          ))}
-        </section>
+      {/* Panels */}
+      <CouncilPanel
+        isOpen={isCouncilOpen}
+        onClose={() => setIsCouncilOpen(false)}
+        proposals={councilProposals}
+        currentResources={resources}
+        onAcceptProposal={(id) => decide(id, 'accept')}
+        onRejectProposal={(id) => decide(id, 'reject')}
+        onScryProposal={scry}
+        onGenerateProposals={generate}
+        canGenerateProposals={true}
+      />
 
-        <section>
-          <h2 className="text-xl font-serif mb-3">Council Proposals</h2>
-          <div className="grid gap-3">
-            {proposals.length === 0 && (
-              <div className="text-slate-400">No proposals yet. Summon your guilds.</div>
-            )}
-            {proposals.map((p) => (
-              <div key={p.id} className="rounded border border-slate-800 bg-slate-900 p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-slate-400 text-sm">{p.guild}</div>
-                    <div className="text-lg font-medium">{p.title}</div>
-                  </div>
-                  <div>
-                    <span className="text-xs px-2 py-1 rounded bg-slate-800 border border-slate-700">{p.status}</span>
-                  </div>
-                </div>
-                <p className="mt-2 text-slate-300">{p.description}</p>
-                <div className="mt-3 grid grid-cols-2 md:grid-cols-6 gap-2">
-                  {Object.entries(p.predicted_delta || {}).map(([k,v]) => (
-                    <div key={k} className="text-sm text-slate-400">{k}: <span className={Number(v) >= 0 ? 'text-emerald-400' : 'text-rose-400'}>{Number(v) >= 0 ? '+' : ''}{v as number}</span></div>
-                  ))}
-                </div>
-                <div className="mt-3 flex gap-2">
-                  <button onClick={() => scry(p.id)} disabled={loading} className="rounded border border-indigo-700 text-indigo-300 px-3 py-1 hover:bg-indigo-950 disabled:opacity-50">Scry</button>
-                  <button onClick={() => decide(p.id, 'accept')} disabled={loading || p.status!=='pending'} className="rounded bg-emerald-700 px-3 py-1 hover:bg-emerald-600 disabled:opacity-50">Accept</button>
-                  <button onClick={() => decide(p.id, 'reject')} disabled={loading || p.status!=='pending'} className="rounded bg-rose-700 px-3 py-1 hover:bg-rose-600 disabled:opacity-50">Reject</button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-      </div>
-    </main>
+      <EdictsPanel
+        isOpen={isEdictsOpen}
+        onClose={() => setIsEdictsOpen(false)}
+        edicts={edicts}
+        pendingChanges={pendingEdictChanges}
+        onEdictChange={handleEdictChange}
+        onApplyChanges={applyEdictChanges}
+        onResetChanges={resetEdictChanges}
+        currentFavor={resources.favor}
+        totalCost={totalEdictCost}
+      />
+
+      <OmenPanel
+        isOpen={isOmensOpen}
+        onClose={() => setIsOmensOpen(false)}
+        upcomingEvents={upcomingEvents}
+        omenReadings={omenReadings}
+        currentCycle={gameTime.cycle}
+        currentSeason={gameTime.season}
+        canRequestReading={true}
+        readingCost={25}
+        currentMana={resources.mana}
+      />
+
+      {/* Debug Info */}
+      {selectedTile && (
+        <div className="absolute bottom-20 left-4 bg-black/80 text-white p-2 rounded text-sm">
+          Selected: ({selectedTile.x}, {selectedTile.y})
+        </div>
+      )}
+
+      {error && (
+        <div className="absolute top-20 left-1/2 transform -translate-x-1/2 bg-red-900/90 text-red-200 px-4 py-2 rounded">
+          {error}
+        </div>
+      )}
+    </div>
   );
 }
