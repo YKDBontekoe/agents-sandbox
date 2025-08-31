@@ -1,7 +1,11 @@
+-- Ensure UUID generator is available
+create extension if not exists pgcrypto;
+
 -- Initial schema for Arcane Dominion
 create table if not exists game_state (
   id uuid primary key default gen_random_uuid(),
   created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
   cycle int not null default 1,
   resources jsonb not null default '{"grain": 1000, "coin": 500, "mana": 200, "favor": 10, "unrest": 0, "threat": 0}',
   notes text
