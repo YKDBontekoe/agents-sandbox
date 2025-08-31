@@ -13,7 +13,7 @@ const BodySchema = z.object({
 const ProposalSchema = z.object({
   title: z.string(),
   description: z.string(),
-  predicted_delta: z.record(z.number()),
+  predicted_delta: z.record(z.string(), z.number()),
 })
 
 const AIResponseSchema = z.array(ProposalSchema)
