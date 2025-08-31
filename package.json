@@ -1,0 +1,8 @@
+{
+  "name": "agents-sandbox",
+  "private": true,
+  "workspaces": ["arcane-dominion"],
+  "scripts": {
+    "vercel-build": "npm --workspace arcane-dominion run vercel-build"
+  }
+}

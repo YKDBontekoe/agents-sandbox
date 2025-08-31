@@ -13,7 +13,7 @@ interface RouteContext {
 const BodySchema = z.object({})
 
 const AIResponseSchema = z.object({
-  predicted_delta: z.record(z.number()),
+  predicted_delta: z.record(z.string(), z.number()),
   risk_note: z.string(),
 })
 
