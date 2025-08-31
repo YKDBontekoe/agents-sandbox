@@ -55,8 +55,8 @@ export default function IsometricGrid({
     const tile = new PIXI.Graphics();
     
     // Draw isometric tile shape
-    tile.beginFill(0x2a2a3e, 0.3);
-    tile.lineStyle(1, 0x4a4a6e, 0.8);
+    tile.fill({ color: 0x2a2a3e, alpha: 0.3 });
+    tile.setStrokeStyle({ width: 1, color: 0x4a4a6e, alpha: 0.8 });
     
     // Isometric diamond shape
     tile.moveTo(0, -tileHeight / 2);
@@ -64,7 +64,8 @@ export default function IsometricGrid({
     tile.lineTo(0, tileHeight / 2);
     tile.lineTo(-tileWidth / 2, 0);
     tile.closePath();
-    tile.endFill();
+    tile.fill();
+    tile.stroke();
     
     tile.x = worldX;
     tile.y = worldY;
@@ -107,8 +108,13 @@ export default function IsometricGrid({
 
   // Initialize grid
   useEffect(() => {
-    if (!viewport) return;
+    console.log('IsometricGrid useEffect triggered, viewport:', viewport);
+    if (!viewport) {
+      console.warn('IsometricGrid: No viewport available');
+      return;
+    }
 
+    console.log('Creating grid container and tiles...');
     const gridContainer = new PIXI.Container();
     gridContainer.name = 'isometric-grid';
     viewport.addChild(gridContainer);
@@ -126,6 +132,8 @@ export default function IsometricGrid({
       }
     }
     
+    console.log(`Created ${tiles.size} tiles for ${gridSize}x${gridSize} grid`);
+    console.log('Grid container children count:', gridContainer.children.length);
     tilesRef.current = tiles;
 
     // Cleanup function
@@ -160,15 +168,16 @@ export default function IsometricGrid({
           const lineWidth = Math.max(0.5, Math.min(2, scale * 1.5));
           tile.sprite.clear();
           
-          tile.sprite.beginFill(0x2a2a3e, 0.3);
-          tile.sprite.lineStyle(lineWidth, 0x4a4a6e, 0.8);
+          tile.sprite.fill({ color: 0x2a2a3e, alpha: 0.3 });
+          tile.sprite.setStrokeStyle({ width: lineWidth, color: 0x4a4a6e, alpha: 0.8 });
           
           tile.sprite.moveTo(0, -tileHeight / 2);
           tile.sprite.lineTo(tileWidth / 2, 0);
           tile.sprite.lineTo(0, tileHeight / 2);
           tile.sprite.lineTo(-tileWidth / 2, 0);
           tile.sprite.closePath();
-          tile.sprite.endFill();
+          tile.sprite.fill();
+          tile.sprite.stroke();
         }
       });
     };

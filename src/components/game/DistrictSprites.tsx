@@ -96,43 +96,52 @@ export default function DistrictSprites({
     const icon = new PIXI.Graphics();
     const colors = getDistrictColors(type);
     
-    icon.beginFill(colors.primary);
-    
     switch (type) {
       case DistrictType.FARM:
         // Simple house shape
-        icon.drawRect(-size/3, -size/4, size*2/3, size/2);
-        icon.drawPolygon([-size/3, -size/4, 0, -size/2, size/3, -size/4]);
+        icon.fill(colors.primary);
+        icon.rect(-size/3, -size/4, size*2/3, size/2);
+        icon.poly([-size/3, -size/4, 0, -size/2, size/3, -size/4]);
+        icon.fill();
         break;
       case DistrictType.FORGE:
         // Anvil shape
-        icon.drawRect(-size/4, -size/6, size/2, size/4);
-        icon.drawRect(-size/3, size/6, size*2/3, size/8);
+        icon.fill(colors.primary);
+        icon.rect(-size/4, -size/6, size/2, size/4);
+        icon.rect(-size/3, size/6, size*2/3, size/8);
+        icon.fill();
         break;
       case DistrictType.SANCTUM:
         // Crystal/diamond shape
-        icon.drawPolygon([0, -size/2, size/3, -size/6, size/3, size/6, 0, size/2, -size/3, size/6, -size/3, -size/6]);
+        icon.fill(colors.primary);
+        icon.poly([0, -size/2, size/3, -size/6, size/3, size/6, 0, size/2, -size/3, size/6, -size/3, -size/6]);
+        icon.fill();
         break;
       case DistrictType.MARKET:
         // Tent/stall shape
-        icon.drawPolygon([-size/3, size/4, -size/6, -size/4, size/6, -size/4, size/3, size/4]);
+        icon.fill(colors.primary);
+        icon.poly([-size/3, size/4, -size/6, -size/4, size/6, -size/4, size/3, size/4]);
+        icon.fill();
         break;
       case DistrictType.WELL:
         // Circle (well) - outer ring
-        icon.drawCircle(0, 0, size/3);
-        icon.endFill();
+        icon.fill(colors.primary);
+        icon.circle(0, 0, size/3);
+        icon.fill();
         // Inner hole
-        icon.beginFill(0x1a1a2e); // Background color
-        icon.drawCircle(0, 0, size/6);
+        icon.fill(0x1a1a2e); // Background color
+        icon.circle(0, 0, size/6);
+        icon.fill();
         break;
       case DistrictType.WATCHTOWER:
         // Tower shape
-        icon.drawRect(-size/6, -size/2, size/3, size);
-        icon.drawRect(-size/4, -size/2, size/2, size/4);
+        icon.fill(colors.primary);
+        icon.rect(-size/6, -size/2, size/3, size);
+        icon.rect(-size/4, -size/2, size/2, size/4);
+        icon.fill();
         break;
     }
     
-    icon.endFill();
     return icon;
   };
 
@@ -141,9 +150,9 @@ export default function DistrictSprites({
     const indicator = new PIXI.Graphics();
     
     for (let i = 0; i < tier; i++) {
-      indicator.beginFill(0xfbbf24);
-      indicator.drawCircle(-size/3 + (i * size/6), size/3, size/12);
-      indicator.endFill();
+      indicator.fill(0xfbbf24);
+      indicator.circle(-size/3 + (i * size/6), size/3, size/12);
+      indicator.fill();
     }
     
     return indicator;
@@ -155,21 +164,22 @@ export default function DistrictSprites({
     
     switch (state) {
       case DistrictState.DISABLED:
-        overlay.beginFill(0x000000, 0.5);
-        overlay.drawRect(-size/2, -size/2, size, size);
-        overlay.endFill();
+        overlay.fill({ color: 0x000000, alpha: 0.5 });
+        overlay.rect(-size/2, -size/2, size, size);
+        overlay.fill();
         // Red X
-        overlay.lineStyle(3, 0xef4444);
+        overlay.setStrokeStyle({ width: 3, color: 0xef4444 });
         overlay.moveTo(-size/4, -size/4);
         overlay.lineTo(size/4, size/4);
         overlay.moveTo(size/4, -size/4);
         overlay.lineTo(-size/4, size/4);
+        overlay.stroke();
         break;
       case DistrictState.EMPOWERED:
         // Golden glow effect
-        overlay.beginFill(0xfbbf24, 0.3);
-        overlay.drawCircle(0, 0, size/2 + 5);
-        overlay.endFill();
+        overlay.fill({ color: 0xfbbf24, alpha: 0.3 });
+        overlay.circle(0, 0, size/2 + 5);
+        overlay.fill();
         break;
     }
     
@@ -188,10 +198,11 @@ export default function DistrictSprites({
     
     // Background (elevated platform)
     const background = new PIXI.Graphics();
-    background.beginFill(0x374151, 0.8);
-    background.lineStyle(1, 0x6b7280);
-    background.drawEllipse(0, tileHeight/4, tileWidth/3, tileHeight/6);
-    background.endFill();
+    background.fill({ color: 0x374151, alpha: 0.8 });
+    background.setStrokeStyle({ width: 1, color: 0x6b7280 });
+    background.ellipse(0, tileHeight/4, tileWidth/3, tileHeight/6);
+    background.fill();
+    background.stroke();
     
     // District icon
     const icon = createDistrictIcon(district.type, 24);

@@ -80,22 +80,25 @@ export const LeylineSystem: React.FC<LeylineSystemProps> = ({
     const alpha = baseAlpha + (maxAlpha - baseAlpha) * flowIntensity;
     
     // Draw main line
-    graphics.lineStyle(thickness, color, alpha);
+    graphics.setStrokeStyle({ width: thickness, color: color, alpha: alpha });
     graphics.moveTo(fromWorld.x, fromWorld.y);
     graphics.lineTo(toWorld.x, toWorld.y);
+    graphics.stroke();
     
     // Add glow effect for high flow
     if (flowIntensity > 0.5) {
-      graphics.lineStyle(thickness * 2, color, alpha * 0.3);
+      graphics.setStrokeStyle({ width: thickness * 2, color: color, alpha: alpha * 0.3 });
       graphics.moveTo(fromWorld.x, fromWorld.y);
       graphics.lineTo(toWorld.x, toWorld.y);
+      graphics.stroke();
     }
     
     // Add selection highlight
     if (selectedLeyline && selectedLeyline.id === leyline.id) {
-      graphics.lineStyle(thickness + 4, 0xffffff, 0.5);
+      graphics.setStrokeStyle({ width: thickness + 4, color: 0xffffff, alpha: 0.5 });
       graphics.moveTo(fromWorld.x, fromWorld.y);
       graphics.lineTo(toWorld.x, toWorld.y);
+      graphics.stroke();
     }
     
     // Make interactive
@@ -132,9 +135,9 @@ export const LeylineSystem: React.FC<LeylineSystemProps> = ({
     
     // Background
     const bg = new PIXI.Graphics();
-    bg.beginFill(0x000000, 0.8);
-    bg.drawRoundedRect(-30, -10, 60, 20, 5);
-    bg.endFill();
+    bg.fill({ color: 0x000000, alpha: 0.8 });
+    bg.roundRect(-30, -10, 60, 20, 5);
+    bg.fill();
     container.addChild(bg);
     
     // Text
@@ -179,9 +182,10 @@ export const LeylineSystem: React.FC<LeylineSystemProps> = ({
     const startWorld = gridToWorld(startPointRef.current.x, startPointRef.current.y);
     
     drawingLineRef.current.clear();
-    drawingLineRef.current.lineStyle(3, 0xffffff, 0.7);
+    drawingLineRef.current.setStrokeStyle({ width: 3, color: 0xffffff, alpha: 0.7 });
     drawingLineRef.current.moveTo(startWorld.x, startWorld.y);
     drawingLineRef.current.lineTo(worldPos.x, worldPos.y);
+    drawingLineRef.current.stroke();
   }, [viewport, gridToWorld]);
 
   const handlePointerUp = useCallback((event: PIXI.FederatedPointerEvent) => {

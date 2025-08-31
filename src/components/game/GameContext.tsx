@@ -36,6 +36,8 @@ export function GameProvider({
   setApp,
   setViewport,
 }: GameProviderProps) {
+  console.log('GameProvider rendering with:', { app: !!app, viewport: !!viewport });
+  
   return (
     <GameContext.Provider value={{ app, viewport, setApp, setViewport }}>
       {children}

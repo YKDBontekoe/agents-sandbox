@@ -19,7 +19,10 @@ This guide aligns agents with the Arcane Dominion Tycoon design. It explains set
 - OPENAI_API_KEY=
 
 3) Database
-- Run supabase.sql in your Supabase SQL editor to create tables: game_state, proposals, decisions.
+- Apply migrations to your Supabase project:
+  - Via CLI: `supabase link` then `supabase db push --include-all`
+  - Or run the SQL from `supabase/migrations/` in order using the Dashboard SQL editor
+  - The latest migrations are idempotent and will create any missing core tables
 
 ## Architecture
 

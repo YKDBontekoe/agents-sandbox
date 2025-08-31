@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import GameRenderer from '@/components/game/GameRenderer';
+
 import { GameHUD, GameResources, GameTime } from '@/components/game/GameHUD';
 import { CouncilPanel, CouncilProposal } from '@/components/game/CouncilPanel';
 import { EdictsPanel, EdictSetting } from '@/components/game/EdictsPanel';
@@ -25,6 +26,8 @@ interface Proposal {
 }
 
 export default function PlayPage() {
+
+  
   const [state, setState] = useState<GameState | null>(null);
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [loading, setLoading] = useState(false);
@@ -52,8 +55,11 @@ export default function PlayPage() {
   const [omenReadings, setOmenReadings] = useState<OmenReading[]>([]);
 
   const fetchState = useCallback(async () => {
+    console.log('Fetching state from /api/state');
     const res = await fetch("/api/state");
+    console.log('Response status:', res.status, res.ok);
     const json = await res.json();
+    console.log('Response JSON:', json);
     if (!res.ok) throw new Error(json.error || "Failed to fetch state");
     setState(json);
   }, []);
@@ -85,6 +91,20 @@ export default function PlayPage() {
   useEffect(() => {
     (async () => {
       try {
+        // Temporarily set mock state to test rendering
+        setState({
+          id: 'test-state',
+          cycle: 1,
+          resources: {
+            grain: 100,
+            coin: 50,
+            mana: 75,
+            favor: 25,
+            unrest: 10,
+            threat: 5
+          }
+        });
+        
         await fetchState();
         await fetchProposals();
         initializeMockData();
@@ -348,21 +368,26 @@ export default function PlayPage() {
   }, 0);
 
   return (
-    <div className="h-screen bg-neutral-50 overflow-hidden relative">
-      {/* Game Canvas */}
-      <GameRenderer
-        onTileHover={handleTileHover}
-        onTileClick={handleTileClick}
-      >
-        <DistrictSprites districts={districts} />
-        <LeylineSystem
-          leylines={leylines}
-          onLeylineCreate={handleLeylineCreate}
-          onLeylineSelect={setSelectedLeyline}
-          selectedLeyline={selectedLeyline}
-          isDrawingMode={isDrawingMode}
-        />
-      </GameRenderer>
+    <div className="h-screen bg-neutral-50 overflow-hidden relative flex flex-col">
+      {/* Game Canvas - Responsive container */}
+      <div className="flex-1 relative min-h-0">
+
+        <GameRenderer
+          width={1200}
+          height={800}
+          onTileHover={handleTileHover}
+          onTileClick={handleTileClick}
+        >
+          <DistrictSprites districts={districts} />
+          <LeylineSystem
+            leylines={leylines}
+            onLeylineCreate={handleLeylineCreate}
+            onLeylineSelect={setSelectedLeyline}
+            selectedLeyline={selectedLeyline}
+            isDrawingMode={isDrawingMode}
+          />
+        </GameRenderer>
+      </div>
 
       {/* HUD Overlay */}
       <GameHUD

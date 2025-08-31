@@ -15,6 +15,8 @@ import { ActionButton, ResourceIcon } from '../ui';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { getResourceIcon, getResourceColor } from './resourceUtils';
+import '../../styles/design-tokens.css';
+import '../../styles/animations.css';
 
 export interface GameResources {
   grain: number;
@@ -53,21 +55,38 @@ const TimeDisplay: React.FC<{ time: GameTime; isPaused?: boolean }> = ({ time, i
   };
 
   return (
-    <div className="flex items-center gap-2 bg-neutral-100 rounded-lg px-3 py-2">
-      <div className="text-center">
-        <div className="text-xs text-neutral-500">Cycle</div>
-        <div className="font-bold text-neutral-800">{time.cycle}</div>
+    <div 
+      className="flex items-center bg-gradient-to-r from-slate-50 to-slate-100 px-2 sm:px-3 lg:px-4 py-2 sm:py-3 border border-slate-200/50 animate-scale-in transition-smooth hover-lift"
+      style={{
+        gap: 'var(--spacing-xs)',
+        borderRadius: 'var(--radius-lg)',
+        boxShadow: 'var(--shadow-sm)',
+        animationDelay: '0.2s'
+      }}
+    >
+      <div className="text-center min-w-[2rem] sm:min-w-[2.5rem] lg:min-w-[3rem]">
+        <div className="font-medium text-slate-500 uppercase tracking-wide mb-1 hidden md:block" style={{ fontSize: 'var(--font-size-xs)' }}>Cycle</div>
+        <div className="text-sm sm:text-base lg:text-lg font-bold text-slate-800">{time.cycle}</div>
       </div>
-      <div className="w-px h-8 bg-neutral-300" />
-      <div className="text-center">
-        <div className="text-xs text-neutral-500">Season</div>
-        <div className="font-medium text-neutral-800 capitalize">{time.season}</div>
+      <div className="w-px h-6 sm:h-8 lg:h-10 bg-gradient-to-b from-transparent via-slate-300 to-transparent" />
+      <div className="text-center min-w-[2.5rem] sm:min-w-[3rem] lg:min-w-[4rem]">
+        <div className="font-medium text-slate-500 uppercase tracking-wide mb-1 hidden md:block" style={{ fontSize: 'var(--font-size-xs)' }}>Season</div>
+        <div className="text-xs sm:text-sm font-semibold text-slate-700 capitalize">{time.season}</div>
       </div>
-      <div className="w-px h-8 bg-neutral-300" />
-      <div className="text-center">
-        <div className="text-xs text-neutral-500">Time</div>
-        <div className={`font-mono text-sm ${isPaused ? 'text-amber-600' : 'text-emerald-600'}`}>
-          {isPaused ? 'PAUSED' : formatTime(time.timeRemaining)}
+      <div className="w-px h-6 sm:h-8 lg:h-10 bg-gradient-to-b from-transparent via-slate-300 to-transparent" />
+      <div className="text-center min-w-[2.5rem] sm:min-w-[3rem] lg:min-w-[4rem]">
+        <div className="font-medium text-slate-500 uppercase tracking-wide mb-1 hidden md:block" style={{ fontSize: 'var(--font-size-xs)' }}>Time</div>
+        <div 
+          className={`font-mono text-xs sm:text-sm font-semibold transition-colors duration-200 ${
+            isPaused ? 'text-amber-600 animate-pulse animate-pulse-slow animate-bounce-gentle' : 'text-emerald-600'
+          }`}
+        >
+          {isPaused ? (
+            <>
+              <span className="hidden sm:inline">PAUSED</span>
+              <span className="sm:hidden">⏸</span>
+            </>
+          ) : formatTime(time.timeRemaining)}
         </div>
       </div>
     </div>
@@ -88,76 +107,158 @@ export const GameHUD: React.FC<GameHUDProps> = ({
   onOpenOmens
 }) => {
   return (
-    <div className="absolute top-0 left-0 right-0 z-50 pointer-events-none">
-      {/* Top HUD Bar */}
-      <div className="flex justify-between items-start p-4">
+    <div className="absolute inset-0 z-50 pointer-events-none animate-fade-in flex flex-col">
+      {/* Top HUD Bar - Mobile optimized */}
+      <div className="flex flex-col xl:flex-row justify-between items-stretch xl:items-start p-2 sm:p-3 lg:p-4 gap-2 sm:gap-3">
         {/* Resources Panel */}
-        <div className="card-elevated bg-white/95 backdrop-blur-sm p-3 pointer-events-auto">
-          <div className="grid grid-cols-3 gap-3">
-            <ResourceIcon type="grain" value={resources.grain} />
-            <ResourceIcon type="coin" value={resources.coin} />
-            <ResourceIcon type="mana" value={resources.mana} />
-            <ResourceIcon type="favor" value={resources.favor} />
-            <ResourceIcon type="unrest" value={resources.unrest} />
-            <ResourceIcon type="threat" value={resources.threat} />
+        <div 
+          className="bg-white/95 backdrop-blur-md border border-white/20 p-2 sm:p-3 lg:p-4 pointer-events-auto transition-all duration-200 hover:shadow-xl w-full xl:w-auto animate-slide-in-left"
+          style={{
+            borderRadius: 'var(--radius-lg)',
+            boxShadow: 'var(--shadow-lg)'
+          }}
+        >
+          <div className="mb-1 sm:mb-2 hidden md:block" style={{ marginBottom: 'var(--spacing-sm)' }}>
+            <h3 
+              className="font-semibold text-slate-700 uppercase tracking-wide"
+              style={{ fontSize: 'var(--font-size-xs)' }}
+            >
+              Resources
+            </h3>
+          </div>
+          <div 
+            className="grid grid-cols-6 sm:grid-cols-6 md:grid-cols-3 xl:grid-cols-6 2xl:grid-cols-3"
+            style={{ gap: 'var(--spacing-xs)' }}
+          >
+            <ResourceIcon type="grain" value={resources.grain} className="animate-scale-in stagger-1" />
+            <ResourceIcon type="coin" value={resources.coin} className="animate-scale-in stagger-2" />
+            <ResourceIcon type="mana" value={resources.mana} className="animate-scale-in stagger-3" />
+            <ResourceIcon type="favor" value={resources.favor} className="animate-scale-in stagger-4" />
+            <ResourceIcon type="unrest" value={resources.unrest} className="animate-scale-in stagger-5" />
+            <ResourceIcon type="threat" value={resources.threat} className="animate-scale-in stagger-6" />
           </div>
         </div>
 
         {/* Time Controls */}
-        <div className="card-elevated bg-white/95 backdrop-blur-sm p-3 pointer-events-auto">
-          <div className="flex items-center gap-3">
+        <div 
+          className="bg-white/95 backdrop-blur-md border border-white/20 p-2 sm:p-3 lg:p-4 pointer-events-auto transition-all duration-200 hover:shadow-xl w-full xl:w-auto animate-slide-in-right"
+          style={{
+            borderRadius: 'var(--radius-lg)',
+            boxShadow: 'var(--shadow-lg)'
+          }}
+        >
+          <div 
+            className="flex flex-col sm:flex-row items-center"
+            style={{ gap: 'var(--spacing-sm)' }}
+          >
             <TimeDisplay time={time} isPaused={isPaused} />
-            <div className="flex gap-2">
+            <div 
+              className="flex w-full sm:w-auto"
+              style={{ gap: 'var(--spacing-xs)' }}
+            >
               {isPaused ? (
-                <ActionButton onClick={onResume} variant="primary">
-                  <FontAwesomeIcon icon={faPlay} /> Resume
+                <ActionButton onClick={onResume} variant="primary" className="flex-1 sm:flex-none transition-smooth hover-lift text-xs sm:text-sm">
+                  <FontAwesomeIcon icon={faPlay} className="mr-1 sm:mr-2" /> 
+                  <span className="hidden sm:inline">Resume</span>
                 </ActionButton>
               ) : (
-                <ActionButton onClick={onPause}>
-                  <FontAwesomeIcon icon={faPause} /> Pause
+                <ActionButton onClick={onPause} className="flex-1 sm:flex-none transition-smooth hover-lift text-xs sm:text-sm">
+                  <FontAwesomeIcon icon={faPause} className="mr-1 sm:mr-2" /> 
+                  <span className="hidden sm:inline">Pause</span>
                 </ActionButton>
               )}
-              <ActionButton onClick={onAdvanceCycle} variant="danger">
-                <FontAwesomeIcon icon={faForward} /> Advance
+              <ActionButton onClick={onAdvanceCycle} variant="danger" className="flex-1 sm:flex-none transition-smooth hover-lift text-xs sm:text-sm">
+                <FontAwesomeIcon icon={faForward} className="mr-1 sm:mr-2" /> 
+                <span className="hidden sm:inline">Advance</span>
               </ActionButton>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Panel Controls */}
-      <div className="absolute top-4 right-4">
-        <div className="flex flex-col gap-2 pointer-events-auto">
-          <ActionButton onClick={onOpenCouncil}>
-            <FontAwesomeIcon icon={faLandmark} /> Council
-          </ActionButton>
-          <ActionButton onClick={onOpenEdicts}>
-            <FontAwesomeIcon icon={faScroll} /> Edicts
-          </ActionButton>
-          <ActionButton onClick={onOpenOmens}>
-            <FontAwesomeIcon icon={faEye} /> Omens
-          </ActionButton>
+      {/* Panel Controls - Mobile responsive positioning */}
+      <div className="flex-1 flex flex-col justify-center">
+        <div 
+          className="self-end mr-2 sm:mr-3 lg:mr-4 z-40 animate-slide-in-right"
+        >
+          <div 
+            className="bg-white/10 backdrop-blur-md border border-white/20 p-2 sm:p-3 pointer-events-auto transition-all duration-200 hover:shadow-xl hover-lift"
+            style={{
+              borderRadius: 'var(--radius-lg)',
+              boxShadow: 'var(--shadow-lg)'
+            }}
+          >
+            <div 
+              className="flex flex-row xl:flex-col"
+              style={{ gap: 'var(--spacing-xs)' }}
+            >
+              <ActionButton 
+                 onClick={onOpenCouncil} 
+                 variant="secondary" 
+                 className="w-full justify-center xl:justify-start text-xs sm:text-sm transition-smooth hover-lift animate-scale-in stagger-1 px-2 sm:px-3"
+               >
+                 <FontAwesomeIcon icon={faLandmark} className="xl:mr-2" /> 
+                 <span className="hidden sm:inline xl:inline ml-1 xl:ml-0">Council</span>
+               </ActionButton>
+               <ActionButton 
+                 onClick={onOpenEdicts} 
+                 variant="secondary" 
+                 className="w-full justify-center xl:justify-start text-xs sm:text-sm transition-smooth hover-lift animate-scale-in stagger-2 px-2 sm:px-3"
+               >
+                 <FontAwesomeIcon icon={faScroll} className="xl:mr-2" /> 
+                 <span className="hidden sm:inline xl:inline ml-1 xl:ml-0">Edicts</span>
+               </ActionButton>
+               <ActionButton 
+                 onClick={onOpenOmens} 
+                 variant="secondary" 
+                 className="w-full justify-center xl:justify-start text-xs sm:text-sm transition-smooth hover-lift animate-scale-in stagger-3 px-2 sm:px-3"
+               >
+                 <FontAwesomeIcon icon={faEye} className="xl:mr-2" /> 
+                 <span className="hidden sm:inline xl:inline ml-1 xl:ml-0">Omens</span>
+               </ActionButton>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Bottom Status Bar */}
-      <div className="absolute bottom-4 left-4 right-4">
-        <div className="card-elevated bg-white/90 backdrop-blur-sm p-2 pointer-events-auto">
-          <div className="flex justify-between items-center text-sm text-neutral-600">
-            <div className="flex items-center gap-4">
-              <span className="flex items-center gap-1">
-                <FontAwesomeIcon icon={faMousePointer} /> Click tiles to select
-              </span>
-              <span className="flex items-center gap-1">
-                <FontAwesomeIcon icon={faArrowsAlt} /> Drag to pan
-              </span>
-              <span className="flex items-center gap-1">
-                <FontAwesomeIcon icon={faMagnifyingGlass} /> Scroll to zoom
-              </span>
+      {/* Bottom Status Bar - Mobile optimized */}
+      <div 
+        className="mt-auto pointer-events-auto bg-white/95 backdrop-blur-md border border-white/20 mx-2 sm:mx-3 lg:mx-4 mb-2 sm:mb-3 lg:mb-4 px-2 sm:px-3 lg:px-4 py-2 sm:py-3 flex flex-col sm:flex-row justify-between items-center gap-2 sm:gap-4 animate-fade-in transition-smooth hover-lift"
+        style={{
+          borderRadius: 'var(--radius-lg)',
+          boxShadow: 'var(--shadow-lg)',
+          fontSize: 'var(--font-size-sm)',
+          animationDelay: '0.3s'
+        }}
+      >
+        <div className="flex flex-col sm:flex-row justify-between items-center w-full gap-2 sm:gap-4">
+          <div className="flex flex-row sm:flex-row items-center gap-3 sm:gap-4 flex-wrap justify-center sm:justify-start">
+            <div className="flex items-center text-slate-600 text-xs">
+              <FontAwesomeIcon icon={faMousePointer} className="text-slate-400 mr-1" />
+              <span className="hidden sm:inline">Click tiles to select</span>
+              <span className="sm:hidden">Click</span>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs">FPS:</span>
-              <span className="font-mono text-emerald-600">60</span>
+            <div className="flex items-center text-slate-600 text-xs">
+              <FontAwesomeIcon icon={faArrowsAlt} className="text-slate-400 mr-1" />
+              <span className="hidden sm:inline">Drag to pan</span>
+              <span className="sm:hidden">Drag</span>
+            </div>
+            <div className="flex items-center text-slate-600 text-xs">
+              <FontAwesomeIcon icon={faMagnifyingGlass} className="text-slate-400 mr-1" />
+              <span className="hidden sm:inline">Scroll to zoom</span>
+              <span className="sm:hidden">Zoom</span>
+            </div>
+          </div>
+          <div className="flex items-center">
+            <div 
+              className="flex items-center px-2 sm:px-3 py-1 bg-emerald-50 border border-emerald-200 rounded-md"
+            >
+              <span className="font-medium text-emerald-700 text-xs mr-1">
+                FPS:
+              </span>
+              <span className="font-mono font-bold text-emerald-600 text-xs">
+                60
+              </span>
             </div>
           </div>
         </div>

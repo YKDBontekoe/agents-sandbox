@@ -23,8 +23,10 @@ function GameRendererContent({
   onTileHover,
   onTileClick,
 }: GameRendererProps) {
+  console.log('GameRendererContent rendering with:', { width, height, gridSize });
+  
   return (
-    <div className="relative">
+    <div className="relative" style={{ minHeight: '600px', border: '1px solid blue' }}>
       <GameCanvas
         width={width}
         height={height}
@@ -48,6 +50,8 @@ function GameRendererContent({
 }
 
 export default function GameRenderer({ children, ...props }: GameRendererProps) {
+  console.log('GameRenderer component rendering with props:', props);
+  
   const [app, setApp] = useState<PIXI.Application | null>(null);
   const [viewport, setViewport] = useState<Viewport | null>(null);
 
