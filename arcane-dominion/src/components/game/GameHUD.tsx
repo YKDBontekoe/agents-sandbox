@@ -10,7 +10,7 @@ import {
   faMousePointer,
   faArrowsAlt,
   faMagnifyingGlass
-} from '@fortawesome/free-solid-svg-icons';
+} from '@/lib/icons';
 import { ActionButton, ResourceIcon } from '../ui';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as Tooltip from '@radix-ui/react-tooltip';

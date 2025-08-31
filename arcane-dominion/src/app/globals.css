@@ -36,6 +36,33 @@ html {
   scroll-behavior: smooth;
 }
 
+/* Performance optimizations */
+* {
+  /* Reduce paint and layout thrashing */
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+/* Optimize animations for better performance */
+.animate-fade-in,
+.animate-slide-up,
+[class*="animate-"] {
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+}
+
+/* Reduce motion for users who prefer it */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* Focus styles */
 *:focus-visible {
   outline: 2px solid #0284c7;

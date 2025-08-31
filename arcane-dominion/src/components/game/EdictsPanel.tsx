@@ -4,7 +4,7 @@ import * as Slider from '@radix-ui/react-slider';
 import * as Toggle from '@radix-ui/react-toggle';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faCrown, faScroll, faXmark, faLock } from '@fortawesome/free-solid-svg-icons';
+import { faCrown, faScroll, faXmark, faLock } from '@/lib/icons';
 import { CategoryIcon } from '../ui';
 
 export interface EdictSetting {

@@ -31,28 +31,28 @@ export default function Home() {
           <div className="container-narrow text-center">
             <h1 className="text-heading-1 font-display text-neutral-900 mb-6 animate-slide-up">
               Build Your
-              <span className="text-gradient-primary block animate-fade-in" style={{animationDelay: '0.2s'}}>
+              <span className="text-gradient-primary block">
                 Mystical Empire
               </span>
             </h1>
-            <p className="text-body-large text-neutral-600 mb-8 max-w-2xl mx-auto leading-relaxed animate-fade-in" style={{animationDelay: '0.4s'}}>
+            <p className="text-body-large text-neutral-600 mb-8 max-w-2xl mx-auto leading-relaxed animate-fade-in" style={{animationDelay: '0.2s'}}>
               Master the art of strategic resource management in a world where ancient leylines 
               power civilizations and mystical forces shape the fate of kingdoms.
             </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-12 animate-slide-up" style={{animationDelay: '0.6s'}}>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-12 animate-slide-up" style={{animationDelay: '0.4s'}}>
               <Link 
                 href="/play" 
-                className="btn-primary text-lg px-8 py-4 hover:scale-110 hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
+                className="btn-primary text-lg px-8 py-4 hover:transform hover:scale-105 hover:shadow-xl transition-transform duration-200 will-change-transform"
               >
                 Start Playing
               </Link>
-              <button className="btn-secondary text-lg px-8 py-4 hover:scale-110 hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+              <button className="btn-secondary text-lg px-8 py-4 hover:transform hover:scale-105 hover:shadow-xl transition-transform duration-200 will-change-transform">
                 Watch Demo
               </button>
             </div>
 
             {/* Feature Preview */}
-            <div className="card-elevated p-8 animate-scale-in" style={{animationDelay: '0.8s'}}>
+            <div className="card-elevated p-8 animate-fade-in" style={{animationDelay: '0.6s'}}>
               <div className="grid md:grid-cols-3 gap-8">
                 <div className="text-center">
                   <div className="w-12 h-12 bg-primary-100 rounded-xl flex items-center justify-center mx-auto mb-4">

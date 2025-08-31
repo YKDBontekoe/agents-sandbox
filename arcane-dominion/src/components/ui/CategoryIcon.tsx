@@ -6,7 +6,7 @@ import {
   faShieldHalved,
   faUsers,
   faHatWizard
-} from '@fortawesome/free-solid-svg-icons';
+} from '@/lib/icons';
 
 export type CategoryType = 'economic' | 'military' | 'social' | 'mystical';
 

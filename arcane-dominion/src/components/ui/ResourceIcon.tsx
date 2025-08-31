@@ -9,7 +9,7 @@ import {
   faCrown,
   faBolt,
   faSkullCrossbones
-} from '@fortawesome/free-solid-svg-icons';
+} from '@/lib/icons';
 
 export type ResourceType = 'grain' | 'coin' | 'mana' | 'favor' | 'unrest' | 'threat';
 
@@ -41,9 +41,9 @@ export const ResourceIcon: React.FC<ResourceIconProps> = ({ type, value, classNa
   <Tooltip.Provider>
     <Tooltip.Root>
       <Tooltip.Trigger asChild>
-        <div className={`flex items-center gap-1 transition-all duration-200 hover:scale-110 cursor-pointer group ${className}`}>
-          <FontAwesomeIcon icon={ICONS[type]} className={`text-lg ${COLORS[type]} group-hover:animate-pulse`} />
-          <span className={`font-mono text-sm ${COLORS[type]} group-hover:font-semibold`}>{value}</span>
+        <div className={`flex items-center gap-1 transition-transform duration-150 hover:transform hover:scale-105 cursor-pointer group will-change-transform ${className}`}>
+          <FontAwesomeIcon icon={ICONS[type]} className={`text-lg ${COLORS[type]}`} />
+          <span className={`font-mono text-sm ${COLORS[type]} group-hover:font-semibold transition-all duration-150`}>{value}</span>
         </div>
       </Tooltip.Trigger>
       <Tooltip.Portal>

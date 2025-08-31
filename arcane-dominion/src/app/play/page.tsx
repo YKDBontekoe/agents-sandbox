@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import GameRenderer from '@/components/game/GameRenderer';
 import { GameHUD, GameResources, GameTime } from '@/components/game/GameHUD';
 import { CouncilPanel, CouncilProposal } from '@/components/game/CouncilPanel';
@@ -51,19 +51,36 @@ export default function PlayPage() {
   const [upcomingEvents, setUpcomingEvents] = useState<SeasonalEvent[]>([]);
   const [omenReadings, setOmenReadings] = useState<OmenReading[]>([]);
 
-  async function fetchState() {
+  const fetchState = useCallback(async () => {
     const res = await fetch("/api/state");
     const json = await res.json();
     if (!res.ok) throw new Error(json.error || "Failed to fetch state");
     setState(json);
-  }
+  }, []);
 
-  async function fetchProposals() {
+  const fetchProposals = useCallback(async () => {
     const res = await fetch("/api/proposals");
     const json = await res.json();
     if (!res.ok) throw new Error(json.error || "Failed to fetch proposals");
     setProposals(json.proposals || []);
-  }
+  }, []);
+
+  const tick = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/state/tick`, { method: "POST" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Failed to tick");
+      setState(json);
+      setTimeRemaining(120); // Reset timer
+      await fetchProposals();
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchProposals]);
 
   useEffect(() => {
     (async () => {
@@ -94,97 +111,100 @@ export default function PlayPage() {
 
   // Timer for cycle progression
   useEffect(() => {
+    let timer: NodeJS.Timeout | null = null;
+    
     if (!isPaused && timeRemaining > 0) {
-      const timer = setTimeout(() => {
+      timer = setTimeout(() => {
         setTimeRemaining(prev => prev - 1);
       }, 1000);
-      return () => clearTimeout(timer);
     } else if (timeRemaining === 0) {
       tick();
     }
-  }, [timeRemaining, isPaused]);
+    
+    return () => {
+      if (timer) {
+        clearTimeout(timer);
+      }
+    };
+  }, [timeRemaining, isPaused, tick]);
 
-  const initializeMockData = () => {
-    // Initialize districts
-    const mockDistricts: District[] = [
+  const mockData = useMemo(() => ({
+    districts: [
       { id: '1', gridX: 5, gridY: 5, worldX: 320, worldY: 160, type: DistrictType.FARM, tier: DistrictTier.TIER_1, state: DistrictState.NORMAL },
       { id: '2', gridX: 7, gridY: 6, worldX: 448, worldY: 192, type: DistrictType.MARKET, tier: DistrictTier.TIER_2, state: DistrictState.EMPOWERED },
       { id: '3', gridX: 3, gridY: 8, worldX: 192, worldY: 256, type: DistrictType.SANCTUM, tier: DistrictTier.TIER_1, state: DistrictState.NORMAL },
       { id: '4', gridX: 9, gridY: 4, worldX: 576, worldY: 128, type: DistrictType.FORGE, tier: DistrictTier.TIER_3, state: DistrictState.DISABLED },
       { id: '5', gridX: 6, gridY: 9, worldX: 384, worldY: 288, type: DistrictType.WELL, tier: DistrictTier.TIER_2, state: DistrictState.NORMAL },
       { id: '6', gridX: 2, gridY: 3, worldX: 128, worldY: 96, type: DistrictType.WATCHTOWER, tier: DistrictTier.TIER_1, state: DistrictState.NORMAL },
-    ];
-    setDistricts(mockDistricts);
-
-    // Initialize leylines
-    const mockLeylines: Leyline[] = [
+    ],
+    leylines: [
       { id: '1', fromX: 5, fromY: 5, toX: 7, toY: 6, capacity: 100, currentFlow: 75, isActive: true },
       { id: '2', fromX: 7, fromY: 6, toX: 3, toY: 8, capacity: 80, currentFlow: 40, isActive: true },
       { id: '3', fromX: 9, fromY: 4, toX: 6, toY: 9, capacity: 120, currentFlow: 0, isActive: false },
-    ];
-    setLeylines(mockLeylines);
+    ],
+    edicts: [
+       {
+         id: 'tax_rate',
+         name: 'Tax Rate',
+         description: 'Adjust the taxation level on citizens',
+         type: 'slider' as const,
+         category: 'economic' as const,
+         currentValue: 50,
+         defaultValue: 50,
+         cost: 10,
+         effects: [
+           { resource: 'Coin', impact: '+2 per 10% tax rate' },
+           { resource: 'Unrest', impact: '+1 per 20% above 50%' }
+         ]
+       },
+       {
+         id: 'military_patrol',
+         name: 'Military Patrols',
+         description: 'Enable regular military patrols in the realm',
+         type: 'toggle' as const,
+         category: 'military' as const,
+         currentValue: 1,
+         defaultValue: 0,
+         cost: 15,
+         effects: [
+           { resource: 'Threat', impact: '-2 per cycle' },
+           { resource: 'Coin', impact: '-5 per cycle' }
+         ]
+       }
+     ],
+     events: [
+       {
+         id: '1',
+         name: 'Harvest Festival',
+         description: 'A bountiful harvest brings prosperity to the realm',
+         type: 'blessing' as const,
+         season: 'autumn' as const,
+         cycleOffset: 2,
+         probability: 85,
+         effects: [{ resource: 'Grain', impact: '+50' }, { resource: 'Favor', impact: '+10' }],
+         isRevealed: true
+       },
+       {
+         id: '2',
+         name: 'Mysterious Plague',
+         description: 'A strange sickness spreads through the land',
+         type: 'curse' as const,
+         season: 'winter' as const,
+         cycleOffset: 5,
+         probability: 60,
+         effects: [{ resource: 'Grain', impact: '-30' }, { resource: 'Unrest', impact: '+15' }],
+         duration: 3,
+         isRevealed: false
+       }
+     ]
+  }), []);
 
-    // Initialize edicts
-    const mockEdicts: EdictSetting[] = [
-      {
-        id: 'tax_rate',
-        name: 'Tax Rate',
-        description: 'Adjust the taxation level on citizens',
-        type: 'slider',
-        category: 'economic',
-        currentValue: 50,
-        defaultValue: 50,
-        cost: 10,
-        effects: [
-          { resource: 'Coin', impact: '+2 per 10% tax rate' },
-          { resource: 'Unrest', impact: '+1 per 20% above 50%' }
-        ]
-      },
-      {
-        id: 'military_patrol',
-        name: 'Military Patrols',
-        description: 'Enable regular military patrols in the realm',
-        type: 'toggle',
-        category: 'military',
-        currentValue: 1,
-        defaultValue: 0,
-        cost: 15,
-        effects: [
-          { resource: 'Threat', impact: '-2 per cycle' },
-          { resource: 'Coin', impact: '-5 per cycle' }
-        ]
-      }
-    ];
-    setEdicts(mockEdicts);
-
-    // Initialize events and omens
-    const mockEvents: SeasonalEvent[] = [
-      {
-        id: '1',
-        name: 'Harvest Festival',
-        description: 'A bountiful harvest brings prosperity to the realm',
-        type: 'blessing',
-        season: 'autumn',
-        cycleOffset: 2,
-        probability: 85,
-        effects: [{ resource: 'Grain', impact: '+50' }, { resource: 'Favor', impact: '+10' }],
-        isRevealed: true
-      },
-      {
-        id: '2',
-        name: 'Mysterious Plague',
-        description: 'A strange sickness spreads through the land',
-        type: 'curse',
-        season: 'winter',
-        cycleOffset: 5,
-        probability: 60,
-        effects: [{ resource: 'Grain', impact: '-30' }, { resource: 'Unrest', impact: '+15' }],
-        duration: 3,
-        isRevealed: false
-      }
-    ];
-    setUpcomingEvents(mockEvents);
-  };
+  const initializeMockData = useCallback(() => {
+    setDistricts(mockData.districts);
+    setLeylines(mockData.leylines);
+    setEdicts(mockData.edicts);
+    setUpcomingEvents(mockData.events);
+  }, [mockData]);
 
   async function generate() {
     setLoading(true);
@@ -231,23 +251,6 @@ export default function PlayPage() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Failed to decide");
-      await fetchProposals();
-    } catch (e: any) {
-      setError(e.message);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function tick() {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/state/tick`, { method: "POST" });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Failed to tick");
-      setState(json);
-      setTimeRemaining(120); // Reset timer
       await fetchProposals();
     } catch (e: any) {
       setError(e.message);
