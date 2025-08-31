@@ -10,16 +10,16 @@ export default function Home() {
 
       <div className="relative z-10">
         {/* Navigation */}
-        <nav className="container-base py-6">
+        <nav className="container-base py-6 animate-fade-in">
           <div className="flex items-center justify-between">
-            <div className="text-heading-2 font-display text-neutral-900">
+            <div className="text-heading-2 font-display text-neutral-900 hover:text-gradient-primary transition-all duration-300">
               Arcane Dominion
             </div>
             <div className="flex items-center gap-4">
-              <button className="btn-ghost text-sm">
+              <button className="btn-ghost text-sm hover:scale-105 transition-transform duration-200">
                 About
               </button>
-              <button className="btn-ghost text-sm">
+              <button className="btn-ghost text-sm hover:scale-105 transition-transform duration-200">
                 Features
               </button>
             </div>
@@ -29,30 +29,30 @@ export default function Home() {
         {/* Hero Section */}
         <section className="section-padding-lg">
           <div className="container-narrow text-center">
-            <h1 className="text-heading-1 font-display text-neutral-900 mb-6">
+            <h1 className="text-heading-1 font-display text-neutral-900 mb-6 animate-slide-up">
               Build Your
-              <span className="text-gradient-primary block">
+              <span className="text-gradient-primary block animate-fade-in" style={{animationDelay: '0.2s'}}>
                 Mystical Empire
               </span>
             </h1>
-            <p className="text-body-large text-neutral-600 mb-8 max-w-2xl mx-auto leading-relaxed">
+            <p className="text-body-large text-neutral-600 mb-8 max-w-2xl mx-auto leading-relaxed animate-fade-in" style={{animationDelay: '0.4s'}}>
               Master the art of strategic resource management in a world where ancient leylines 
               power civilizations and mystical forces shape the fate of kingdoms.
             </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-12">
+            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-12 animate-slide-up" style={{animationDelay: '0.6s'}}>
               <Link 
                 href="/play" 
-                className="btn-primary text-lg px-8 py-4"
+                className="btn-primary text-lg px-8 py-4 hover:scale-110 hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
               >
                 Start Playing
               </Link>
-              <button className="btn-secondary text-lg px-8 py-4">
+              <button className="btn-secondary text-lg px-8 py-4 hover:scale-110 hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
                 Watch Demo
               </button>
             </div>
 
             {/* Feature Preview */}
-            <div className="card-elevated p-8 animate-scale-in">
+            <div className="card-elevated p-8 animate-scale-in" style={{animationDelay: '0.8s'}}>
               <div className="grid md:grid-cols-3 gap-8">
                 <div className="text-center">
                   <div className="w-12 h-12 bg-primary-100 rounded-xl flex items-center justify-center mx-auto mb-4">
@@ -96,7 +96,7 @@ export default function Home() {
 
         {/* Stats Section */}
         <section className="container-base section-padding-sm">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 animate-fade-in" style={{animationDelay: '1s'}}>
             <div className="text-center">
               <div className="text-display-3 text-neutral-900 font-bold mb-1">50K+</div>
               <div className="text-body-small text-neutral-600">Active Players</div>

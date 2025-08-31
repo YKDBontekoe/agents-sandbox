@@ -9,9 +9,9 @@ export interface ActionButtonProps {
 }
 
 const VARIANT_CLASSES: Record<NonNullable<ActionButtonProps['variant']>, string> = {
-  primary: 'bg-blue-600 hover:bg-blue-700 text-white',
-  secondary: 'bg-gray-600 hover:bg-gray-700 text-white',
-  danger: 'bg-red-600 hover:bg-red-700 text-white',
+  primary: 'bg-blue-600 hover:bg-blue-700 text-white hover:scale-105 hover:shadow-lg active:scale-95',
+  secondary: 'bg-gray-600 hover:bg-gray-700 text-white hover:scale-105 hover:shadow-lg active:scale-95',
+  danger: 'bg-red-600 hover:bg-red-700 text-white hover:scale-105 hover:shadow-lg active:scale-95',
 };
 
 export const ActionButton: React.FC<ActionButtonProps> = ({
@@ -24,7 +24,7 @@ export const ActionButton: React.FC<ActionButtonProps> = ({
   <button
     onClick={onClick}
     disabled={disabled}
-    className={`inline-flex items-center gap-1 px-3 py-2 rounded-md text-sm font-medium transition-colors ${VARIANT_CLASSES[variant]} ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'} ${className}`}
+    className={`inline-flex items-center gap-1 px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 ease-out ${VARIANT_CLASSES[variant]} ${disabled ? 'opacity-50 cursor-not-allowed hover:scale-100 hover:shadow-none' : 'cursor-pointer'} ${className}`}
   >
     {children}
   </button>

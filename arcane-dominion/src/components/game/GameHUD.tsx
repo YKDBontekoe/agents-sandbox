@@ -43,29 +43,7 @@ export interface GameHUDProps {
   onOpenOmens?: () => void;
 }
 
-const ResourceIcon: React.FC<{ type: keyof GameResources; value: number; className?: string }> = ({ type, value, className = '' }) => {
-  return (
-    <Tooltip.Provider>
-      <Tooltip.Root>
-        <Tooltip.Trigger asChild>
-          <div className={`flex items-center gap-1 ${className}`}>
-            <span className="text-lg">{getResourceIcon(type)}</span>
-            <span className={`font-mono text-sm ${getResourceColor(type)}`}>{value}</span>
-          </div>
-        </Tooltip.Trigger>
-        <Tooltip.Portal>
-          <Tooltip.Content
-            className="bg-gray-900 text-white px-2 py-1 rounded text-xs capitalize"
-            sideOffset={5}
-          >
-            {type}: {value}
-            <Tooltip.Arrow className="fill-gray-900" />
-          </Tooltip.Content>
-        </Tooltip.Portal>
-      </Tooltip.Root>
-    </Tooltip.Provider>
-  );
-};
+// Using imported ResourceIcon component from '../ui'
 
 const TimeDisplay: React.FC<{ time: GameTime; isPaused?: boolean }> = ({ time, isPaused }) => {
   const formatTime = (seconds: number) => {
@@ -96,37 +74,7 @@ const TimeDisplay: React.FC<{ time: GameTime; isPaused?: boolean }> = ({ time, i
   );
 };
 
-const ActionButton: React.FC<{ 
-  onClick?: () => void; 
-  children: React.ReactNode; 
-  variant?: 'primary' | 'secondary' | 'danger';
-  disabled?: boolean;
-}> = ({ onClick, children, variant = 'secondary', disabled = false }) => {
-  const getVariantClasses = () => {
-    switch (variant) {
-      case 'primary':
-        return 'btn-primary';
-      case 'danger':
-        return 'btn-danger';
-      default:
-        return 'btn-secondary';
-    }
-  };
-
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className={`
-        px-3 py-2 text-sm font-medium transition-colors
-        ${getVariantClasses()}
-        ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
-      `}
-    >
-      {children}
-    </button>
-  );
-};
+// Using imported ActionButton component from '../ui'
 
 export const GameHUD: React.FC<GameHUDProps> = ({
   resources,
