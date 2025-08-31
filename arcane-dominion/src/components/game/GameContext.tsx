@@ -2,12 +2,12 @@
 
 import { createContext, useContext, ReactNode } from "react";
 import { Viewport } from "pixi-viewport";
-import * as PIXI from "pixi.js";
+import type { Application } from "pixi.js";
 
 interface GameContextType {
-  app: PIXI.Application | null;
+  app: Application | null;
   viewport: Viewport | null;
-  setApp: (app: PIXI.Application | null) => void;
+  setApp: (app: Application | null) => void;
   setViewport: (viewport: Viewport | null) => void;
 }
 
@@ -23,9 +23,9 @@ export function useGameContext() {
 
 interface GameProviderProps {
   children: ReactNode;
-  app: PIXI.Application | null;
+  app: Application | null;
   viewport: Viewport | null;
-  setApp: (app: PIXI.Application | null) => void;
+  setApp: (app: Application | null) => void;
   setViewport: (viewport: Viewport | null) => void;
 }
 

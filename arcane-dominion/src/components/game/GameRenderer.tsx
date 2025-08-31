@@ -5,7 +5,7 @@ import GameCanvas from "./GameCanvas";
 import { IsometricGrid } from "./IsometricGrid";
 import { GameProvider } from "./GameContext";
 import { Viewport } from "pixi-viewport";
-import * as PIXI from "pixi.js";
+import type { Application } from "pixi.js";
 
 interface GameRendererProps {
   width?: number;
@@ -48,7 +48,7 @@ function GameRendererContent({
 }
 
 export default function GameRenderer({ children, ...props }: GameRendererProps) {
-  const [app, setApp] = useState<PIXI.Application | null>(null);
+  const [app, setApp] = useState<Application | null>(null);
   const [viewport, setViewport] = useState<Viewport | null>(null);
 
   return (
