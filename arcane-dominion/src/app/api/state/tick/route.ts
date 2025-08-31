@@ -41,7 +41,7 @@ export async function POST() {
   // Increment cycle and persist
   const { data: updated, error: upErr } = await supabase
     .from('game_state')
-    .update({ cycle: state.cycle + 1, resources })
+    .update({ cycle: state.cycle + 1, resources, updated_at: new Date().toISOString() })
     .eq('id', state.id)
     .select('*')
     .single()
