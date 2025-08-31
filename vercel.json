@@ -1,5 +1,0 @@
-{
-  "buildCommand": "npm run vercel-build",
-  "outputDirectory": "arcane-dominion/.next",
-  "installCommand": "npm install && npm run install-deps"
-}
