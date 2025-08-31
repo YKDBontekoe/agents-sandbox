@@ -28,8 +28,11 @@ export async function GET() {
       .maybeSingle()
 
     if (error) {
-      console.warn('Supabase error, falling back to mock data:', error.message)
-      return NextResponse.json(mockGameState)
+      console.error('Supabase error:', error.message)
+      return NextResponse.json(
+        { error: 'Database connection failed' },
+        { status: 503 }
+      )
     }
 
     // If no state, create one
@@ -40,15 +43,21 @@ export async function GET() {
         .select('*')
         .single()
       if (createErr) {
-        console.warn('Supabase create error, falling back to mock data:', createErr.message)
-        return NextResponse.json(mockGameState)
+        console.error('Supabase create error:', createErr.message)
+        return NextResponse.json(
+          { error: 'Failed to create game state' },
+          { status: 503 }
+        )
       }
       return NextResponse.json(created)
     }
 
     return NextResponse.json(state)
   } catch (error) {
-    console.warn('Supabase connection error, falling back to mock data:', error)
-    return NextResponse.json(mockGameState)
+    console.error('Supabase connection error:', error)
+    return NextResponse.json(
+      { error: 'Service unavailable - database not configured' },
+      { status: 503 }
+    )
   }
 }

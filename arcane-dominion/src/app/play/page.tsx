@@ -87,27 +87,13 @@ export default function PlayPage() {
       try {
         await fetchState();
         await fetchProposals();
+        initializeMockData();
       } catch (e: any) {
-        // If API fails, use mock data to allow the game to run
-        console.warn('API failed, using mock data:', e.message);
-        setState({
-          id: 'mock-game',
-          cycle: 1,
-          resources: {
-            grain: 100,
-            coin: 50,
-            mana: 75,
-            favor: 25,
-            unrest: 10,
-            threat: 5
-          }
-        });
-        setProposals([]);
-        setError(null); // Clear error since we're handling it with mock data
+        console.error('Failed to connect to database:', e.message);
+        setError(e.message);
       }
-      initializeMockData();
     })();
-  }, []);
+  }, [fetchState, fetchProposals]);
 
   // Timer for cycle progression
   useEffect(() => {
@@ -297,6 +283,26 @@ export default function PlayPage() {
   const resetEdictChanges = () => {
     setPendingEdictChanges({});
   };
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-slate-900 to-slate-800 flex items-center justify-center">
+        <div className="text-center text-white max-w-md mx-auto p-6">
+          <h1 className="text-2xl font-bold mb-4">Service Unavailable</h1>
+          <p className="text-lg mb-6">Unable to connect to the game database. Please check your configuration and try again.</p>
+          <div className="text-sm text-gray-400 mb-6">
+            Error: {error}
+          </div>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (!state) {
     return (

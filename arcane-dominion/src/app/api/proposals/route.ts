@@ -16,8 +16,11 @@ export async function GET(_req: NextRequest) {
       .limit(1)
       .maybeSingle()
     if (stateErr) {
-      console.warn('Supabase error in proposals route, returning mock data:', stateErr.message)
-      return NextResponse.json({ proposals: mockProposals })
+      console.error('Supabase error in proposals route:', stateErr.message)
+      return NextResponse.json(
+        { error: 'Database connection failed' },
+        { status: 503 }
+      )
     }
     if (!state) return NextResponse.json({ proposals: [] })
 
@@ -28,13 +31,19 @@ export async function GET(_req: NextRequest) {
       .in('status', ['pending', 'accepted', 'rejected'])
       .order('created_at', { ascending: false })
     if (propErr) {
-      console.warn('Supabase error fetching proposals, returning mock data:', propErr.message)
-      return NextResponse.json({ proposals: mockProposals })
+      console.error('Supabase error fetching proposals:', propErr.message)
+      return NextResponse.json(
+        { error: 'Failed to fetch proposals' },
+        { status: 503 }
+      )
     }
 
     return NextResponse.json({ proposals })
   } catch (error) {
-    console.warn('Supabase connection error in proposals route, returning mock data:', error)
-    return NextResponse.json({ proposals: mockProposals })
+    console.error('Supabase connection error in proposals route:', error)
+    return NextResponse.json(
+      { error: 'Service unavailable - database not configured' },
+      { status: 503 }
+    )
   }
 }
