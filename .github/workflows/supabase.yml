@@ -15,7 +15,7 @@ jobs:
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
       SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
-      SITE_URL: https://sync-date-magic.vercel.app
+      SITE_URL: agents-sandbox.vercel.app
 
     steps:
       - name: Checkout code
