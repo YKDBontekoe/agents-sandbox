@@ -1,5 +1,7 @@
 # Arcane Dominion Agents Guide
 
+> See [root AGENTS.md](../AGENTS.md) for repository-wide norms.
+
 This guide aligns agents with the Arcane Dominion Tycoon design. It explains setup, architecture, and conventions to extend the AI-driven council.
 
 ## Setup
