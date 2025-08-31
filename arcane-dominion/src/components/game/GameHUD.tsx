@@ -1,6 +1,7 @@
 import React from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as Tooltip from '@radix-ui/react-tooltip';
+import { getResourceIcon, getResourceColor } from './resourceUtils';
 
 export interface GameResources {
   grain: number;
@@ -30,37 +31,13 @@ export interface GameHUDProps {
 }
 
 const ResourceIcon: React.FC<{ type: keyof GameResources; value: number; className?: string }> = ({ type, value, className = '' }) => {
-  const getIcon = (resourceType: keyof GameResources) => {
-    switch (resourceType) {
-      case 'grain': return '🌾';
-      case 'coin': return '🪙';
-      case 'mana': return '✨';
-      case 'favor': return '👑';
-      case 'unrest': return '⚡';
-      case 'threat': return '⚔️';
-      default: return '?';
-    }
-  };
-
-  const getColor = (resourceType: keyof GameResources) => {
-    switch (resourceType) {
-      case 'grain': return 'text-yellow-600';
-      case 'coin': return 'text-amber-500';
-      case 'mana': return 'text-purple-500';
-      case 'favor': return 'text-blue-500';
-      case 'unrest': return 'text-red-500';
-      case 'threat': return 'text-red-700';
-      default: return 'text-gray-500';
-    }
-  };
-
   return (
     <Tooltip.Provider>
       <Tooltip.Root>
         <Tooltip.Trigger asChild>
           <div className={`flex items-center gap-1 ${className}`}>
-            <span className="text-lg">{getIcon(type)}</span>
-            <span className={`font-mono text-sm ${getColor(type)}`}>{value}</span>
+            <span className="text-lg">{getResourceIcon(type)}</span>
+            <span className={`font-mono text-sm ${getResourceColor(type)}`}>{value}</span>
           </div>
         </Tooltip.Trigger>
         <Tooltip.Portal>
