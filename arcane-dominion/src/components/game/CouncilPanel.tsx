@@ -1,7 +1,7 @@
 import React from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
-import * as Tooltip from '@radix-ui/react-tooltip';
 import { GameResources } from './GameHUD';
+import { getResourceIcon, getResourceColor } from './resourceUtils';
 
 export interface ProposalDelta {
   grain?: number;
@@ -41,41 +41,17 @@ export interface CouncilPanelProps {
   canGenerateProposals: boolean;
 }
 
-const ResourceDelta: React.FC<{ delta: ProposalDelta; type: 'cost' | 'benefit' }> = ({ delta, type }) => {
+const ResourceDelta: React.FC<{ delta: ProposalDelta; type: 'cost' | 'benefit' }> = ({ delta, type: _type }) => {
   const entries = Object.entries(delta).filter(([_, value]) => value !== 0 && value !== undefined);
-  
+
   if (entries.length === 0) return null;
-
-  const getIcon = (resource: string) => {
-    switch (resource) {
-      case 'grain': return '🌾';
-      case 'coin': return '🪙';
-      case 'mana': return '✨';
-      case 'favor': return '👑';
-      case 'unrest': return '⚡';
-      case 'threat': return '⚔️';
-      default: return '?';
-    }
-  };
-
-  const getColor = (value: number, resourceType: string) => {
-    if (type === 'cost') {
-      return value > 0 ? 'text-red-400' : 'text-green-400';
-    } else {
-      // For benefits, positive is good except for unrest/threat
-      if (resourceType === 'unrest' || resourceType === 'threat') {
-        return value > 0 ? 'text-red-400' : 'text-green-400';
-      }
-      return value > 0 ? 'text-green-400' : 'text-red-400';
-    }
-  };
 
   return (
     <div className="flex flex-wrap gap-2">
       {entries.map(([resource, value]) => (
         <div key={resource} className="flex items-center gap-1">
-          <span className="text-xs">{getIcon(resource)}</span>
-          <span className={`text-xs font-mono ${getColor(value as number, resource)}`}>
+          <span className="text-xs">{getResourceIcon(resource as keyof GameResources)}</span>
+          <span className={`text-xs font-mono ${getResourceColor(resource as keyof GameResources)}`}>
             {value as number > 0 ? '+' : ''}{value}
           </span>
         </div>
