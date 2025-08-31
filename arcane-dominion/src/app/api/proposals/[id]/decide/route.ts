@@ -1,18 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { z } from 'zod'
 
 interface RouteContext {
   params: Promise<{ id: string }>
 }
 
+const BodySchema = z.object({
+  decision: z.enum(['accept', 'reject']),
+  comment: z.string().optional(),
+})
+
 export async function POST(req: NextRequest, context: RouteContext) {
   const params = await context.params
   const supabase = createSupabaseServerClient()
   const { id } = params
-  const { decision, comment } = await req.json().catch(() => ({}))
-  if (!['accept','reject'].includes(decision)) {
-    return NextResponse.json({ error: 'decision must be accept or reject' }, { status: 400 })
+  const json = await req.json().catch(() => ({}))
+  const parsed = BodySchema.safeParse(json)
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: parsed.error.message },
+      { status: 400 },
+    )
   }
+  const { decision, comment } = parsed.data
 
   const { data: prop, error: propErr } = await supabase.from('proposals').select('*').eq('id', id).maybeSingle()
   if (propErr) return NextResponse.json({ error: propErr.message }, { status: 500 })

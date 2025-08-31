@@ -2,13 +2,33 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { generateText } from 'ai'
 import { createOpenAI } from '@ai-sdk/openai'
+import { z } from 'zod'
 
 const openai = createOpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
+const BodySchema = z.object({
+  guild: z.string().optional(),
+})
+
+const ProposalSchema = z.object({
+  title: z.string(),
+  description: z.string(),
+  predicted_delta: z.record(z.number()),
+})
+
+const AIResponseSchema = z.array(ProposalSchema)
+
 export async function POST(req: NextRequest) {
   const supabase = createSupabaseServerClient()
-  const body = await req.json().catch(() => ({}))
-  const { guild = 'Wardens' } = body
+  const json = await req.json().catch(() => ({}))
+  const parsedBody = BodySchema.safeParse(json)
+  if (!parsedBody.success) {
+    return NextResponse.json(
+      { error: parsedBody.error.message },
+      { status: 400 },
+    )
+  }
+  const { guild = 'Wardens' } = parsedBody.data
 
   // Get latest state
   const { data: state, error: stateErr } = await supabase
@@ -34,14 +54,25 @@ Return JSON array, each item: { title, description, predicted_delta: {resource:n
     prompt: user,
   })
 
-  let proposals: Array<{ title: string; description: string; predicted_delta: Record<string, number> }>
+  let parsedJson: unknown
   try {
     const jsonStart = text.indexOf('[')
     const jsonEnd = text.lastIndexOf(']') + 1
-    proposals = JSON.parse(text.slice(jsonStart, jsonEnd))
-  } catch (e) {
-    return NextResponse.json({ error: 'AI response parse failed', raw: text }, { status: 500 })
+    parsedJson = JSON.parse(text.slice(jsonStart, jsonEnd))
+  } catch {
+    return NextResponse.json(
+      { error: 'AI response parse failed', raw: text },
+      { status: 400 },
+    )
   }
+  const proposalsResult = AIResponseSchema.safeParse(parsedJson)
+  if (!proposalsResult.success) {
+    return NextResponse.json(
+      { error: proposalsResult.error.message },
+      { status: 400 },
+    )
+  }
+  const proposals = proposalsResult.data
 
   const rows = proposals.map(p => ({
     state_id: state.id,
