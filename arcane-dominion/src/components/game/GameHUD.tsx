@@ -1,6 +1,17 @@
 import React from 'react';
-import * as Dialog from '@radix-ui/react-dialog';
-import * as Tooltip from '@radix-ui/react-tooltip';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import {
+  faPlay,
+  faPause,
+  faForward,
+  faLandmark,
+  faScroll,
+  faEye,
+  faMousePointer,
+  faArrowsAlt,
+  faMagnifyingGlass
+} from '@fortawesome/free-solid-svg-icons';
+import { ActionButton, ResourceIcon } from '../ui';
 
 export interface GameResources {
   grain: number;
@@ -29,54 +40,6 @@ export interface GameHUDProps {
   onOpenOmens?: () => void;
 }
 
-const ResourceIcon: React.FC<{ type: keyof GameResources; value: number; className?: string }> = ({ type, value, className = '' }) => {
-  const getIcon = (resourceType: keyof GameResources) => {
-    switch (resourceType) {
-      case 'grain': return '🌾';
-      case 'coin': return '🪙';
-      case 'mana': return '✨';
-      case 'favor': return '👑';
-      case 'unrest': return '⚡';
-      case 'threat': return '⚔️';
-      default: return '?';
-    }
-  };
-
-  const getColor = (resourceType: keyof GameResources) => {
-    switch (resourceType) {
-      case 'grain': return 'text-yellow-600';
-      case 'coin': return 'text-amber-500';
-      case 'mana': return 'text-purple-500';
-      case 'favor': return 'text-blue-500';
-      case 'unrest': return 'text-red-500';
-      case 'threat': return 'text-red-700';
-      default: return 'text-gray-500';
-    }
-  };
-
-  return (
-    <Tooltip.Provider>
-      <Tooltip.Root>
-        <Tooltip.Trigger asChild>
-          <div className={`flex items-center gap-1 ${className}`}>
-            <span className="text-lg">{getIcon(type)}</span>
-            <span className={`font-mono text-sm ${getColor(type)}`}>{value}</span>
-          </div>
-        </Tooltip.Trigger>
-        <Tooltip.Portal>
-          <Tooltip.Content
-            className="bg-gray-900 text-white px-2 py-1 rounded text-xs capitalize"
-            sideOffset={5}
-          >
-            {type}: {value}
-            <Tooltip.Arrow className="fill-gray-900" />
-          </Tooltip.Content>
-        </Tooltip.Portal>
-      </Tooltip.Root>
-    </Tooltip.Provider>
-  );
-};
-
 const TimeDisplay: React.FC<{ time: GameTime; isPaused?: boolean }> = ({ time, isPaused }) => {
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -103,38 +66,6 @@ const TimeDisplay: React.FC<{ time: GameTime; isPaused?: boolean }> = ({ time, i
         </div>
       </div>
     </div>
-  );
-};
-
-const ActionButton: React.FC<{ 
-  onClick?: () => void; 
-  children: React.ReactNode; 
-  variant?: 'primary' | 'secondary' | 'danger';
-  disabled?: boolean;
-}> = ({ onClick, children, variant = 'secondary', disabled = false }) => {
-  const getVariantClasses = () => {
-    switch (variant) {
-      case 'primary':
-        return 'bg-blue-600 hover:bg-blue-700 text-white';
-      case 'danger':
-        return 'bg-red-600 hover:bg-red-700 text-white';
-      default:
-        return 'bg-gray-600 hover:bg-gray-700 text-white';
-    }
-  };
-
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className={`
-        px-3 py-2 rounded-md text-sm font-medium transition-colors
-        ${getVariantClasses()}
-        ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
-      `}
-    >
-      {children}
-    </button>
   );
 };
 
@@ -172,15 +103,15 @@ export const GameHUD: React.FC<GameHUDProps> = ({
             <div className="flex gap-2">
               {isPaused ? (
                 <ActionButton onClick={onResume} variant="primary">
-                  ▶️ Resume
+                  <FontAwesomeIcon icon={faPlay} /> Resume
                 </ActionButton>
               ) : (
                 <ActionButton onClick={onPause}>
-                  ⏸️ Pause
+                  <FontAwesomeIcon icon={faPause} /> Pause
                 </ActionButton>
               )}
               <ActionButton onClick={onAdvanceCycle} variant="danger">
-                ⏭️ Advance
+                <FontAwesomeIcon icon={faForward} /> Advance
               </ActionButton>
             </div>
           </div>
@@ -191,13 +122,13 @@ export const GameHUD: React.FC<GameHUDProps> = ({
       <div className="absolute top-4 right-4">
         <div className="flex flex-col gap-2 pointer-events-auto">
           <ActionButton onClick={onOpenCouncil}>
-            🏛️ Council
+            <FontAwesomeIcon icon={faLandmark} /> Council
           </ActionButton>
           <ActionButton onClick={onOpenEdicts}>
-            📜 Edicts
+            <FontAwesomeIcon icon={faScroll} /> Edicts
           </ActionButton>
           <ActionButton onClick={onOpenOmens}>
-            🔮 Omens
+            <FontAwesomeIcon icon={faEye} /> Omens
           </ActionButton>
         </div>
       </div>
@@ -207,7 +138,15 @@ export const GameHUD: React.FC<GameHUDProps> = ({
         <div className="bg-black/60 backdrop-blur-sm rounded-lg p-2 pointer-events-auto">
           <div className="flex justify-between items-center text-sm text-gray-300">
             <div className="flex items-center gap-4">
-              <span>🎯 Click tiles to select • 🖱️ Drag to pan • 🔍 Scroll to zoom</span>
+              <span className="flex items-center gap-1">
+                <FontAwesomeIcon icon={faMousePointer} /> Click tiles to select
+              </span>
+              <span className="flex items-center gap-1">
+                <FontAwesomeIcon icon={faArrowsAlt} /> Drag to pan
+              </span>
+              <span className="flex items-center gap-1">
+                <FontAwesomeIcon icon={faMagnifyingGlass} /> Scroll to zoom
+              </span>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-xs">FPS:</span>
