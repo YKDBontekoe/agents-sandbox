@@ -20,6 +20,7 @@ const mockGameState = {
 export async function GET() {
   try {
     const supabase = createSupabaseServerClient()
+    
     const { data: state, error } = await supabase
       .from('game_state')
       .select('*')
@@ -30,7 +31,7 @@ export async function GET() {
     if (error) {
       console.error('Supabase error:', error.message)
       return NextResponse.json(
-        { error: 'Database connection failed' },
+        { error: `Database error: ${error.message}` },
         { status: 503 }
       )
     }

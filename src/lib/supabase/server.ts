@@ -9,7 +9,13 @@ export function createSupabaseServerClient() {
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
   if (!url || !serviceKey || url.includes('placeholder') || serviceKey.includes('placeholder')) {
-    throw new Error('Supabase not configured - using mock data')
+    console.error('Supabase configuration missing:', {
+      hasUrl: !!url,
+      hasServiceKey: !!serviceKey,
+      urlContainsPlaceholder: url?.includes('placeholder'),
+      serviceKeyContainsPlaceholder: serviceKey?.includes('placeholder')
+    })
+    throw new Error('Supabase not configured - check environment variables')
   }
 
   return createClient(url, serviceKey, {
