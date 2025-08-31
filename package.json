@@ -1,0 +1,15 @@
+{
+  "name": "agents-sandbox",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "cd arcane-dominion && npm run build",
+    "vercel-build": "cd arcane-dominion && npm run vercel-build",
+    "start": "cd arcane-dominion && npm start",
+    "dev": "cd arcane-dominion && npm run dev",
+    "install-deps": "cd arcane-dominion && npm install"
+  },
+  "workspaces": [
+    "arcane-dominion"
+  ]
+}
