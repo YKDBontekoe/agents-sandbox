@@ -1,0 +1,43 @@
+name: Apply Supabase migrations
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'supabase/migrations/**'
+      - 'supabase/functions/**'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      SITE_URL: agents-sandbox.vercel.app
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Link to Supabase project
+        run: supabase link --project-ref ${{ secrets.SUPABASE_PROJECT_ID }}
+        working-directory: ./supabase
+
+      - name: Apply database migrations
+        run: supabase db push --include-all
+        working-directory: ./supabase
+
+      - name: Deploy Edge Functions
+        run: |
+          for dir in $(find functions -maxdepth 1 -mindepth 1 -type d \
+            ! -name '_*' ! -name 'lib'); do
+            supabase functions deploy $(basename "$dir") --no-verify-jwt
+          done
+        working-directory: ./supabase
