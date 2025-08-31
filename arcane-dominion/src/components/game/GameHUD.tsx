@@ -1,4 +1,17 @@
 import React from 'react';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import {
+  faPlay,
+  faPause,
+  faForward,
+  faLandmark,
+  faScroll,
+  faEye,
+  faMousePointer,
+  faArrowsAlt,
+  faMagnifyingGlass
+} from '@fortawesome/free-solid-svg-icons';
+import { ActionButton, ResourceIcon } from '../ui';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { getResourceIcon, getResourceColor } from './resourceUtils';
@@ -149,15 +162,15 @@ export const GameHUD: React.FC<GameHUDProps> = ({
             <div className="flex gap-2">
               {isPaused ? (
                 <ActionButton onClick={onResume} variant="primary">
-                  ▶️ Resume
+                  <FontAwesomeIcon icon={faPlay} /> Resume
                 </ActionButton>
               ) : (
                 <ActionButton onClick={onPause}>
-                  ⏸️ Pause
+                  <FontAwesomeIcon icon={faPause} /> Pause
                 </ActionButton>
               )}
               <ActionButton onClick={onAdvanceCycle} variant="danger">
-                ⏭️ Advance
+                <FontAwesomeIcon icon={faForward} /> Advance
               </ActionButton>
             </div>
           </div>
@@ -168,13 +181,13 @@ export const GameHUD: React.FC<GameHUDProps> = ({
       <div className="absolute top-4 right-4">
         <div className="flex flex-col gap-2 pointer-events-auto">
           <ActionButton onClick={onOpenCouncil}>
-            🏛️ Council
+            <FontAwesomeIcon icon={faLandmark} /> Council
           </ActionButton>
           <ActionButton onClick={onOpenEdicts}>
-            📜 Edicts
+            <FontAwesomeIcon icon={faScroll} /> Edicts
           </ActionButton>
           <ActionButton onClick={onOpenOmens}>
-            🔮 Omens
+            <FontAwesomeIcon icon={faEye} /> Omens
           </ActionButton>
         </div>
       </div>
@@ -184,7 +197,15 @@ export const GameHUD: React.FC<GameHUDProps> = ({
         <div className="card-elevated bg-white/90 backdrop-blur-sm p-2 pointer-events-auto">
           <div className="flex justify-between items-center text-sm text-neutral-600">
             <div className="flex items-center gap-4">
-              <span>🎯 Click tiles to select • 🖱️ Drag to pan • 🔍 Scroll to zoom</span>
+              <span className="flex items-center gap-1">
+                <FontAwesomeIcon icon={faMousePointer} /> Click tiles to select
+              </span>
+              <span className="flex items-center gap-1">
+                <FontAwesomeIcon icon={faArrowsAlt} /> Drag to pan
+              </span>
+              <span className="flex items-center gap-1">
+                <FontAwesomeIcon icon={faMagnifyingGlass} /> Scroll to zoom
+              </span>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-xs">FPS:</span>

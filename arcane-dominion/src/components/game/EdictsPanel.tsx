@@ -3,6 +3,9 @@ import * as Dialog from '@radix-ui/react-dialog';
 import * as Slider from '@radix-ui/react-slider';
 import * as Toggle from '@radix-ui/react-toggle';
 import * as Tooltip from '@radix-ui/react-tooltip';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faCrown, faScroll, faXmark, faLock } from '@fortawesome/free-solid-svg-icons';
+import { CategoryIcon } from '../ui';
 
 export interface EdictSetting {
   id: string;
@@ -33,16 +36,6 @@ export interface EdictsPanelProps {
   totalCost: number;
 }
 
-const CategoryIcon: React.FC<{ category: EdictSetting['category'] }> = ({ category }) => {
-  const icons = {
-    economic: '💰',
-    military: '⚔️',
-    social: '👥',
-    mystical: '🔮'
-  };
-  return <span>{icons[category]}</span>;
-};
-
 const EdictControl: React.FC<{
   edict: EdictSetting;
   currentValue: number;
@@ -67,8 +60,8 @@ const EdictControl: React.FC<{
           </div>
         </div>
         {cost > 0 && (
-          <div className="text-xs bg-yellow-600 text-white px-2 py-1 rounded">
-            👑 {cost}
+          <div className="text-xs bg-yellow-600 text-white px-2 py-1 rounded flex items-center gap-1">
+            <FontAwesomeIcon icon={faCrown} /> {cost}
           </div>
         )}
       </div>
@@ -148,7 +141,7 @@ const EdictControl: React.FC<{
       {isLocked && (
         <div className="mt-2 pt-2 border-t border-gray-700">
           <div className="text-xs text-red-400 flex items-center gap-1">
-            🔒 Locked - Requirements not met
+            <FontAwesomeIcon icon={faLock} /> Locked - Requirements not met
           </div>
         </div>
       )}
@@ -217,7 +210,7 @@ export const EdictsPanel: React.FC<EdictsPanelProps> = ({
           {/* Header */}
           <div className="flex items-center justify-between p-6 border-b border-gray-700">
             <div className="flex items-center gap-3">
-              <span className="text-2xl">📜</span>
+              <FontAwesomeIcon icon={faScroll} className="text-2xl" />
               <div>
                 <Dialog.Title className="text-xl font-bold text-white">
                   Royal Edicts
@@ -232,16 +225,18 @@ export const EdictsPanel: React.FC<EdictsPanelProps> = ({
               {hasChanges && (
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-gray-400">Cost:</span>
-                  <span className={`font-mono text-sm ${
-                    canAfford ? 'text-yellow-400' : 'text-red-400'
-                  }`}>
-                    👑 {totalCost} / {currentFavor}
+                  <span
+                    className={`font-mono text-sm flex items-center gap-1 ${
+                      canAfford ? 'text-yellow-400' : 'text-red-400'
+                    }`}
+                  >
+                    <FontAwesomeIcon icon={faCrown} /> {totalCost} / {currentFavor}
                   </span>
                 </div>
               )}
               <Dialog.Close asChild>
                 <button className="p-2 hover:bg-gray-800 rounded text-gray-400 hover:text-white transition-colors">
-                  ✕
+                  <FontAwesomeIcon icon={faXmark} />
                 </button>
               </Dialog.Close>
             </div>
