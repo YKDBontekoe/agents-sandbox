@@ -1,54 +1,98 @@
-# Agents Sandbox
+Arcane Dominion Tycoon — Agentic Game Design
 
-Agents Sandbox is a Next.js playground for experimenting with plugin-driven agent interactions. It exposes a modular architecture that allows developers to build, test, and extend agent capabilities through reusable plugins.
+⸻
 
-## Installation
+1) Core Fantasy
 
-1. **Install dependencies**
-   ```bash
-   npm install
-   ```
-2. **Start the development server**
-   ```bash
-   npm run dev
-   ```
-   The app runs at [http://localhost:3000](http://localhost:3000).
+You are the Steward of the Realm. You do not build farms by hand, or lay leylines yourself. Instead, guild agents do the thinking, planning, and proposing. Your power is in setting edicts and approving or rejecting their schemes.
 
-## Architecture
+The world is alive: wards decay, grain spoils, mana fluctuates, omens loom. Your guilds constantly monitor this and come to you with proposals. The Council is the game.
 
-The application is structured around a plugin system. Core components live under `src/`, while optional capabilities are loaded from the `plugins/` directory. Each plugin can contribute UI elements, backend logic, or both, enabling rapid experimentation without touching the core codebase.
+⸻
 
-## Plugin Authoring
+2) The Agentic Council Loop
+	1.	Guild Observation → Each guild monitors part of the realm (food, defense, mana, unrest).
+	2.	Proposal Drafting → Agents autonomously create proposals in their specialty (e.g., Wardens suggest reinforcing wards, Alchemists propose a transmutation).
+	3.	Scrying Forecast → Before acting, the proposal is simulated in a magical “scrying mirror,” predicting the impact on prosperity, unrest, favor, and resources.
+	4.	Steward’s Decree → Player accepts, modifies, or rejects proposals.
+	5.	Execution & Consequences → Approved proposals apply next cycle; rejected proposals may frustrate guilds or worsen issues.
+	6.	Realm Progression → Successful stewardship unlocks new districts, guild roles, and edicts.
 
-Plugins reside in the `plugins/` folder and are loaded at runtime. Scaffold a new plugin with:
+⸻
 
-```bash
-npm run scaffold:plugin
-```
+3) Guild Agents (Agentic AI Roles)
+	•	Wardens (Defense AI)
+Guard wards, reroute mana, repel raids. Proposals: repair ward, add watchtower, reroute leyline.
+	•	Alchemists (Resource AI)
+Transmute between grain, mana, and coin. Proposals: transmute 200 grain → 50 mana to stabilize deficit.
+	•	Scribes (Infrastructure AI)
+Optimize layout. Proposals: extend leyline, build sanctum, empower forge.
+	•	Stewards (Policy AI, late-game)
+Propose budget changes, tax shifts, long-term strategies.
 
-Refer to [docs/plugin-authoring.md](docs/plugin-authoring.md) for a complete guide.
+Each agent is autonomous, with its own priorities, biases, and alignment tendencies (Order/Wild/Shadow).
 
-## API Usage
+⸻
 
-Agents Sandbox exposes a lightweight API layer for interacting with plugins and core services. See [docs/api-usage.md](docs/api-usage.md) for request examples and integration tips.
+4) Resources & Tensions
+	•	Grain → feeds the people; shortage = unrest.
+	•	Coin → taxes and markets; funds upkeep.
+	•	Mana → powers wards and rituals; flows via leylines.
+	•	Favor → standing with gods/spirits; unlocks rare events.
+	•	Unrest → pressure from populace; leads to revolt.
+	•	Threat → builds from chaos; leads to raids.
 
-### Marketplace
+Agentic angle: resources aren’t just bars; they are pressure signals guilds react to. Agents observe deltas and propose interventions.
 
-The agent marketplace supports server-side search and category filtering via `q` and `category` query parameters. Agents can also be rated, and each rating updates the agent's average score.
+⸻
 
-## Persistence Layers
+5) Systems (Agentic Hooks)
+	•	Wards → decay each cycle. Wardens raise proposals when thresholds are crossed.
+	•	Leylines → limited flow; Scribes propose reroutes to ease bottlenecks.
+	•	Economy → tax rates, upkeep, and markets; Stewards propose policy changes.
+	•	Seasons → modifiers (Harvest, Frost, Eclipse). Agents anticipate these and pre-emptively propose actions.
+	•	Omens & Events → raids, famine, festivals. Guilds draft countermeasures or celebrations.
 
-The project ships with an in-memory store for rapid prototyping. Agent chat sessions are persisted to `data/sessions.json` so conversations survive server restarts. Additional persistence strategies can be added by implementing the persistence interface described in [docs/persistence-layers.md](docs/persistence-layers.md).
+⸻
 
-## Developer Guidelines
+6) Player Control Surface
 
-- **Coding style:** follow the existing ESLint configuration and prefer modern TypeScript features.
-- **Testing:** run `npm test` (when available) and `npm run lint` before committing.
-- **Documentation:** update both the README and `docs/` directory whenever behavior or APIs change.
+The player has no micromanagement tools beyond:
+	•	Council Table → inbox of proposals. Each shows predicted deltas.
+	•	Scrying Mirror → preview of outcomes before decree.
+	•	Edicts Panel → high-level sliders/toggles (tax, ward upkeep, risk appetite, alignment).
+	•	Time Controls → pause/normal/fast-forward, auto-pause on incidents.
 
-### Default Agent Config Builder
+Everything else comes through agents.
 
-Use `createDefaultAgentConfig` from `src/lib/agents/agent-builder` to scaffold new agent definitions. It returns an `AgentConfig` without id or timestamps pre-populated with common defaults, which helps keep forms and tests consistent.
+⸻
 
-For extended guidelines, consult [docs/developer-guidelines.md](docs/developer-guidelines.md).
+7) Victory & Failure
+	•	Victory: Sustain prosperity and favor for N cycles, ascend with a Rune of Dominion.
+	•	Failure:
+	•	Unrest maxes out → rebellion.
+	•	Threat overwhelms → realm overrun.
+	•	Wards collapse → sanctum destroyed.
 
+Agentic twist: failure often comes from ignoring or rejecting too many proposals, or following biased agents without balance.
+
+⸻
+
+8) Development Steps (Agentic-First)
+	1.	Prototype loop: one guild (Wardens), one resource (mana), wards that decay. Proposals: repair vs ignore.
+	2.	Council + Scry: proposals visible, outcomes forecasted, accept/reject flow.
+	3.	Resources expanded: add grain, coin, unrest; Alchemists appear.
+	4.	Networks & Seasons: leylines and seasonal modifiers. Scribes join.
+	5.	Omens & Raids: agents propose countermeasures.
+	6.	Alignment system: agents drift toward Order/Wild/Shadow; proposals reflect ideology.
+	7.	Late-game policies: Stewards propose tax/budget shifts.
+	8.	Victory/failure: prosperity, unrest, ward collapse.
+	9.	Flavor & immersion: agent personalities, council debates, unique proposal wording.
+
+⸻
+
+9) Why Agentic AI is Core
+	•	Replayability → Each run, agents propose different mixes based on state + alignment.
+	•	Player agency → You aren’t dragged into micro, you are making judgments about advisors.
+	•	Emergent drama → Conflicting proposals (Wardens want more defense, Alchemists want risky experiments) create story tension.
+	•	Fantasy immersion → Feels like ruling through a living council, not clicking menus.
