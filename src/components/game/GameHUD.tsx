@@ -43,6 +43,7 @@ export interface GameHUDProps {
   onOpenCouncil?: () => void;
   onOpenEdicts?: () => void;
   onOpenOmens?: () => void;
+  highlightAdvance?: boolean;
 }
 
 // Using imported ResourceIcon component from '../ui'
@@ -104,7 +105,8 @@ export const GameHUD: React.FC<GameHUDProps> = ({
   onAdvanceCycle,
   onOpenCouncil,
   onOpenEdicts,
-  onOpenOmens
+  onOpenOmens,
+  highlightAdvance = false
 }) => {
   return (
     <div className="absolute inset-0 z-50 pointer-events-none animate-fade-in flex flex-col">
@@ -167,7 +169,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
                   <span className="hidden sm:inline">Pause</span>
                 </ActionButton>
               )}
-              <ActionButton onClick={onAdvanceCycle} variant="danger" className="flex-1 sm:flex-none transition-smooth hover-lift text-xs sm:text-sm">
+              <ActionButton onClick={onAdvanceCycle} variant="danger" className={`flex-1 sm:flex-none transition-smooth hover-lift text-xs sm:text-sm ${highlightAdvance ? 'ring-2 ring-amber-400 animate-pulse' : ''}`}>
                 <FontAwesomeIcon icon={faForward} className="mr-1 sm:mr-2" /> 
                 <span className="hidden sm:inline">Advance</span>
               </ActionButton>

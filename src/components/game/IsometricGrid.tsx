@@ -33,6 +33,8 @@ export default function IsometricGrid({
   const tilesRef = useRef<Map<string, GridTile>>(new Map());
   const hoveredTileRef = useRef<GridTile | null>(null);
   const selectedTileRef = useRef<GridTile | null>(null);
+  const centeredRef = useRef<boolean>(false);
+  const initializedRef = useRef<boolean>(false);
 
   // Convert grid coordinates to world coordinates (isometric)
   const gridToWorld = (gridX: number, gridY: number) => {
@@ -54,9 +56,9 @@ export default function IsometricGrid({
     
     const tile = new PIXI.Graphics();
     
-    // Draw isometric tile shape
-    tile.fill({ color: 0x2a2a3e, alpha: 0.3 });
-    tile.setStrokeStyle({ width: 1, color: 0x4a4a6e, alpha: 0.8 });
+    // Draw isometric tile shape (lighter theme)
+    tile.fill({ color: 0xdde7f7, alpha: 0.35 });
+    tile.setStrokeStyle({ width: 1, color: 0xa5b4fc, alpha: 0.9 });
     
     // Isometric diamond shape
     tile.moveTo(0, -tileHeight / 2);
@@ -79,7 +81,7 @@ export default function IsometricGrid({
       }
       
       hoveredTileRef.current = { x: gridX, y: gridY, worldX, worldY, sprite: tile };
-      tile.tint = 0x88ccff;
+      tile.tint = 0x4f46e5; // indigo highlight
       
       onTileHover?.(gridX, gridY);
     });
@@ -98,7 +100,7 @@ export default function IsometricGrid({
       }
       
       selectedTileRef.current = { x: gridX, y: gridY, worldX, worldY, sprite: tile };
-      tile.tint = 0xffaa44;
+      tile.tint = 0x10b981; // emerald for selection
       
       onTileClick?.(gridX, gridY);
     });
@@ -113,6 +115,11 @@ export default function IsometricGrid({
       console.warn('IsometricGrid: No viewport available');
       return;
     }
+    if (initializedRef.current) {
+      // Avoid re-initializing the grid if already set up
+      return;
+    }
+    initializedRef.current = true;
 
     console.log('Creating grid container and tiles...');
     const gridContainer = new PIXI.Container();
@@ -136,15 +143,70 @@ export default function IsometricGrid({
     console.log('Grid container children count:', gridContainer.children.length);
     tilesRef.current = tiles;
 
+    // Compute world bounds for clamping based on isometric grid extents
+    // For an isometric grid, we need to find the actual world bounds of all tiles
+    const topLeft = gridToWorld(0, 0);
+    const topRight = gridToWorld(gridSize - 1, 0);
+    const bottomLeft = gridToWorld(0, gridSize - 1);
+    const bottomRight = gridToWorld(gridSize - 1, gridSize - 1);
+    
+    const allX = [topLeft.worldX, topRight.worldX, bottomLeft.worldX, bottomRight.worldX];
+    const allY = [topLeft.worldY, topRight.worldY, bottomLeft.worldY, bottomRight.worldY];
+    
+    // Center the viewport using the geometric center of the grid bounds
+    // This ensures the entire grid is properly centered in view
+    const gridCenterX = (Math.min(...allX) + Math.max(...allX)) / 2;
+    const gridCenterY = (Math.min(...allY) + Math.max(...allY)) / 2;
+    
+    // Apply zoom first, then center, and only once
+    if (!centeredRef.current) {
+      viewport.setZoom(1.5);
+      viewport.moveCenter(gridCenterX, gridCenterY);
+      centeredRef.current = true;
+      console.log(`Centered viewport on geometric center at (${gridCenterX}, ${gridCenterY})`);
+    }
+
+    const halfW = tileWidth / 2;
+    const halfH = tileHeight / 2;
+    const basePadX = tileWidth * 1.5;
+    const basePadY = tileHeight * 1.5;
+    
+    const worldMinX = Math.min(...allX) - halfW;
+    const worldMaxX = Math.max(...allX) + halfW;
+    const worldMinY = Math.min(...allY) - halfH;
+    const worldMaxY = Math.max(...allY) + halfH;
+
+    const updateClamp = () => {
+      if (!viewport?.scale) return;
+      const scale = viewport.scale.x || 1;
+      const screenHalfW = (viewport.screenWidth || 0) / Math.max(scale, 0.0001) / 2;
+      const screenHalfH = (viewport.screenHeight || 0) / Math.max(scale, 0.0001) / 2;
+      const padX = Math.max(basePadX, screenHalfW);
+      const padY = Math.max(basePadY, screenHalfH);
+      const minX = worldMinX - padX;
+      const maxX = worldMaxX + padX;
+      const minY = worldMinY - padY;
+      const maxY = worldMaxY + padY;
+      viewport.clamp({ left: minX, right: maxX, top: minY, bottom: maxY, underflow: 'none' });
+    };
+
+    updateClamp();
+    viewport.on('zoomed', updateClamp);
+    // Removed 'moved' listener to prevent feedback loops and flicker
+
     // Cleanup function
     return () => {
       if (gridContainer.parent) {
         gridContainer.parent.removeChild(gridContainer);
       }
       gridContainer.destroy({ children: true });
+      viewport.off('zoomed', updateClamp);
+      // No 'moved' off needed since not attached
       tilesRef.current.clear();
       hoveredTileRef.current = null;
       selectedTileRef.current = null;
+      centeredRef.current = false;
+      initializedRef.current = false;
     };
   }, [viewport, gridSize, tileWidth, tileHeight]);
 
@@ -166,10 +228,11 @@ export default function IsometricGrid({
         // Adjust line thickness based on zoom
         if (shouldShowTiles) {
           const lineWidth = Math.max(0.5, Math.min(2, scale * 1.5));
+          // Only redraw on zoom changes (this effect listens to 'zoomed' only now)
           tile.sprite.clear();
           
-          tile.sprite.fill({ color: 0x2a2a3e, alpha: 0.3 });
-          tile.sprite.setStrokeStyle({ width: lineWidth, color: 0x4a4a6e, alpha: 0.8 });
+          tile.sprite.fill({ color: 0xdde7f7, alpha: 0.35 });
+          tile.sprite.setStrokeStyle({ width: lineWidth, color: 0xa5b4fc, alpha: 0.9 });
           
           tile.sprite.moveTo(0, -tileHeight / 2);
           tile.sprite.lineTo(tileWidth / 2, 0);
@@ -184,14 +247,13 @@ export default function IsometricGrid({
 
     // Listen to viewport events for LOD updates
     viewport.on('zoomed', updateLOD);
-    viewport.on('moved', updateLOD);
+    // Removed 'moved' listener to prevent redraws while panning (reduces flicker)
     
     // Initial LOD update
     updateLOD();
 
     return () => {
       viewport.off('zoomed', updateLOD);
-      viewport.off('moved', updateLOD);
     };
   }, [viewport, tileWidth, tileHeight]);
 

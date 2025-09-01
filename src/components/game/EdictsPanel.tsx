@@ -47,20 +47,20 @@ const EdictControl: React.FC<{
   const cost = hasChanged ? (edict.cost || 0) : 0;
 
   return (
-    <div className={`bg-gray-800 rounded-lg p-4 border ${
-      hasChanged ? 'border-yellow-500' : 'border-gray-700'
-    } ${isLocked ? 'opacity-50' : ''}`}>
+    <div className={`bg-white rounded-lg p-4 border ${
+      hasChanged ? 'border-yellow-400' : 'border-slate-200'
+    } shadow-sm ${isLocked ? 'opacity-50' : ''}`}>
       {/* Header */}
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-2">
           <CategoryIcon category={edict.category} />
           <div>
-            <h3 className="text-white font-medium">{edict.name}</h3>
-            <p className="text-gray-400 text-sm">{edict.description}</p>
+            <h3 className="text-slate-900 font-medium">{edict.name}</h3>
+            <p className="text-slate-600 text-sm">{edict.description}</p>
           </div>
         </div>
         {cost > 0 && (
-          <div className="text-xs bg-yellow-600 text-white px-2 py-1 rounded flex items-center gap-1">
+          <div className="text-xs bg-yellow-100 text-yellow-800 border border-yellow-200 px-2 py-1 rounded flex items-center gap-1">
             <FontAwesomeIcon icon={faCrown} /> {cost}
           </div>
         )}
@@ -71,9 +71,9 @@ const EdictControl: React.FC<{
         {edict.type === 'slider' ? (
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
-              <span className="text-gray-400">Value:</span>
+              <span className="text-slate-500">Value:</span>
               <span className={`font-mono ${
-                hasChanged ? 'text-yellow-400' : 'text-white'
+                hasChanged ? 'text-amber-600' : 'text-slate-700'
               }`}>
                 {pendingValue}%
               </span>
@@ -86,7 +86,7 @@ const EdictControl: React.FC<{
               className="relative flex items-center select-none touch-none w-full h-5"
               disabled={isLocked}
             >
-              <Slider.Track className="bg-gray-700 relative grow rounded-full h-2">
+              <Slider.Track className="bg-slate-200 relative grow rounded-full h-2">
                 <Slider.Range className="absolute bg-blue-500 rounded-full h-full" />
               </Slider.Track>
               <Slider.Thumb
@@ -97,14 +97,14 @@ const EdictControl: React.FC<{
           </div>
         ) : (
           <div className="flex items-center justify-between">
-            <span className="text-gray-400 text-sm">Status:</span>
+            <span className="text-slate-500 text-sm">Status:</span>
             <Toggle.Root
               pressed={pendingValue === 1}
               onPressedChange={(pressed) => !isLocked && onChange(pressed ? 1 : 0)}
               className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
                 pendingValue === 1
                   ? 'bg-green-600 text-white'
-                  : 'bg-gray-600 text-gray-300'
+                  : 'bg-slate-100 text-slate-600'
               } ${isLocked ? 'cursor-not-allowed' : 'hover:opacity-80'}`}
               disabled={isLocked}
             >
@@ -116,10 +116,10 @@ const EdictControl: React.FC<{
 
       {/* Effects */}
       <div className="space-y-1">
-        <div className="text-xs text-gray-400">Effects:</div>
+        <div className="text-xs text-slate-500">Effects:</div>
         {edict.effects.map((effect, index) => (
-          <div key={index} className="text-xs text-gray-300 flex items-center gap-2">
-            <span className="text-blue-400">{effect.resource}:</span>
+          <div key={index} className="text-xs text-slate-700 flex items-center gap-2">
+            <span className="text-blue-600">{effect.resource}:</span>
             <span>{effect.impact}</span>
           </div>
         ))}
@@ -203,19 +203,19 @@ export const EdictsPanel: React.FC<EdictsPanelProps> = ({
   const canAfford = currentFavor >= totalCost;
 
   return (
-    <Dialog.Root open={isOpen} onOpenChange={onClose}>
+    <Dialog.Root open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40" />
-        <Dialog.Content className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-gray-900 rounded-lg shadow-xl z-50 w-full max-w-6xl max-h-[90vh] overflow-hidden">
+        <Dialog.Content className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white rounded-lg shadow-xl z-50 w-full max-w-6xl max-h-[90vh] overflow-hidden border border-slate-200">
           {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b border-gray-700">
+          <div className="flex items-center justify-between p-6 border-b border-slate-200">
             <div className="flex items-center gap-3">
               <FontAwesomeIcon icon={faScroll} className="text-2xl" />
               <div>
-                <Dialog.Title className="text-xl font-bold text-white">
+                <Dialog.Title className="text-xl font-bold text-slate-900">
                   Royal Edicts
                 </Dialog.Title>
-                <Dialog.Description className="text-gray-400 text-sm">
+                <Dialog.Description className="text-slate-600 text-sm">
                   Adjust policies and doctrines that will take effect next cycle
                 </Dialog.Description>
               </div>
@@ -224,10 +224,10 @@ export const EdictsPanel: React.FC<EdictsPanelProps> = ({
               {/* Cost Display */}
               {hasChanges && (
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-400">Cost:</span>
+                  <span className="text-sm text-slate-500">Cost:</span>
                   <span
                     className={`font-mono text-sm flex items-center gap-1 ${
-                      canAfford ? 'text-yellow-400' : 'text-red-400'
+                      canAfford ? 'text-amber-600' : 'text-red-600'
                     }`}
                   >
                     <FontAwesomeIcon icon={faCrown} /> {totalCost} / {currentFavor}
@@ -235,7 +235,7 @@ export const EdictsPanel: React.FC<EdictsPanelProps> = ({
                 </div>
               )}
               <Dialog.Close asChild>
-                <button className="p-2 hover:bg-gray-800 rounded text-gray-400 hover:text-white transition-colors">
+                <button className="p-2 hover:bg-slate-100 rounded text-slate-500 hover:text-slate-900 transition-colors">
                   <FontAwesomeIcon icon={faXmark} />
                 </button>
               </Dialog.Close>
@@ -260,15 +260,15 @@ export const EdictsPanel: React.FC<EdictsPanelProps> = ({
 
             {/* Footer */}
             {hasChanges && (
-              <div className="border-t border-gray-700 p-4">
+              <div className="border-t border-slate-200 p-4 bg-white">
                 <div className="flex items-center justify-between">
-                  <div className="text-sm text-gray-400">
+                  <div className="text-sm text-slate-600">
                     Changes will take effect at the start of the next cycle
                   </div>
                   <div className="flex gap-2">
                     <button
                       onClick={onResetChanges}
-                      className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white text-sm rounded transition-colors"
+                      className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm rounded transition-colors"
                     >
                       Reset
                     </button>
@@ -281,7 +281,7 @@ export const EdictsPanel: React.FC<EdictsPanelProps> = ({
                             className={`px-4 py-2 text-sm rounded font-medium transition-colors ${
                               canAfford
                                 ? 'bg-green-600 hover:bg-green-700 text-white'
-                                : 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                                : 'bg-slate-100 text-slate-400 cursor-not-allowed'
                             }`}
                           >
                             Apply Changes
@@ -289,12 +289,9 @@ export const EdictsPanel: React.FC<EdictsPanelProps> = ({
                         </Tooltip.Trigger>
                         {!canAfford && (
                           <Tooltip.Portal>
-                            <Tooltip.Content
-                              className="bg-gray-900 text-white px-2 py-1 rounded text-xs"
-                              sideOffset={5}
-                            >
+                            <Tooltip.Content className="bg-white border border-slate-200 text-slate-700 px-2 py-1 rounded text-xs shadow-sm" sideOffset={5}>
                               Insufficient favor to apply changes
-                              <Tooltip.Arrow className="fill-gray-900" />
+                              <Tooltip.Arrow className="fill-white" />
                             </Tooltip.Content>
                           </Tooltip.Portal>
                         )}

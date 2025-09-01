@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import GameCanvas from "./GameCanvas";
 import { IsometricGrid } from "./IsometricGrid";
 import { GameProvider } from "./GameContext";
@@ -24,12 +24,30 @@ function GameRendererContent({
   onTileClick,
 }: GameRendererProps) {
   console.log('GameRendererContent rendering with:', { width, height, gridSize });
-  
+  const [showHelp, setShowHelp] = useState(true);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [dims, setDims] = useState<{ w: number; h: number }>({ w: width, h: height });
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const update = () => {
+      const rect = el.getBoundingClientRect();
+      const w = Math.max(320, Math.floor(rect.width));
+      const h = Math.max(320, Math.floor(rect.height));
+      setDims({ w, h });
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   return (
-    <div className="relative" style={{ minHeight: '600px', border: '1px solid blue' }}>
+    <div ref={containerRef} className="relative w-full h-full">
       <GameCanvas
-        width={width}
-        height={height}
+        width={dims.w}
+        height={dims.h}
         onTileHover={onTileHover}
         onTileClick={onTileClick}
       />
@@ -42,9 +60,27 @@ function GameRendererContent({
         onTileClick={onTileClick}
       />
       
-      <div className="absolute top-2 left-2 bg-slate-900 bg-opacity-75 rounded px-2 py-1 text-xs text-slate-300">
-        Grid: {gridSize}x{gridSize} | Zoom to interact
-      </div>
+      {showHelp && (
+        <div className="absolute top-2 left-2 pointer-events-none">
+          <div className="bg-white/95 backdrop-blur-sm border border-slate-200 rounded-lg shadow-md px-3 py-2 text-[11px] sm:text-xs text-slate-700 max-w-xs pointer-events-none">
+            <div className="font-semibold text-slate-800 mb-1">How to interact</div>
+            <ul className="list-disc pl-4 space-y-0.5">
+              <li>Click tiles to select</li>
+              <li>Drag to pan, scroll to zoom</li>
+              <li>Open Council to take actions</li>
+            </ul>
+            <div className="mt-2 flex items-center justify-between">
+              <span className="text-slate-500">Grid: {gridSize}×{gridSize}</span>
+              <button
+                onClick={() => setShowHelp(false)}
+                className="ml-2 px-2 py-0.5 text-[11px] rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 pointer-events-auto"
+              >
+                Got it
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -38,10 +38,87 @@ export async function POST(req: NextRequest, context: RouteContext) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   if (!proposal) return NextResponse.json({ error: 'Proposal not found' }, { status: 404 })
 
+  const hasOpenAI = !!process.env.OPENAI_API_KEY &&
+    !process.env.OPENAI_API_KEY.includes('your_openai_api_key_here') &&
+    !process.env.OPENAI_API_KEY.toLowerCase().includes('placeholder')
+
+  // Deterministic fallback when OpenAI is not configured
+  if (!hasOpenAI) {
+    const guild = String((proposal as any).guild || '')
+    const title = String((proposal as any).title || '')
+    const description = String((proposal as any).description || '')
+
+    function inferDelta() {
+      const t = `${title} ${description}`.toLowerCase()
+      const delta: Record<string, number> = {}
+      const add = (k: string, v: number) => {
+        delta[k] = (delta[k] ?? 0) + v
+      }
+
+      // Wardens heuristics
+      if (guild.toLowerCase().includes('warden')) {
+        if (t.includes('fortify') || t.includes('wall')) {
+          add('threat', -3); add('unrest', -1); add('coin', -10)
+        } else if (t.includes('patrol') || t.includes('wild')) {
+          add('threat', -2); add('favor', +1); add('coin', -5)
+        } else {
+          add('threat', -2); add('coin', -6)
+        }
+      }
+
+      // Alchemists heuristics
+      else if (guild.toLowerCase().includes('alchem')) {
+        if (t.includes('mana') || t.includes('distill')) {
+          add('mana', +15); add('coin', -10)
+        } else if (t.includes('fertil') || t.includes('field')) {
+          add('grain', +120); add('coin', -15)
+        } else {
+          add('mana', +8); add('coin', -8)
+        }
+      }
+
+      // Scribes heuristics
+      else if (guild.toLowerCase().includes('scribe')) {
+        if (t.includes('road')) {
+          add('coin', +20); add('favor', +2); add('unrest', -1)
+        } else if (t.includes('archive') || t.includes('record')) {
+          add('coin', +10); add('mana', +2)
+        } else {
+          add('coin', +8); add('favor', +1)
+        }
+      }
+
+      // Stewards heuristics
+      else if (guild.toLowerCase().includes('steward')) {
+        if (t.includes('market')) {
+          add('unrest', -3); add('favor', +2); add('coin', -5)
+        } else if (t.includes('festival') || t.includes('civic')) {
+          add('unrest', -2); add('favor', +3); add('coin', -8)
+        } else {
+          add('unrest', -1); add('favor', +1); add('coin', -4)
+        }
+      }
+
+      // Default minimal conservative estimate
+      else {
+        add('unrest', -1); add('coin', -5)
+      }
+
+      return delta
+    }
+
+    const predicted_delta = inferDelta()
+    await supabase.from('proposals').update({ predicted_delta }).eq('id', id)
+    return NextResponse.json({
+      predicted_delta,
+      risk_note: 'Deterministic fallback estimate based on guild heuristics (no OpenAI configured).',
+    })
+  }
+
   const system = `You are a scrying oracle. Given a proposal and current resources, forecast likely deltas in a conservative, numeric way.
 Return JSON: { predicted_delta: {resource:number,...}, risk_note: string }`
 
-  const user = `Resources: ${JSON.stringify(proposal.game_state.resources)}\nProposal: ${proposal.title} - ${proposal.description}`
+  const user = `Resources: ${JSON.stringify((proposal as any).game_state.resources)}\nProposal: ${String((proposal as any).title)} - ${String((proposal as any).description)}`
   const { text } = await generateText({ model: openai('gpt-4o-mini'), system, prompt: user })
 
   let parsedJson: unknown

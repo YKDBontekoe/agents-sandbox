@@ -1,9 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 
-// Mock proposals for development when Supabase is not configured
-const mockProposals: any[] = []
-
 export async function GET(_req: NextRequest) {
   try {
     const supabase = createSupabaseServerClient()

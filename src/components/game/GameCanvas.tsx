@@ -47,20 +47,6 @@ export default function GameCanvas({
     const initPixi = async () => {
         const initializeCanvas = async () => {
           console.log('Starting PIXI initialization...');
-        // Enhanced WebGL support check
-        const testCanvas = document.createElement('canvas');
-        const gl = testCanvas.getContext('webgl2') || testCanvas.getContext('webgl') || testCanvas.getContext('experimental-webgl') as WebGLRenderingContext | WebGL2RenderingContext | null;
-        
-        if (!gl) {
-          throw new Error('WebGL is not supported by your browser. Please enable hardware acceleration or use a modern browser.');
-        }
-
-        // Test WebGL functionality
-        const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
-        if (debugInfo) {
-          console.log('WebGL Renderer:', gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL));
-        }
-        
         // Create PIXI Application with enhanced fallback options
         const app = new PIXI.Application();
         
@@ -69,12 +55,11 @@ export default function GameCanvas({
           canvas: canvasRef.current!,
           width,
           height,
-          backgroundColor: 0x1a1a2e,
+          backgroundColor: 0xf5f7fb,
           antialias: window.devicePixelRatio <= 1, // Disable on high-DPI for performance
           resolution: Math.min(window.devicePixelRatio || 1, 2), // Cap at 2x for performance
           autoDensity: true,
-          preference: 'webgl' as const, // Use WebGL preference with WebGL2 fallback
-          powerPreference: 'high-performance' as const,
+          // Let PIXI auto-detect the best renderer; avoid hard failures on some browsers
           hello: false, // Disable PIXI banner in console
           // Performance optimizations
           clearBeforeRender: true,
@@ -151,42 +136,24 @@ export default function GameCanvas({
         // Configure viewport plugins
         viewport
           .drag({
-            mouseButtons: "left",
+            mouseButtons: "all",
           })
           .pinch()
-          .wheel({
-            smooth: 3,
-            percent: 0.1,
-          })
-          .decelerate({
-            friction: 0.95,
-            bounce: 0.8,
-            minSpeed: 0.01,
-          })
+          // Removed decelerate to avoid clamp bounce feedback causing jitter
+          // .decelerate({
+          //   friction: 0.95,
+          //   bounce: 0.8,
+          //   minSpeed: 0.01,
+          // })
           .clampZoom({
-            minScale: 0.1,
+            minScale: 0.2,
             maxScale: 3,
           })
-          .clamp({
-            left: -500,
-            right: 2500,
-            top: -500,
-            bottom: 2500,
-          });
+          .wheel({ smooth: 0, percent: 0.12 });
 
-        // Center the viewport
-        viewport.moveCenter(1000, 1000);
-        viewport.setZoom(0.8);
-
-        // Add a test graphic to verify rendering
-        const testGraphic = new PIXI.Graphics();
-        testGraphic.fill({ color: 0xff0000, alpha: 0.8 });
-        testGraphic.rect(0, 0, 100, 100);
-        testGraphic.fill();
-        testGraphic.x = 500;
-        testGraphic.y = 500;
-        viewport.addChild(testGraphic);
-        console.log('Added test red rectangle at (500, 500)');
+        // Removed default centering/zoom; IsometricGrid manages it to prevent conflicts
+        // viewport.moveCenter(0, 0);
+        // viewport.setZoom(0.8);
 
         // Share references through context
         setApp(app);
@@ -209,12 +176,11 @@ export default function GameCanvas({
           canvas: canvasRef.current!,
           width,
           height,
-          backgroundColor: 0x1a1a2e,
+          backgroundColor: 0xf5f7fb,
           antialias: false,
           resolution: 1,
           autoDensity: false,
-          preference: 'webgl' as const,
-          powerPreference: 'low-power' as const,
+          // No explicit preference; allow detection
           hello: false,
           clearBeforeRender: true,
           preserveDrawingBuffer: false,
@@ -238,9 +204,15 @@ export default function GameCanvas({
         viewportRef.current = viewport;
         
         // Basic viewport configuration
-        viewport.drag({ mouseButtons: "left" }).wheel();
-        viewport.moveCenter(1000, 1000);
-        viewport.setZoom(0.8);
+        viewport.drag({ mouseButtons: "left" })
+          .clampZoom({
+            minScale: 0.2,
+            maxScale: 3,
+          })
+          .wheel({ smooth: 0, percent: 0.12 });
+        // Removed default centering/zoom to avoid conflict with grid centering
+        // viewport.moveCenter(1000, 1000);
+        // viewport.setZoom(0.8);
         
         setApp(app);
         setViewport(viewport);
@@ -323,66 +295,65 @@ export default function GameCanvas({
     };
   }, []);
 
-  // Handle window resize
+  // Handle resize to provided dimensions
   useEffect(() => {
-    const handleResize = () => {
+    const applySize = () => {
       if (appRef.current && viewportRef.current) {
-        const newWidth = Math.min(window.innerWidth - 32, width);
-        const newHeight = Math.min(window.innerHeight - 200, height);
-        
+        const newWidth = width;
+        const newHeight = height;
         appRef.current.renderer.resize(newWidth, newHeight);
         viewportRef.current.resize(newWidth, newHeight);
       }
     };
-
-    window.addEventListener("resize", handleResize);
-    handleResize(); // Initial resize
-
-    return () => window.removeEventListener("resize", handleResize);
+    applySize();
+    const onResize = () => applySize();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
   }, [width, height, isInitialized]);
 
   return (
-    <div className="relative" style={{ minHeight: '400px', border: '2px solid red' }}>
+    <div className="relative w-full h-full" style={{ minHeight: '400px' }}>
       <canvas
         ref={canvasRef}
-        className="border border-slate-700 rounded-lg"
+        className="border border-slate-200 rounded-lg shadow-sm w-full h-full"
         style={{
           display: "block",
-          maxWidth: "100%",
-          height: "auto",
-          backgroundColor: '#1a1a2e',
+          width: "100%",
+          height: "100%",
+          // Light, neutral canvas background
+          backgroundColor: '#f5f7fb',
           minHeight: '400px'
         }}
       />
       {!isInitialized && (
-        <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-gray-900/90 to-gray-800/90 backdrop-blur-sm rounded-lg">
-          <div className="text-center text-gray-300">
+        <div className="absolute inset-0 flex items-center justify-center bg-white/80 backdrop-blur-sm rounded-lg">
+          <div className="text-center text-slate-700">
             <div className="relative mb-4">
-              <div className="animate-spin rounded-full h-12 w-12 border-2 border-gray-600 mx-auto"></div>
-              <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-blue-400 absolute top-0 left-1/2 transform -translate-x-1/2"></div>
+              <div className="animate-spin rounded-full h-12 w-12 border-2 border-slate-300 mx-auto"></div>
+              <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-indigo-400 absolute top-0 left-1/2 transform -translate-x-1/2"></div>
             </div>
-            <div className="text-lg font-medium mb-2">Initializing Game Canvas</div>
-            <div className="text-sm text-gray-400">Loading WebGL renderer...</div>
+            <div className="text-lg font-medium mb-2">Preparing the Map</div>
+            <div className="text-sm text-slate-500">Loading renderer…</div>
             <div className="mt-4 flex justify-center space-x-1">
-              <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse" style={{animationDelay: '0ms'}}></div>
-              <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse" style={{animationDelay: '150ms'}}></div>
-              <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse" style={{animationDelay: '300ms'}}></div>
+              <div className="w-2 h-2 bg-indigo-400 rounded-full animate-pulse" style={{animationDelay: '0ms'}}></div>
+              <div className="w-2 h-2 bg-indigo-400 rounded-full animate-pulse" style={{animationDelay: '150ms'}}></div>
+              <div className="w-2 h-2 bg-indigo-400 rounded-full animate-pulse" style={{animationDelay: '300ms'}}></div>
             </div>
           </div>
         </div>
       )}
       {initError && (
-        <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-red-900/20 to-red-800/20 border border-red-500/30 rounded-lg">
+        <div className="absolute inset-0 flex items-center justify-center bg-red-50 border border-red-200 rounded-lg">
           <div className="text-center p-6 max-w-md">
             <div className="mb-4">
-              <svg className="w-12 h-12 text-red-400 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-12 h-12 text-red-500 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
               </svg>
             </div>
-            <h3 className="font-semibold text-red-300 mb-2">Game Initialization Failed</h3>
-            <p className="text-sm text-red-200 mb-4">{initError}</p>
+            <h3 className="font-semibold text-red-700 mb-2">Canvas Failed to Load</h3>
+            <p className="text-sm text-red-600 mb-4">{initError}</p>
             <button 
-              onClick={() => window.location.reload()} 
+              onClick={() => window.location.reload()}
               className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md text-sm font-medium transition-colors"
             >
               Retry

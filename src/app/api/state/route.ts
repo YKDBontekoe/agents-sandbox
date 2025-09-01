@@ -1,22 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 
-// Mock game state for development when Supabase is not configured
-const mockGameState = {
-  id: 'mock-game-state-id',
-  created_at: new Date().toISOString(),
-  cycle: 1,
-  resources: {
-    grain: 100,
-    coin: 50,
-    mana: 75,
-    favor: 25,
-    unrest: 10,
-    threat: 5
-  },
-  notes: 'Mock game state for development'
-}
-
 export async function GET() {
   try {
     const supabase = createSupabaseServerClient()

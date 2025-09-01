@@ -40,6 +40,46 @@ export async function POST(req: NextRequest) {
   if (stateErr) return NextResponse.json({ error: stateErr.message }, { status: 500 })
   if (!state) return NextResponse.json({ error: 'No game state' }, { status: 400 })
 
+  const hasOpenAI = !!process.env.OPENAI_API_KEY &&
+    !process.env.OPENAI_API_KEY.includes('your_openai_api_key_here') &&
+    !process.env.OPENAI_API_KEY.toLowerCase().includes('placeholder')
+
+  if (!hasOpenAI) {
+    // Deterministic, rule-based fallback when OpenAI is not configured
+    const guildMap: Record<string, { title: string; desc: string; delta: Record<string, number> }[]> = {
+      Wardens: [
+        { title: 'Fortify the Outer Walls', desc: 'Repair battlements and station extra sentries along the perimeter.', delta: { threat: -3, unrest: -1, coin: -10 } },
+        { title: 'Patrol the Wilds', desc: 'Sweep nearby forests for raiders and lurking beasts.', delta: { threat: -2, favor: +1, coin: -5 } },
+      ],
+      Alchemists: [
+        { title: 'Distill Mana Salts', desc: 'Convert surplus reagents into refined mana for the leyworks.', delta: { mana: +15, coin: -10 } },
+        { title: 'Fertilize the Fields', desc: 'Apply alchemical tonics to boost crop yield.', delta: { grain: +120, coin: -15 } },
+      ],
+      Scribes: [
+        { title: 'Codex of Roads', desc: 'Standardize measures and repair key road segments to ease trade.', delta: { coin: +20, favor: +2, unrest: -1 } },
+        { title: 'Archives Reordering', desc: 'Streamline record-keeping to reduce waste and duplication.', delta: { coin: +10, mana: +2 } },
+      ],
+      Stewards: [
+        { title: 'Calm the Markets', desc: 'Institute fair pricing and resolve merchant disputes.', delta: { unrest: -3, favor: +2, coin: -5 } },
+        { title: 'Civic Festival', desc: 'A modest festival to raise spirits and cohesion.', delta: { unrest: -2, favor: +3, coin: -8 } },
+      ],
+    }
+    const picks = guildMap[guild] ?? guildMap['Wardens']
+
+    const rows = picks.slice(0, 2).map(p => ({
+      state_id: state.id,
+      guild,
+      title: p.title,
+      description: p.desc,
+      predicted_delta: p.delta,
+      status: 'pending' as const,
+    }))
+
+    const { data: inserted, error: insErr } = await supabase.from('proposals').insert(rows).select('*')
+    if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 })
+    return NextResponse.json(inserted)
+  }
+
   // Use AI to draft 1-3 proposals aligned with README fantasy
   const system = `You are an autonomous guild agent in a fantasy realm management game. Propose concise, actionable proposals with predicted resource deltas.
 Resources: grain, coin, mana, favor, unrest, threat.

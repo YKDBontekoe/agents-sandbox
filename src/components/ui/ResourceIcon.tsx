@@ -48,11 +48,11 @@ export const ResourceIcon: React.FC<ResourceIconProps> = ({ type, value, classNa
       </Tooltip.Trigger>
       <Tooltip.Portal>
         <Tooltip.Content
-          className="bg-gray-900 text-white px-2 py-1 rounded text-xs capitalize"
+          className="bg-white border border-slate-200 text-slate-700 px-2 py-1 rounded text-xs capitalize shadow-sm"
           sideOffset={5}
         >
           {type}: {value}
-          <Tooltip.Arrow className="fill-gray-900" />
+          <Tooltip.Arrow className="fill-white" />
         </Tooltip.Content>
       </Tooltip.Portal>
     </Tooltip.Root>

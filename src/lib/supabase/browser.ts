@@ -8,7 +8,7 @@ export function createSupabaseBrowserClient() {
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
   if (!url || !anonKey || url.includes('placeholder') || anonKey.includes('placeholder')) {
-    throw new Error('Supabase not configured - using mock data')
+    throw new Error('Supabase not configured: set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY')
   }
 
   return createClient(url, anonKey)
