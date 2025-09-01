@@ -14,6 +14,7 @@ import EffectsLayer from '@/components/game/EffectsLayer';
 import HeatLayer from '@/components/game/HeatLayer';
 import MarkersLayer from '@/components/game/MarkersLayer';
 import CrisisModal, { CrisisData } from '@/components/game/CrisisModal';
+import GoalBanner from '@/components/game/GoalBanner';
 
 interface GameState {
   id: string;
@@ -493,6 +494,7 @@ export default function PlayPage() {
 
   return (
     <div className="h-screen bg-neutral-50 overflow-hidden relative flex flex-col">
+      <GoalBanner />
 
       <div className="flex-1 relative min-h-0">
 
