@@ -9,7 +9,7 @@ import { EdictsPanel, EdictSetting } from '@/components/game/EdictsPanel';
 import { OmenPanel, SeasonalEvent, OmenReading } from '@/components/game/OmenPanel';
 import DistrictSprites, { District } from '@/components/game/DistrictSprites';
 import { LeylineSystem, Leyline } from '@/components/game/LeylineSystem';
-import { createSupabaseBrowserClient } from '@/lib/supabase/browser'
+import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
 import EffectsLayer from '@/components/game/EffectsLayer';
 import HeatLayer from '@/components/game/HeatLayer';
 import MarkersLayer from '@/components/game/MarkersLayer';
@@ -18,6 +18,7 @@ import FlavorEvent from '@/components/game/FlavorEvent';
 import { FlavorEventDef, getRandomFlavorEvent } from '@/components/game/flavorEvents';
 import CrisisModal, { CrisisData } from '@/components/game/CrisisModal';
 import GoalBanner from '@/components/game/GoalBanner';
+import { useIdGenerator } from '@/hooks/useIdGenerator';
 
 interface GameState {
   id: string;
@@ -45,8 +46,7 @@ const SIM_BUILDINGS: Record<string, SimBuildingType> = {
 };
 
 export default function PlayPage() {
-
-  
+  const generateId = useIdGenerator();
   const [state, setState] = useState<GameState | null>(null);
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [loading, setLoading] = useState(false);
@@ -280,7 +280,7 @@ export default function PlayPage() {
         setDismissedGuide(true);
         setGuideProgress(prev => ({ ...prev, accepted: true }));
         if (selectedTile) {
-          setMarkers(prev => [{ id: `m-${Date.now()}`, x: selectedTile.x, y: selectedTile.y, label: 'Accepted' }, ...prev]);
+          setMarkers(prev => [{ id: `m-${generateId()}`, x: selectedTile.x, y: selectedTile.y, label: 'Accepted' }, ...prev]);
         }
         // Auto-hide after a short delay if user doesn't advance
         setTimeout(() => setAcceptedNotice(null), 4000);
@@ -329,7 +329,7 @@ export default function PlayPage() {
       population: prev.population + (total.population || 0),
     } : prev);
     // celebratory marker
-    setMarkers(prev => [{ id: `harvest-${Date.now()}`, x: selectedTile?.x ?? 10, y: selectedTile?.y ?? 10, label: 'Harvest' }, ...prev]);
+    setMarkers(prev => [{ id: `harvest-${generateId()}`, x: selectedTile?.x ?? 10, y: selectedTile?.y ?? 10, label: 'Harvest' }, ...prev]);
   }, [placedBuildings, selectedTile]);
   const handleTileHover = (x: number, y: number) => {
     setSelectedTile({ x, y });
@@ -357,9 +357,9 @@ export default function PlayPage() {
         return;
       }
       spend(def.cost);
-      const newB = { id: Math.random().toString(36).slice(2), typeId: selectedBuildType, x, y, level: 1 };
+      const newB = { id: generateId(), typeId: selectedBuildType, x, y, level: 1 };
       setPlacedBuildings(prev => [newB, ...prev]);
-      setMarkers(prev => [{ id: `b-${Date.now()}`, x, y, label: def.name }, ...prev]);
+      setMarkers(prev => [{ id: `b-${generateId()}`, x, y, label: def.name }, ...prev]);
       setSelectedBuildType(null);
       return; // don't auto-open council for sim placement
     }
@@ -374,7 +374,7 @@ export default function PlayPage() {
 
   const handleLeylineCreate = (fromX: number, fromY: number, toX: number, toY: number) => {
     const newLeyline: Leyline = {
-      id: Math.random().toString(36).substring(2),
+      id: generateId(),
       fromX, fromY, toX, toY,
       capacity: 100,
       currentFlow: 0,
@@ -579,7 +579,7 @@ export default function PlayPage() {
           {acceptedNotice && (
             <EffectsLayer
               trigger={{
-                eventKey: `accept-${Date.now()}`,
+                eventKey: `accept-${generateId()}`,
                 deltas: acceptedNotice.delta || {},
                 gridX: selectedTile?.x ?? Math.floor(10),
                 gridY: selectedTile?.y ?? Math.floor(10),
