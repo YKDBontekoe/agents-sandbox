@@ -5,8 +5,9 @@ import * as PIXI from 'pixi.js';
 import GameRenderer from '@/components/game/GameRenderer';
 import logger from '@/lib/logger';
 
-import { GameHUD, GameResources, GameTime } from '@/components/game/GameHUD';
-import { CouncilPanel, CouncilProposal } from '@/components/game/CouncilPanel';
+import { GameHUD } from '@/components/game/GameHUD';
+import { CouncilPanel } from '@/components/game/CouncilPanel';
+import { GameResources, GameTime, CouncilProposal } from '@/types/game';
 import { EdictsPanel, EdictSetting } from '@/components/game/EdictsPanel';
 import { OmenPanel, SeasonalEvent, OmenReading } from '@/components/game/OmenPanel';
 import DistrictSprites, { District } from '@/components/game/DistrictSprites';
