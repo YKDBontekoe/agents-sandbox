@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
+import type { SupabaseClient } from '@supabase/supabase-js'
 
 export async function GET() {
   // Only expose booleans and sanitized error messages
@@ -8,16 +9,17 @@ export async function GET() {
     hasServiceKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
   }
 
-  let supabase
+  let supabase: SupabaseClient
   try {
     supabase = createSupabaseServerClient()
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err)
     return NextResponse.json(
       {
         connected: false,
         env: envStatus,
         error: 'Supabase not configured or failed to initialize',
-        details: err?.message || String(err),
+        details: message,
       },
       { status: 503 }
     )
@@ -27,7 +29,7 @@ export async function GET() {
     try {
       // Minimal, non-invasive check. head:true avoids body rows.
       const { error } = await supabase
-        .from(name as any)
+        .from(name)
         .select('*', { head: true, count: 'exact' })
         .limit(1)
 
@@ -35,8 +37,9 @@ export async function GET() {
         return { ok: false, error: error.message }
       }
       return { ok: true }
-    } catch (e: any) {
-      return { ok: false, error: e?.message || String(e) }
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e)
+      return { ok: false, error: message }
     }
   }
 
