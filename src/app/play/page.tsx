@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import * as PIXI from 'pixi.js';
 import GameRenderer from '@/components/game/GameRenderer';
 import logger from '@/lib/logger';
 
@@ -86,6 +87,10 @@ export default function PlayPage() {
   const [selectedLeyline, setSelectedLeyline] = useState<Leyline | null>(null);
   const [isDrawingMode, setIsDrawingMode] = useState(false);
   const hasAutoOpenedCouncilRef = useRef(false);
+
+  // Tooltip state
+  const [cursorPos, setCursorPos] = useState({ x: 0, y: 0 });
+  const [tooltip, setTooltip] = useState<{ x: number; y: number; district: District } | null>(null);
   
   // Panels data (empty until backend features are implemented)
   const [edicts, setEdicts] = useState<EdictSetting[]>([]);
@@ -335,6 +340,22 @@ export default function PlayPage() {
   }, [placedBuildings, selectedTile]);
   const handleTileHover = (x: number, y: number) => {
     setSelectedTile({ x, y });
+    const district = districts.find(d => d.gridX === x && d.gridY === y);
+    if (district) {
+      setTooltip({ x: cursorPos.x, y: cursorPos.y, district });
+    } else {
+      setTooltip(null);
+    }
+  };
+
+  const handleDistrictHover = (district: District | null, e?: PIXI.FederatedPointerEvent) => {
+    if (district) {
+      const x = e?.clientX ?? cursorPos.x;
+      const y = e?.clientY ?? cursorPos.y;
+      setTooltip({ x, y, district });
+    } else {
+      setTooltip(null);
+    }
   };
 
   const handleTileClick = (x: number, y: number) => {
@@ -516,7 +537,11 @@ export default function PlayPage() {
     <div className="h-screen bg-neutral-50 overflow-hidden relative flex flex-col">
       <GoalBanner />
 
-      <div className="flex-1 relative min-h-0">
+      <div
+        className="flex-1 relative min-h-0"
+        onMouseMove={e => setCursorPos({ x: e.clientX, y: e.clientY })}
+        onMouseLeave={() => setTooltip(null)}
+      >
 
         {/* Sim Mode overlays */}
         <div className="absolute top-4 right-4 z-40 flex gap-2">
@@ -569,7 +594,7 @@ export default function PlayPage() {
         )}
 
         <GameRenderer onTileHover={handleTileHover} onTileClick={handleTileClick}>
-          <DistrictSprites districts={districts} />
+          <DistrictSprites districts={districts} onDistrictHover={handleDistrictHover} />
           <LeylineSystem
             leylines={leylines}
             onLeylineCreate={handleLeylineCreate}
@@ -596,6 +621,15 @@ export default function PlayPage() {
             ...placedBuildings.map(b => ({ id: `b-${b.id}`, x: b.x, y: b.y, label: SIM_BUILDINGS[b.typeId].name }))
           ].map(m => ({ id: m.id, gridX: m.x, gridY: m.y, label: m.label }))} />
         </GameRenderer>
+        {tooltip && (
+          <div
+            className="pointer-events-none fixed bg-white rounded shadow px-2 py-1 text-xs"
+            style={{ left: tooltip.x + 12, top: tooltip.y + 12 }}
+          >
+            <div className="font-semibold capitalize">{tooltip.district.type}</div>
+            <div className="text-[10px] text-slate-500">Tier {tooltip.district.tier}</div>
+          </div>
+        )}
       </div>
 
       <GameHUD

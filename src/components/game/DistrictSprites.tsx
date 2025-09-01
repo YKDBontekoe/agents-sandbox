@@ -50,7 +50,7 @@ interface DistrictSpritesProps {
   tileWidth?: number;
   tileHeight?: number;
   onDistrictClick?: (district: District) => void;
-  onDistrictHover?: (district: District | null) => void;
+  onDistrictHover?: (district: District | null, event?: PIXI.FederatedPointerEvent) => void;
 }
 
 export default function DistrictSprites({
@@ -219,14 +219,14 @@ export default function DistrictSprites({
     container.addChild(stateOverlay);
     
     // Interaction events
-    container.on('pointerover', () => {
+    container.on('pointerover', (event: PIXI.FederatedPointerEvent) => {
       container.scale.set(1.1);
-      onDistrictHover?.(district);
+      onDistrictHover?.(district, event);
     });
-    
-    container.on('pointerout', () => {
+
+    container.on('pointerout', (event: PIXI.FederatedPointerEvent) => {
       container.scale.set(1.0);
-      onDistrictHover?.(null);
+      onDistrictHover?.(null, event);
     });
     
     container.on('pointerdown', () => {
