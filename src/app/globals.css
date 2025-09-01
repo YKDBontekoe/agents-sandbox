@@ -6,20 +6,38 @@
 @tailwind utilities;
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --color-background: #ffffff;
+  --color-foreground: #171717;
+  --color-primary: #0ea5e9;
+  --color-secondary: #0369a1;
+  --color-accent: #d946ef;
+  --color-muted: #737373;
+  --color-panel: #f5f5f5;
+  --color-border: #e5e5e5;
+  --color-inverse: #ffffff;
+  --color-success: #22c55e;
+  --color-warning: #f59e0b;
+  --color-danger: #ef4444;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+.dark {
+  --color-background: #0a0a0a;
+  --color-foreground: #ededed;
+  --color-primary: #38bdf8;
+  --color-secondary: #0ea5e9;
+  --color-accent: #f0abfc;
+  --color-muted: #a3a3a3;
+  --color-panel: #262626;
+  --color-border: #404040;
+  --color-inverse: #000000;
+  --color-success: #4ade80;
+  --color-warning: #fbbf24;
+  --color-danger: #f87171;
 }
 
 body {
-  color: var(--foreground);
-  background: var(--background);
+  color: var(--color-foreground);
+  background: var(--color-background);
   font-family: 'Inter', system-ui, sans-serif;
   font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
   -webkit-font-smoothing: antialiased;

@@ -20,6 +20,28 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Design Tokens
+
+Global color tokens are defined in `src/app/globals.css` and surfaced in Tailwind via `theme.extend.colors`.
+Use these classes instead of hard-coded palettes when building UI:
+
+| Token | Tailwind Class | Purpose |
+|-------|---------------|---------|
+| `--color-background` | `bg-background`, `text-background` | Page background color |
+| `--color-foreground` | `text-foreground`, `bg-foreground` | Primary text color |
+| `--color-primary` | `bg-primary`, `text-primary` | Brand accents and primary actions |
+| `--color-secondary` | `bg-secondary`, `text-secondary` | Hover/active states for primary elements |
+| `--color-accent` | `bg-accent`, `text-accent` | Supplementary accents |
+| `--color-muted` | `text-muted`, `bg-muted` | De-emphasized text or surfaces |
+| `--color-panel` | `bg-panel`, `text-panel` | Card and panel backgrounds |
+| `--color-border` | `border-border` | Standard border color |
+| `--color-success` | `bg-success`, `text-success` | Positive messaging |
+| `--color-warning` | `bg-warning`, `text-warning` | Cautionary messaging |
+| `--color-danger` | `bg-danger`, `text-danger` | Errors and destructive actions |
+| `--color-inverse` | `text-inverse` | Text contrasting against accent backgrounds |
+
+Dark mode overrides are provided under the `.dark` class.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

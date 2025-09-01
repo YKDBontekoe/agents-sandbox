@@ -53,8 +53,8 @@ const TimeDisplay: React.FC<{ time: GameTime; isPaused?: boolean }> = ({ time, i
   };
 
   return (
-    <div 
-      className="flex items-center bg-gradient-to-r from-slate-50 to-slate-100 px-2 sm:px-3 lg:px-4 py-2 sm:py-3 border border-slate-200/50 animate-scale-in transition-smooth hover-lift"
+    <div
+      className="flex items-center bg-panel px-2 sm:px-3 lg:px-4 py-2 sm:py-3 border border-border animate-scale-in transition-smooth hover-lift"
       style={{
         gap: 'var(--spacing-xs)',
         borderRadius: 'var(--radius-lg)',
@@ -63,20 +63,20 @@ const TimeDisplay: React.FC<{ time: GameTime; isPaused?: boolean }> = ({ time, i
       }}
     >
       <div className="text-center min-w-[2rem] sm:min-w-[2.5rem] lg:min-w-[3rem]">
-        <div className="font-medium text-slate-500 uppercase tracking-wide mb-1 hidden md:block" style={{ fontSize: 'var(--font-size-xs)' }}>Cycle</div>
-        <div className="text-sm sm:text-base lg:text-lg font-bold text-slate-800">{time.cycle}</div>
+        <div className="font-medium text-muted uppercase tracking-wide mb-1 hidden md:block" style={{ fontSize: 'var(--font-size-xs)' }}>Cycle</div>
+        <div className="text-sm sm:text-base lg:text-lg font-bold text-foreground">{time.cycle}</div>
       </div>
-      <div className="w-px h-6 sm:h-8 lg:h-10 bg-gradient-to-b from-transparent via-slate-300 to-transparent" />
+      <div className="w-px h-6 sm:h-8 lg:h-10 bg-gradient-to-b from-transparent via-border to-transparent" />
       <div className="text-center min-w-[2.5rem] sm:min-w-[3rem] lg:min-w-[4rem]">
-        <div className="font-medium text-slate-500 uppercase tracking-wide mb-1 hidden md:block" style={{ fontSize: 'var(--font-size-xs)' }}>Season</div>
-        <div className="text-xs sm:text-sm font-semibold text-slate-700 capitalize">{time.season}</div>
+        <div className="font-medium text-muted uppercase tracking-wide mb-1 hidden md:block" style={{ fontSize: 'var(--font-size-xs)' }}>Season</div>
+        <div className="text-xs sm:text-sm font-semibold text-foreground capitalize">{time.season}</div>
       </div>
-      <div className="w-px h-6 sm:h-8 lg:h-10 bg-gradient-to-b from-transparent via-slate-300 to-transparent" />
+      <div className="w-px h-6 sm:h-8 lg:h-10 bg-gradient-to-b from-transparent via-border to-transparent" />
       <div className="text-center min-w-[2.5rem] sm:min-w-[3rem] lg:min-w-[4rem]">
-        <div className="font-medium text-slate-500 uppercase tracking-wide mb-1 hidden md:block" style={{ fontSize: 'var(--font-size-xs)' }}>Time</div>
-        <div 
+        <div className="font-medium text-muted uppercase tracking-wide mb-1 hidden md:block" style={{ fontSize: 'var(--font-size-xs)' }}>Time</div>
+        <div
           className={`font-mono text-xs sm:text-sm font-semibold transition-colors duration-200 ${
-            isPaused ? 'text-amber-600 animate-pulse animate-pulse-slow animate-bounce-gentle' : 'text-emerald-600'
+            isPaused ? 'text-warning animate-pulse animate-pulse-slow animate-bounce-gentle' : 'text-success'
           }`}
         >
           {isPaused ? (
@@ -138,16 +138,16 @@ export const GameHUD: React.FC<GameHUDProps> = ({
       {/* Top HUD Bar - Mobile optimized */}
       <div className="flex flex-col xl:flex-row justify-between items-stretch xl:items-start p-2 sm:p-3 lg:p-4 gap-2 sm:gap-3">
         {/* Resources Panel */}
-        <div 
-          className="bg-white/95 backdrop-blur-md border border-white/20 p-2 sm:p-3 lg:p-4 pointer-events-auto transition-all duration-200 hover:shadow-xl w-full xl:w-auto animate-slide-in-left"
+        <div
+          className="bg-panel backdrop-blur-md border border-border p-2 sm:p-3 lg:p-4 pointer-events-auto transition-all duration-200 hover:shadow-xl w-full xl:w-auto animate-slide-in-left"
           style={{
             borderRadius: 'var(--radius-lg)',
             boxShadow: 'var(--shadow-lg)'
           }}
         >
           <div className="mb-1 sm:mb-2 hidden md:block" style={{ marginBottom: 'var(--spacing-sm)' }}>
-            <h3 
-              className="font-semibold text-slate-700 uppercase tracking-wide"
+            <h3
+              className="font-semibold text-foreground uppercase tracking-wide"
               style={{ fontSize: 'var(--font-size-xs)' }}
             >
               Resources
@@ -167,8 +167,8 @@ export const GameHUD: React.FC<GameHUDProps> = ({
         </div>
 
         {/* Time Controls */}
-        <div 
-          className="bg-white/95 backdrop-blur-md border border-white/20 p-2 sm:p-3 lg:p-4 pointer-events-auto transition-all duration-200 hover:shadow-xl w-full xl:w-auto animate-slide-in-right"
+        <div
+          className="bg-panel backdrop-blur-md border border-border p-2 sm:p-3 lg:p-4 pointer-events-auto transition-all duration-200 hover:shadow-xl w-full xl:w-auto animate-slide-in-right"
           style={{
             borderRadius: 'var(--radius-lg)',
             boxShadow: 'var(--shadow-lg)'
@@ -205,11 +205,11 @@ export const GameHUD: React.FC<GameHUDProps> = ({
 
       {/* Panel Controls - Mobile responsive positioning */}
       <div className="flex-1 flex flex-col justify-center">
-        <div 
-          className="self-end mr-2 sm:mr-3 lg:mr-4 z-40 animate-slide-in-right"
-        >
-          <div 
-            className="bg-white/10 backdrop-blur-md border border-white/20 p-2 sm:p-3 pointer-events-auto transition-all duration-200 hover:shadow-xl hover-lift"
+      <div
+        className="self-end mr-2 sm:mr-3 lg:mr-4 z-40 animate-slide-in-right"
+      >
+          <div
+            className="bg-panel backdrop-blur-md border border-border p-2 sm:p-3 pointer-events-auto transition-all duration-200 hover:shadow-xl hover-lift"
             style={{
               borderRadius: 'var(--radius-lg)',
               boxShadow: 'var(--shadow-lg)'
@@ -250,7 +250,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
 
       {/* Bottom Status Bar - Mobile optimized */}
       <div 
-        className="mt-auto pointer-events-auto bg-white/95 backdrop-blur-md border border-white/20 mx-2 sm:mx-3 lg:mx-4 mb-2 sm:mb-3 lg:mb-4 px-2 sm:px-3 lg:px-4 py-2 sm:py-3 flex flex-col sm:flex-row justify-between items-center gap-2 sm:gap-4 animate-fade-in transition-smooth hover-lift"
+        className="mt-auto pointer-events-auto bg-panel backdrop-blur-md border border-border mx-2 sm:mx-3 lg:mx-4 mb-2 sm:mb-3 lg:mb-4 px-2 sm:px-3 lg:px-4 py-2 sm:py-3 flex flex-col sm:flex-row justify-between items-center gap-2 sm:gap-4 animate-fade-in transition-smooth hover-lift"
         style={{
           borderRadius: 'var(--radius-lg)',
           boxShadow: 'var(--shadow-lg)',
@@ -260,30 +260,30 @@ export const GameHUD: React.FC<GameHUDProps> = ({
       >
         <div className="flex flex-col sm:flex-row justify-between items-center w-full gap-2 sm:gap-4">
           <div className="flex flex-row sm:flex-row items-center gap-3 sm:gap-4 flex-wrap justify-center sm:justify-start">
-            <div className="flex items-center text-slate-600 text-xs">
-              <FontAwesomeIcon icon={faMousePointer} className="text-slate-400 mr-1" />
+            <div className="flex items-center text-muted text-xs">
+              <FontAwesomeIcon icon={faMousePointer} className="text-muted mr-1" />
               <span className="hidden sm:inline">Click tiles to select</span>
               <span className="sm:hidden">Click</span>
             </div>
-            <div className="flex items-center text-slate-600 text-xs">
-              <FontAwesomeIcon icon={faArrowsAlt} className="text-slate-400 mr-1" />
+            <div className="flex items-center text-muted text-xs">
+              <FontAwesomeIcon icon={faArrowsAlt} className="text-muted mr-1" />
               <span className="hidden sm:inline">Drag to pan</span>
               <span className="sm:hidden">Drag</span>
             </div>
-            <div className="flex items-center text-slate-600 text-xs">
-              <FontAwesomeIcon icon={faMagnifyingGlass} className="text-slate-400 mr-1" />
+            <div className="flex items-center text-muted text-xs">
+              <FontAwesomeIcon icon={faMagnifyingGlass} className="text-muted mr-1" />
               <span className="hidden sm:inline">Scroll to zoom</span>
               <span className="sm:hidden">Zoom</span>
             </div>
           </div>
           <div className="flex items-center">
-            <div 
-              className="flex items-center px-2 sm:px-3 py-1 bg-emerald-50 border border-emerald-200 rounded-md"
+            <div
+              className="flex items-center px-2 sm:px-3 py-1 bg-success border border-success rounded-md"
             >
-              <span className="font-medium text-emerald-700 text-xs mr-1">
+              <span className="font-medium text-success text-xs mr-1">
                 FPS:
               </span>
-              <span className="font-mono font-bold text-emerald-600 text-xs">
+              <span className="font-mono font-bold text-success text-xs">
                 60
               </span>
             </div>
