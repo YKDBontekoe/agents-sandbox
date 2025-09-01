@@ -16,6 +16,7 @@ interface GameRendererProps {
   onTileHover?: (x: number, y: number) => void;
   onTileClick?: (x: number, y: number) => void;
   children?: React.ReactNode;
+  showHelp?: boolean;
 }
 
 function GameRendererContent({
@@ -24,9 +25,11 @@ function GameRendererContent({
   gridSize = 20,
   onTileHover,
   onTileClick,
+  showHelp = true,
 }: GameRendererProps) {
-  console.log('GameRendererContent rendering with:', { width, height, gridSize });
-  const [showHelp, setShowHelp] = useState(true);
+  console.log('GameRendererContent rendering with:', { width, height, gridSize, showHelp });
+  const [dismissed, setDismissed] = useState(false);
+  useEffect(() => { if (showHelp) setDismissed(false); }, [showHelp]);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [dims, setDims] = useState<{ w: number; h: number }>({ w: width, h: height });
   const { viewport } = useGameContext();
@@ -63,7 +66,7 @@ function GameRendererContent({
         onTileClick={onTileClick}
       />
       
-      {showHelp && (
+      {showHelp && !dismissed && (
         <div className="absolute top-2 left-2 pointer-events-none">
           <div className="bg-white/95 backdrop-blur-sm border border-slate-200 rounded-lg shadow-md px-3 py-2 text-[11px] sm:text-xs text-slate-700 max-w-xs pointer-events-none">
             <div className="font-semibold text-slate-800 mb-1">How to interact</div>
@@ -75,7 +78,7 @@ function GameRendererContent({
             <div className="mt-2 flex items-center justify-between">
               <span className="text-slate-500">Grid: {gridSize}×{gridSize}</span>
               <button
-                onClick={() => setShowHelp(false)}
+                onClick={() => setDismissed(true)}
                 className="ml-2 px-2 py-0.5 text-[11px] rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 pointer-events-auto"
               >
                 Got it

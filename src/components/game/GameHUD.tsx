@@ -9,11 +9,10 @@ import {
   faEye,
   faMousePointer,
   faArrowsAlt,
-  faMagnifyingGlass
+  faMagnifyingGlass,
+  faGear
 } from '@/lib/icons';
 import { ActionButton, ResourceIcon } from '../ui';
-import * as Dialog from '@radix-ui/react-dialog';
-import * as Tooltip from '@radix-ui/react-tooltip';
 import { getResourceIcon, getResourceColor } from './resourceUtils';
 import '../../styles/design-tokens.css';
 import '../../styles/animations.css';
@@ -43,6 +42,7 @@ export interface GameHUDProps {
   onOpenCouncil?: () => void;
   onOpenEdicts?: () => void;
   onOpenOmens?: () => void;
+  onOpenSettings?: () => void;
   highlightAdvance?: boolean;
 }
 
@@ -224,7 +224,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
       </div>
 
       {/* Bottom Status Bar - Mobile optimized */}
-      <div 
+      <div
         className="mt-auto pointer-events-auto bg-white/95 backdrop-blur-md border border-white/20 mx-2 sm:mx-3 lg:mx-4 mb-2 sm:mb-3 lg:mb-4 px-2 sm:px-3 lg:px-4 py-2 sm:py-3 flex flex-col sm:flex-row justify-between items-center gap-2 sm:gap-4 animate-fade-in transition-smooth hover-lift"
         style={{
           borderRadius: 'var(--radius-lg)',
@@ -252,7 +252,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
             </div>
           </div>
           <div className="flex items-center">
-            <div 
+            <div
               className="flex items-center px-2 sm:px-3 py-1 bg-emerald-50 border border-emerald-200 rounded-md"
             >
               <span className="font-medium text-emerald-700 text-xs mr-1">
@@ -262,6 +262,13 @@ export const GameHUD: React.FC<GameHUDProps> = ({
                 60
               </span>
             </div>
+            <button
+              onClick={onOpenSettings}
+              className="ml-2 p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded transition-colors"
+              aria-label="Settings"
+            >
+              <FontAwesomeIcon icon={faGear} />
+            </button>
           </div>
         </div>
       </div>

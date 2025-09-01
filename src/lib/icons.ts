@@ -21,7 +21,8 @@ import {
   faSackDollar,
   faShieldHalved,
   faUsers,
-  faHatWizard
+  faHatWizard,
+  faGear
 } from '@fortawesome/free-solid-svg-icons';
 
 // Add icons to the library for tree-shaking optimization
@@ -46,7 +47,8 @@ library.add(
   faSackDollar,
   faShieldHalved,
   faUsers,
-  faHatWizard
+  faHatWizard,
+  faGear
 );
 
 // Export icons for direct use
@@ -71,5 +73,6 @@ export {
   faSackDollar,
   faShieldHalved,
   faUsers,
-  faHatWizard
+  faHatWizard,
+  faGear
 };

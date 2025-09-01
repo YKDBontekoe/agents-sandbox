@@ -7,6 +7,7 @@ import { GameHUD, GameResources, GameTime } from '@/components/game/GameHUD';
 import { CouncilPanel, CouncilProposal } from '@/components/game/CouncilPanel';
 import { EdictsPanel, EdictSetting } from '@/components/game/EdictsPanel';
 import { OmenPanel, SeasonalEvent, OmenReading } from '@/components/game/OmenPanel';
+import SettingsPanel from '@/components/game/SettingsPanel';
 import DistrictSprites, { District } from '@/components/game/DistrictSprites';
 import { LeylineSystem, Leyline } from '@/components/game/LeylineSystem';
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
@@ -60,6 +61,7 @@ export default function PlayPage() {
   const [isCouncilOpen, setIsCouncilOpen] = useState(false);
   const [isEdictsOpen, setIsEdictsOpen] = useState(false);
   const [isOmensOpen, setIsOmensOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [dismissedGuide, setDismissedGuide] = useState(false);
   const [acceptedNotice, setAcceptedNotice] = useState<{ title: string; delta: Record<string, number> } | null>(null);
   const [markers, setMarkers] = useState<{ id: string; x: number; y: number; label?: string }[]>([]);
@@ -69,6 +71,11 @@ export default function PlayPage() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [guideProgress, setGuideProgress] = useState({ selectedTile: false, openedCouncil: false, generated: false, accepted: false, advanced: false });
   const [guideHint, setGuideHint] = useState<string | null>(null);
+
+  // User settings
+  const [showHelp, setShowHelp] = useState(true);
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [darkMode, setDarkMode] = useState(false);
   
   // Sim Mode state
   const [isSimMode, setIsSimMode] = useState(false);
@@ -106,6 +113,25 @@ export default function PlayPage() {
       }
     } catch {}
   }, []);
+
+  // Initialize user settings from localStorage
+  useEffect(() => {
+    try {
+      const help = localStorage.getItem('ad_setting_help');
+      const sound = localStorage.getItem('ad_setting_sound');
+      const dark = localStorage.getItem('ad_setting_dark');
+      if (help !== null) setShowHelp(help === '1');
+      if (sound !== null) setSoundEnabled(sound === '1');
+      const darkEnabled = dark === '1';
+      setDarkMode(darkEnabled);
+      document.documentElement.classList.toggle('dark', darkEnabled);
+    } catch {}
+  }, []);
+
+  // Apply dark mode class when toggled
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', darkMode);
+  }, [darkMode]);
 
   // Initialize Sim resources from server state once
   useEffect(() => {
@@ -426,6 +452,26 @@ export default function PlayPage() {
     setIsOmensOpen(true);
   }, [gameMode, guideProgress.generated]);
 
+  const handleSettingChange = useCallback(
+    (key: 'showHelp' | 'sound' | 'darkMode', value: boolean) => {
+      switch (key) {
+        case 'showHelp':
+          setShowHelp(value);
+          try { localStorage.setItem('ad_setting_help', value ? '1' : '0'); } catch {}
+          break;
+        case 'sound':
+          setSoundEnabled(value);
+          try { localStorage.setItem('ad_setting_sound', value ? '1' : '0'); } catch {}
+          break;
+        case 'darkMode':
+          setDarkMode(value);
+          try { localStorage.setItem('ad_setting_dark', value ? '1' : '0'); } catch {}
+          break;
+      }
+    },
+    []
+  );
+
   const skipGuide = useCallback(() => {
     setDismissedGuide(true);
     try { localStorage.setItem('ad_dismissed_guide', '1'); } catch {}
@@ -566,7 +612,7 @@ export default function PlayPage() {
           </>
         )}
 
-        <GameRenderer onTileHover={handleTileHover} onTileClick={handleTileClick}>
+        <GameRenderer showHelp={showHelp} onTileHover={handleTileHover} onTileClick={handleTileClick}>
           <DistrictSprites districts={districts} />
           <LeylineSystem
             leylines={leylines}
@@ -606,9 +652,16 @@ export default function PlayPage() {
         onOpenCouncil={openCouncil}
         onOpenEdicts={openEdicts}
         onOpenOmens={openOmens}
+        onOpenSettings={() => setIsSettingsOpen(true)}
         highlightAdvance={acceptedNotice !== null || proposals.some(p => p.status === 'accepted')}
       />
 
+      <SettingsPanel
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        settings={{ showHelp, sound: soundEnabled, darkMode }}
+        onChange={handleSettingChange}
+      />
 
       <CouncilPanel
         isOpen={isCouncilOpen}
