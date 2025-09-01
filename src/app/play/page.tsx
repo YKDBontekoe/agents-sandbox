@@ -13,6 +13,7 @@ import { createSupabaseBrowserClient } from '@/lib/supabase/browser'
 import EffectsLayer from '@/components/game/EffectsLayer';
 import HeatLayer from '@/components/game/HeatLayer';
 import MarkersLayer from '@/components/game/MarkersLayer';
+import CrisisModal, { CrisisData } from '@/components/game/CrisisModal';
 import GoalBanner from '@/components/game/GoalBanner';
 
 interface GameState {
@@ -50,6 +51,7 @@ export default function PlayPage() {
   const [error, setError] = useState<string | null>(null);
   const [isPaused, setIsPaused] = useState(true);
   const [timeRemaining, setTimeRemaining] = useState(120); // 2 minutes per cycle
+  const [crisis, setCrisis] = useState<CrisisData | null>(null);
   
   // Panel states
   const [isCouncilOpen, setIsCouncilOpen] = useState(false);
@@ -138,8 +140,12 @@ export default function PlayPage() {
       const res = await fetch(`/api/state/tick`, { method: "POST" });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Failed to tick");
-      setState(json);
+      setState(json.state);
       setTimeRemaining(120); // Reset timer
+      if (json.crisis) {
+        setIsPaused(true);
+        setCrisis(json.crisis);
+      }
       await fetchProposals();
     } catch (e: any) {
       setError(e.message);
@@ -769,6 +775,16 @@ export default function PlayPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {crisis && (
+        <CrisisModal
+          crisis={crisis}
+          onResolve={() => {
+            setCrisis(null);
+            setIsPaused(false);
+          }}
+        />
       )}
 
       {error && (
