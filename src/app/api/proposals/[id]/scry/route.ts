@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { generateText } from 'ai'
 import { createOpenAI } from '@ai-sdk/openai'
 import { z } from 'zod'
+import { GameResources } from '@/types/game'
 
 const openai = createOpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
@@ -30,13 +31,21 @@ export async function POST(req: NextRequest, context: RouteContext) {
     )
   }
 
-  const { data: proposal, error } = await supabase
+  const { data, error } = await supabase
     .from('proposals')
     .select('*, game_state(*)')
     .eq('id', id)
     .maybeSingle()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  if (!proposal) return NextResponse.json({ error: 'Proposal not found' }, { status: 404 })
+  if (!data) return NextResponse.json({ error: 'Proposal not found' }, { status: 404 })
+
+  interface ProposalRow {
+    guild: string | null
+    title: string | null
+    description: string | null
+    game_state: { resources: GameResources }
+  }
+  const proposal = data as ProposalRow
 
   const hasOpenAI = !!process.env.OPENAI_API_KEY &&
     !process.env.OPENAI_API_KEY.includes('your_openai_api_key_here') &&
@@ -44,9 +53,9 @@ export async function POST(req: NextRequest, context: RouteContext) {
 
   // Deterministic fallback when OpenAI is not configured
   if (!hasOpenAI) {
-    const guild = String((proposal as any).guild || '')
-    const title = String((proposal as any).title || '')
-    const description = String((proposal as any).description || '')
+    const guild = proposal.guild ?? ''
+    const title = proposal.title ?? ''
+    const description = proposal.description ?? ''
 
     function inferDelta() {
       const t = `${title} ${description}`.toLowerCase()
@@ -118,7 +127,7 @@ export async function POST(req: NextRequest, context: RouteContext) {
   const system = `You are a scrying oracle. Given a proposal and current resources, forecast likely deltas in a conservative, numeric way.
 Return JSON: { predicted_delta: {resource:number,...}, risk_note: string }`
 
-  const user = `Resources: ${JSON.stringify((proposal as any).game_state.resources)}\nProposal: ${String((proposal as any).title)} - ${String((proposal as any).description)}`
+  const user = `Resources: ${JSON.stringify(proposal.game_state.resources)}\nProposal: ${String(proposal.title)} - ${String(proposal.description)}`
   const { text } = await generateText({ model: openai('gpt-4o-mini'), system, prompt: user })
 
   let parsedJson: unknown

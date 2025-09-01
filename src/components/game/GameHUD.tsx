@@ -14,23 +14,9 @@ import {
 import { ActionButton, ResourceIcon } from '../ui';
 import '../../styles/design-tokens.css';
 import '../../styles/animations.css';
+import { GameResources, GameTime } from '@/types/game';
 
-export interface GameResources {
-  grain: number;
-  coin: number;
-  mana: number;
-  favor: number;
-  unrest: number;
-  threat: number;
-}
-
-export interface GameTime {
-  cycle: number;
-  season: string;
-  timeRemaining: number; // seconds until next cycle
-}
-
-export interface GameHUDProps {
+interface GameHUDProps {
   resources: GameResources;
   time: GameTime;
   isPaused?: boolean;
