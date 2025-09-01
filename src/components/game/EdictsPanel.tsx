@@ -5,6 +5,7 @@ import * as Toggle from '@radix-ui/react-toggle';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faCrown, faScroll, faXmark, faLock } from '@/lib/icons';
+import { CategoryIcon, Modal } from '../ui';
 import { CategoryIcon } from '../ui';
 import { CategoryType, CATEGORY_TYPES } from '@/lib/categories';
 
@@ -206,16 +207,16 @@ export const EdictsPanel: React.FC<EdictsPanelProps> = ({
   const canAfford = currentFavor >= totalCost;
 
   return (
-    <Dialog.Root open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
-      <Dialog.Portal>
-        <Dialog.Overlay
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 data-[state=open]:opacity-100 data-[state=closed]:opacity-0 motion-safe:transition-opacity motion-safe:duration-200 motion-safe:data-[state=open]:animate-fade-in"
-        />
-        <Dialog.Content
-          className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-lg shadow-xl z-50 w-full max-w-6xl max-h-[90vh] overflow-hidden border border-slate-200 data-[state=open]:opacity-100 data-[state=closed]:opacity-0 data-[state=closed]:scale-95 motion-safe:transition-[opacity,transform] motion-safe:duration-200 motion-safe:data-[state=open]:animate-scale-in"
-        >
-          {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b border-slate-200">
+    <Modal
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+      size="xl"
+      className="bg-white border border-slate-200"
+    >
+      {/* Header */}
+      <div className="flex items-center justify-between p-6 border-b border-slate-200">
             <div className="flex items-center gap-3">
               <FontAwesomeIcon icon={faScroll} className="text-2xl" />
               <div>
@@ -247,10 +248,10 @@ export const EdictsPanel: React.FC<EdictsPanelProps> = ({
                 </button>
               </Dialog.Close>
             </div>
-          </div>
+      </div>
 
-          {/* Content */}
-          <div className="flex flex-col h-[calc(90vh-120px)]">
+      {/* Content */}
+      <div className="flex flex-col h-[calc(90vh-120px)]">
             <div className="flex-1 p-6 overflow-y-auto">
               <div className="space-y-8">
                 {CATEGORY_TYPES.filter(category => edicts.some(e => e.category === category)).map(category => (
@@ -308,10 +309,8 @@ export const EdictsPanel: React.FC<EdictsPanelProps> = ({
                 </div>
               </div>
             )}
-          </div>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+      </div>
+    </Modal>
   );
 };
 

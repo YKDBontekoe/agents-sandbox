@@ -1,5 +1,6 @@
 import React from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
+import { Modal } from '../ui';
 import { GameResources } from './GameHUD';
 import { getResourceIcon, getResourceColor } from './resourceUtils';
 import { CategoryIcon } from '../ui';
@@ -227,16 +228,16 @@ export const CouncilPanel: React.FC<CouncilPanelProps> = ({
   canGenerateProposals
 }) => {
   return (
-    <Dialog.Root open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
-      <Dialog.Portal>
-        <Dialog.Overlay
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 data-[state=open]:opacity-100 data-[state=closed]:opacity-0 motion-safe:transition-opacity motion-safe:duration-200 motion-safe:data-[state=open]:animate-fade-in"
-        />
-        <Dialog.Content
-          className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-panel rounded-lg shadow-xl z-50 w-full max-w-4xl max-h-[90vh] overflow-hidden border border-border data-[state=open]:opacity-100 data-[state=closed]:opacity-0 data-[state=closed]:scale-95 motion-safe:transition-[opacity,transform] motion-safe:duration-200 motion-safe:data-[state=open]:animate-scale-in"
-        >
-          {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b border-border">
+    <Modal
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+      size="lg"
+      className="bg-panel border border-border"
+    >
+      {/* Header */}
+      <div className="flex items-center justify-between p-6 border-b border-border">
             <div className="flex items-center gap-3">
               <span className="text-2xl">🏛️</span>
               <div>
@@ -266,10 +267,10 @@ export const CouncilPanel: React.FC<CouncilPanelProps> = ({
                 </button>
               </Dialog.Close>
             </div>
-          </div>
+      </div>
 
-          {/* Content */}
-          <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)] bg-panel">
+      {/* Content */}
+      <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)] bg-panel">
             {proposals.length === 0 ? (
               <div className="text-center py-12">
                 <div className="text-6xl mb-4">📜</div>
@@ -303,10 +304,8 @@ export const CouncilPanel: React.FC<CouncilPanelProps> = ({
                 ))}
               </div>
             )}
-          </div>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+      </div>
+    </Modal>
   );
 };
 
