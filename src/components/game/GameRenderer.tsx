@@ -66,18 +66,18 @@ function GameRendererContent({
       
       {showHelp && (
         <div className="absolute top-2 left-2 pointer-events-none">
-          <div className="bg-white/95 backdrop-blur-sm border border-slate-200 rounded-lg shadow-md px-3 py-2 text-[11px] sm:text-xs text-slate-700 max-w-xs pointer-events-none">
-            <div className="font-semibold text-slate-800 mb-1">How to interact</div>
+          <div className="bg-panel backdrop-blur-sm border border-border rounded-lg shadow-md px-3 py-2 text-[11px] sm:text-xs text-foreground max-w-xs pointer-events-none">
+            <div className="font-semibold text-foreground mb-1">How to interact</div>
             <ul className="list-disc pl-4 space-y-0.5">
               <li>Click tiles to select</li>
               <li>Drag to pan, scroll to zoom</li>
               <li>Open Council to take actions</li>
             </ul>
             <div className="mt-2 flex items-center justify-between">
-              <span className="text-slate-500">Grid: {gridSize}×{gridSize}</span>
+              <span className="text-muted">Grid: {gridSize}×{gridSize}</span>
               <button
                 onClick={() => setShowHelp(false)}
-                className="ml-2 px-2 py-0.5 text-[11px] rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 pointer-events-auto"
+                className="ml-2 px-2 py-0.5 text-[11px] rounded-md bg-panel hover:bg-muted text-foreground pointer-events-auto"
               >
                 Got it
               </button>
@@ -96,7 +96,7 @@ function GameRendererContent({
             viewport.moveCenter(0, midY);
             viewport.setZoom(1.2);
           }}
-          className="px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs border border-slate-200 shadow-sm"
+          className="px-2 py-1 rounded bg-panel hover:bg-muted text-foreground text-xs border border-border shadow-sm"
         >
           Recenter
         </button>
