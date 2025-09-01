@@ -21,6 +21,9 @@ import { FlavorEventDef, getRandomFlavorEvent } from '@/components/game/flavorEv
 import CrisisModal, { CrisisData } from '@/components/game/CrisisModal';
 import GoalBanner from '@/components/game/GoalBanner';
 import { useIdGenerator } from '@/hooks/useIdGenerator';
+import SettingsPanel from '@/components/SettingsPanel';
+import { LayoutPreset, LAYOUT_PRESET_KEY } from '@/lib/preferences';
+import { useUserPreference } from '@/hooks/useUserPreference';
 
 
 interface GameState {
@@ -50,6 +53,7 @@ const SIM_BUILDINGS: Record<string, SimBuildingType> = {
 
 export default function PlayPage() {
   const generateId = useIdGenerator();
+  const [layoutPreset, setLayoutPreset] = useUserPreference<LayoutPreset>(LAYOUT_PRESET_KEY, 'compact');
   const [state, setState] = useState<GameState | null>(null);
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [loading, setLoading] = useState(false);
@@ -534,7 +538,8 @@ export default function PlayPage() {
   }, 0);
 
   return (
-    <div className="h-screen bg-neutral-50 overflow-hidden relative flex flex-col">
+    <div className={`h-screen bg-neutral-50 overflow-hidden grid ${layoutPreset === 'expanded' ? 'grid-cols-[1fr_20rem]' : 'grid-cols-[1fr_16rem]'}`}>
+      <div className="relative flex flex-col">
       <GoalBanner />
 
       <div
@@ -864,5 +869,7 @@ export default function PlayPage() {
         </div>
       )}
     </div>
+    <SettingsPanel preset={layoutPreset} onPresetChange={setLayoutPreset} />
+  </div>
   );
 }
