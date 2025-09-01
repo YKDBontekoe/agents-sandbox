@@ -6,6 +6,13 @@ const nextConfig: NextConfig = {
     // your project has ESLint errors.
     ignoreDuringBuilds: true,
   },
+
+  experimental: {
+    // Temporarily disable Turbopack to avoid HMR module pattern errors
+    turbo: {
+      rules: {},
+    },
+  },
 };
 
 export default nextConfig;

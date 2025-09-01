@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import "@fortawesome/fontawesome-svg-core/styles.css"; // Prevent FontAwesome from adding its CSS automatically (avoids HMR issues)
+import { config } from "@fortawesome/fontawesome-svg-core";
+config.autoAddCss = false;
 import "./globals.css";
 import "@/lib/icons"; // Initialize FontAwesome icon library
 

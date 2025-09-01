@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useGameContext } from "./GameContext";
 import GameCanvas from "./GameCanvas";
 import { IsometricGrid } from "./IsometricGrid";
 import { GameProvider } from "./GameContext";
 import { Viewport } from "pixi-viewport";
 import * as PIXI from "pixi.js";
+import MiniMap from "./MiniMap";
 
 interface GameRendererProps {
   width?: number;
@@ -27,6 +29,7 @@ function GameRendererContent({
   const [showHelp, setShowHelp] = useState(true);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [dims, setDims] = useState<{ w: number; h: number }>({ w: width, h: height });
+  const { viewport } = useGameContext();
 
   useEffect(() => {
     const el = containerRef.current;
@@ -81,6 +84,25 @@ function GameRendererContent({
           </div>
         </div>
       )}
+
+      {/* Recenter button */}
+      <div className="absolute top-2 right-2 pointer-events-auto flex items-center gap-2">
+        <button
+          onClick={() => {
+            if (!viewport) return;
+            // Center on iso grid midpoint used by IsometricGrid
+            const midY = (gridSize - 1) * (32 / 2); // tileHeight default 32
+            viewport.moveCenter(0, midY);
+            viewport.setZoom(1.2);
+          }}
+          className="px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs border border-slate-200 shadow-sm"
+        >
+          Recenter
+        </button>
+        <div className="hidden sm:block">
+          <MiniMap gridSize={gridSize} tileWidth={64} tileHeight={32} />
+        </div>
+      </div>
     </div>
   );
 }
