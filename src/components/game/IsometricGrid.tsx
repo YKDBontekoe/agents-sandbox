@@ -2,8 +2,8 @@
 
 import { useEffect, useRef } from "react";
 import * as PIXI from "pixi.js";
-import { Viewport } from "pixi-viewport";
 import { useGameContext } from "./GameContext";
+import logger from "@/lib/logger";
 
 interface GridTile {
   x: number;
@@ -110,9 +110,9 @@ export default function IsometricGrid({
 
   // Initialize grid
   useEffect(() => {
-    console.log('IsometricGrid useEffect triggered, viewport:', viewport);
+    logger.debug('IsometricGrid useEffect triggered, viewport:', viewport);
     if (!viewport) {
-      console.warn('IsometricGrid: No viewport available');
+      logger.warn('IsometricGrid: No viewport available');
       return;
     }
     if (initializedRef.current) {
@@ -121,7 +121,7 @@ export default function IsometricGrid({
     }
     initializedRef.current = true;
 
-    console.log('Creating grid container and tiles...');
+    logger.debug('Creating grid container and tiles...');
     const gridContainer = new PIXI.Container();
     gridContainer.name = 'isometric-grid';
     viewport.addChild(gridContainer);
@@ -139,8 +139,8 @@ export default function IsometricGrid({
       }
     }
     
-    console.log(`Created ${tiles.size} tiles for ${gridSize}x${gridSize} grid`);
-    console.log('Grid container children count:', gridContainer.children.length);
+    logger.debug(`Created ${tiles.size} tiles for ${gridSize}x${gridSize} grid`);
+    logger.debug('Grid container children count:', gridContainer.children.length);
     tilesRef.current = tiles;
 
     // Compute world bounds for clamping based on isometric grid extents
@@ -163,7 +163,7 @@ export default function IsometricGrid({
       viewport.setZoom(1.5);
       viewport.moveCenter(gridCenterX, gridCenterY);
       centeredRef.current = true;
-      console.log(`Centered viewport on geometric center at (${gridCenterX}, ${gridCenterY})`);
+      logger.debug(`Centered viewport on geometric center at (${gridCenterX}, ${gridCenterY})`);
     }
 
     const halfW = tileWidth / 2;

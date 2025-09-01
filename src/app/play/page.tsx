@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import GameRenderer from '@/components/game/GameRenderer';
+import logger from '@/lib/logger';
 
 import { GameHUD, GameResources, GameTime } from '@/components/game/GameHUD';
 import { CouncilPanel, CouncilProposal } from '@/components/game/CouncilPanel';
@@ -19,6 +20,7 @@ import { FlavorEventDef, getRandomFlavorEvent } from '@/components/game/flavorEv
 import CrisisModal, { CrisisData } from '@/components/game/CrisisModal';
 import GoalBanner from '@/components/game/GoalBanner';
 import { useIdGenerator } from '@/hooks/useIdGenerator';
+
 
 interface GameState {
   id: string;
@@ -121,11 +123,11 @@ export default function PlayPage() {
     }
   }, [state]);
   const fetchState = useCallback(async () => {
-    console.log('Fetching state from /api/state');
+    logger.debug('Fetching state from /api/state');
     const res = await fetch("/api/state");
-    console.log('Response status:', res.status, res.ok);
+    logger.debug('Response status:', res.status, res.ok);
     const json = await res.json();
-    console.log('Response JSON:', json);
+    logger.debug('Response JSON:', json);
     if (!res.ok) throw new Error(json.error || "Failed to fetch state");
     setState(json);
   }, []);
@@ -178,7 +180,7 @@ export default function PlayPage() {
         await fetchState();
         await fetchProposals();
       } catch (e: any) {
-        console.error('Failed to connect to database:', e.message);
+        logger.error('Failed to connect to database:', e.message);
         setError(e.message);
       }
     })();
@@ -209,7 +211,7 @@ export default function PlayPage() {
     try {
       client = createSupabaseBrowserClient();
     } catch (e: any) {
-      console.warn('Realtime disabled:', e?.message || String(e));
+      logger.debug('Realtime disabled:', e?.message || String(e));
       return; // Early exit: supabase not configured in browser env
     }
 

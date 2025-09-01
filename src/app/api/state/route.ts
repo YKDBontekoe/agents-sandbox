@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
+import logger from '@/lib/logger'
 
 export async function GET() {
   try {
@@ -13,7 +14,7 @@ export async function GET() {
       .maybeSingle()
 
     if (error) {
-      console.error('Supabase error:', error.message)
+      logger.error('Supabase error:', error.message)
       return NextResponse.json(
         { error: `Database error: ${error.message}` },
         { status: 503 }
@@ -28,7 +29,7 @@ export async function GET() {
         .select('*')
         .single()
       if (createErr) {
-        console.error('Supabase create error:', createErr.message)
+        logger.error('Supabase create error:', createErr.message)
         return NextResponse.json(
           { error: 'Failed to create game state' },
           { status: 503 }
@@ -39,7 +40,7 @@ export async function GET() {
 
     return NextResponse.json(state)
   } catch (error) {
-    console.error('Supabase connection error:', error)
+    logger.error('Supabase connection error:', error)
     return NextResponse.json(
       { error: 'Service unavailable - database not configured' },
       { status: 503 }

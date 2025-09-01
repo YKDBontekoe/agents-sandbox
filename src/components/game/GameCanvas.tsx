@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import * as PIXI from "pixi.js";
 import { Viewport } from "pixi-viewport";
 import { useGameContext } from "./GameContext";
+import logger from "@/lib/logger";
 
 interface GameCanvasProps {
   width?: number;
@@ -18,7 +19,7 @@ export default function GameCanvas({
   onTileHover,
   onTileClick,
 }: GameCanvasProps) {
-  console.log('GameCanvas component mounted with props:', { width, height });
+  logger.debug("GameCanvas component mounted with props:", { width, height });
   
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const appRef = useRef<PIXI.Application | null>(null);
@@ -30,23 +31,23 @@ export default function GameCanvas({
   const { setApp, setViewport } = useGameContext();
 
   useEffect(() => {
-    console.log('GameCanvas useEffect triggered with width:', width, 'height:', height);
-    console.log('Canvas ref available:', !!canvasRef.current);
-    console.log('Is initialized:', isInitialized);
+    logger.debug("GameCanvas useEffect triggered with width:", width, "height:", height);
+    logger.debug("Canvas ref available:", !!canvasRef.current);
+    logger.debug("Is initialized:", isInitialized);
     
     if (!canvasRef.current) {
-      console.error('Canvas ref is not available!');
+      logger.error("Canvas ref is not available!");
       return;
     }
     
     if (isInitialized) {
-      console.log('Canvas already initialized, skipping');
+      logger.debug("Canvas already initialized, skipping");
       return;
     }
 
     const initPixi = async () => {
         const initializeCanvas = async () => {
-          console.log('Starting PIXI initialization...');
+          logger.debug("Starting PIXI initialization...");
         // Create PIXI Application with enhanced fallback options
         const app = new PIXI.Application();
         
@@ -73,13 +74,13 @@ export default function GameCanvas({
         const canvas = app.canvas as HTMLCanvasElement;
         
         contextLostHandlerRef.current = (event: Event) => {
-          console.warn('WebGL context lost, preventing default behavior');
+          logger.warn("WebGL context lost, preventing default behavior");
           event.preventDefault();
           setInitError('WebGL context lost. The game will attempt to restore automatically.');
         };
         
         contextRestoredHandlerRef.current = () => {
-          console.log('WebGL context restored, reinitializing...');
+          logger.debug("WebGL context restored, reinitializing...");
           setInitError(null);
           setIsInitialized(false);
           // Trigger reinitialization
@@ -160,15 +161,15 @@ export default function GameCanvas({
         setViewport(viewport);
 
         setIsInitialized(true);
-        console.log('PIXI Application initialized successfully');
-        console.log('App canvas dimensions:', app.canvas.width, 'x', app.canvas.height);
-        console.log('Viewport world size:', viewport.worldWidth, 'x', viewport.worldHeight);
-        console.log('Viewport position:', viewport.x, viewport.y);
-        console.log('Viewport scale:', viewport.scale.x, viewport.scale.y);
+        logger.debug("PIXI Application initialized successfully");
+        logger.debug("App canvas dimensions:", app.canvas.width, "x", app.canvas.height);
+        logger.debug("Viewport world size:", viewport.worldWidth, "x", viewport.worldHeight);
+        logger.debug("Viewport position:", viewport.x, viewport.y);
+        logger.debug("Viewport scale:", viewport.scale.x, viewport.scale.y);
       };
 
       const initializeFallbackCanvas = async () => {
-        console.log('Initializing fallback canvas with reduced settings...');
+        logger.debug("Initializing fallback canvas with reduced settings...");
         
         const app = new PIXI.Application();
         
@@ -217,30 +218,30 @@ export default function GameCanvas({
         setApp(app);
         setViewport(viewport);
         setIsInitialized(true);
-        console.log('Fallback canvas initialized successfully');
+        logger.debug("Fallback canvas initialized successfully");
       };
 
       try {
         await initializeCanvas();
       } catch (error) {
-        console.error('Failed to initialize game canvas:', error);
+        logger.error("Failed to initialize game canvas:", error);
         
         // Try fallback initialization with reduced settings
         try {
-          console.log('Attempting fallback canvas initialization...');
+          logger.debug("Attempting fallback canvas initialization...");
           await initializeFallbackCanvas();
         } catch (fallbackError) {
-          console.error('Fallback initialization also failed:', fallbackError);
+          logger.error("Fallback initialization also failed:", fallbackError);
           const errorMessage = fallbackError instanceof Error ? fallbackError.message : 'Unknown WebGL error';
           setInitError('Failed to initialize game canvas. Your browser may not support WebGL.');
           setIsInitialized(true); // Set to true to stop loading state
           
           // Provide helpful error messages based on common issues
           if (errorMessage.includes('WebGL')) {
-            console.warn('WebGL initialization failed. This may be due to:');
-            console.warn('- Hardware acceleration disabled');
-            console.warn('- Outdated graphics drivers');
-            console.warn('- Browser security settings');
+            logger.warn("WebGL initialization failed. This may be due to:");
+            logger.warn("- Hardware acceleration disabled");
+            logger.warn("- Outdated graphics drivers");
+            logger.warn("- Browser security settings");
           }
         }
       }

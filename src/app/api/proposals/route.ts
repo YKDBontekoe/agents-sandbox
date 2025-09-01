@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
+import logger from '@/lib/logger'
 
 export async function GET(_req: NextRequest) {
   try {
@@ -13,7 +14,7 @@ export async function GET(_req: NextRequest) {
       .limit(1)
       .maybeSingle()
     if (stateErr) {
-      console.error('Supabase error in proposals route:', stateErr.message)
+      logger.error('Supabase error in proposals route:', stateErr.message)
       return NextResponse.json(
         { error: 'Database connection failed' },
         { status: 503 }
@@ -28,7 +29,7 @@ export async function GET(_req: NextRequest) {
       .in('status', ['pending', 'accepted', 'rejected'])
       .order('created_at', { ascending: false })
     if (propErr) {
-      console.error('Supabase error fetching proposals:', propErr.message)
+      logger.error('Supabase error fetching proposals:', propErr.message)
       return NextResponse.json(
         { error: 'Failed to fetch proposals' },
         { status: 503 }
@@ -37,7 +38,7 @@ export async function GET(_req: NextRequest) {
 
     return NextResponse.json({ proposals })
   } catch (error) {
-    console.error('Supabase connection error in proposals route:', error)
+    logger.error('Supabase connection error in proposals route:', error)
     return NextResponse.json(
       { error: 'Service unavailable - database not configured' },
       { status: 503 }

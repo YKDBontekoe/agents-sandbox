@@ -8,6 +8,7 @@ import { GameProvider } from "./GameContext";
 import { Viewport } from "pixi-viewport";
 import * as PIXI from "pixi.js";
 import MiniMap from "./MiniMap";
+import logger from "@/lib/logger";
 
 interface GameRendererProps {
   width?: number;
@@ -25,7 +26,7 @@ function GameRendererContent({
   onTileHover,
   onTileClick,
 }: GameRendererProps) {
-  console.log('GameRendererContent rendering with:', { width, height, gridSize });
+  logger.debug("GameRendererContent rendering with:", { width, height, gridSize });
   const [showHelp, setShowHelp] = useState(true);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [dims, setDims] = useState<{ w: number; h: number }>({ w: width, h: height });
@@ -108,7 +109,7 @@ function GameRendererContent({
 }
 
 export default function GameRenderer({ children, ...props }: GameRendererProps) {
-  console.log('GameRenderer component rendering with props:', props);
+  logger.debug("GameRenderer component rendering with props:", props);
   
   const [app, setApp] = useState<PIXI.Application | null>(null);
   const [viewport, setViewport] = useState<Viewport | null>(null);

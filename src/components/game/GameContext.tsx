@@ -3,6 +3,7 @@
 import { createContext, useContext, ReactNode } from "react";
 import { Viewport } from "pixi-viewport";
 import * as PIXI from "pixi.js";
+import logger from "@/lib/logger";
 
 interface GameContextType {
   app: PIXI.Application | null;
@@ -36,7 +37,7 @@ export function GameProvider({
   setApp,
   setViewport,
 }: GameProviderProps) {
-  console.log('GameProvider rendering with:', { app: !!app, viewport: !!viewport });
+  logger.debug("GameProvider rendering with:", { app: !!app, viewport: !!viewport });
   
   return (
     <GameContext.Provider value={{ app, viewport, setApp, setViewport }}>
