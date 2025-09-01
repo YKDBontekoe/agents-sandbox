@@ -48,7 +48,7 @@ export default function MarkersLayer({ markers, tileWidth = 64, tileHeight = 32 
       const color = m.color ?? 0x2563eb; // indigo default
       g.position.set(wx, wy);
       // pin: small diamond + mast
-      g.lineStyle({ width: 2, color, alpha: 0.9 });
+      g.lineStyle(2, color, 0.9);
       g.beginFill(color, 0.15);
       g.drawPolygon([
         0, -10,

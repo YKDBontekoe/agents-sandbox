@@ -81,9 +81,9 @@ export default function EffectsLayer({ trigger, tileWidth = 64, tileHeight = 32 
     const duration = 900;
     const textDuration = 1200;
 
-    const tick = (delta: number) => {
-      // delta is frames; approximate time
-      const dt = (1000 / 60) * delta;
+    const tick = (ticker: PIXI.Ticker) => {
+      // deltaMS provides elapsed milliseconds since last frame
+      const dt = ticker.deltaMS;
       t += dt;
       const p = Math.min(1, t / duration);
 
@@ -91,7 +91,7 @@ export default function EffectsLayer({ trigger, tileWidth = 64, tileHeight = 32 
       const radius = 8 + p * 26;
       const alpha = 0.35 * (1 - p);
       ring.clear();
-      ring.lineStyle({ width: 2, color: 0x22c55e, alpha });
+      ring.lineStyle(2, 0x22c55e, alpha);
       ring.drawCircle(0, 0, radius);
 
       // Texts: fade in and float

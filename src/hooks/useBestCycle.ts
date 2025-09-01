@@ -23,11 +23,12 @@ export function useBestCycle(cycle: number) {
       try {
         const supabase = createSupabaseBrowserClient();
         const { data } = await supabase
-          .from<GameStateRow>('game_state')
+          .from('game_state')
           .select('cycle')
           .order('cycle', { ascending: false })
           .limit(1);
-        if (data && data.length > 0) remoteBest = data[0].cycle;
+        const rows = (data ?? []) as GameStateRow[];
+        if (rows.length > 0) remoteBest = rows[0].cycle;
       } catch {}
 
       const best = Math.max(localBest, remoteBest);
