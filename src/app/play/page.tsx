@@ -173,8 +173,8 @@ export default function PlayPage() {
           });
         }
       }
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
@@ -185,9 +185,10 @@ export default function PlayPage() {
       try {
         await fetchState();
         await fetchProposals();
-      } catch (e: any) {
-        logger.error('Failed to connect to database:', e.message);
-        setError(e.message);
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        logger.error('Failed to connect to database:', msg);
+        setError(msg);
       }
     })();
   }, [fetchState, fetchProposals]);
@@ -216,15 +217,16 @@ export default function PlayPage() {
     let client: ReturnType<typeof createSupabaseBrowserClient> | null = null;
     try {
       client = createSupabaseBrowserClient();
-    } catch (e: any) {
-      logger.debug('Realtime disabled:', e?.message || String(e));
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      logger.debug('Realtime disabled:', msg);
       return; // Early exit: supabase not configured in browser env
     }
 
     const channel = client
       .channel('game_changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'game_state' }, (payload: any) => {
-        const next = payload?.new;
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'game_state' }, (payload: { new: unknown }) => {
+        const next = payload?.new as GameState | null;
         if (next && typeof next === 'object') {
           setState(next);
         } else {
@@ -252,8 +254,8 @@ export default function PlayPage() {
       await fetchProposals();
       setGuideProgress(prev => ({ ...prev, generated: true }));
       setDismissedGuide(true);
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
@@ -266,8 +268,8 @@ export default function PlayPage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Failed to scry');
       await fetchProposals();
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
@@ -294,8 +296,8 @@ export default function PlayPage() {
         setTimeout(() => setAcceptedNotice(null), 4000);
       }
       await fetchProposals();
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
@@ -304,8 +306,9 @@ export default function PlayPage() {
   // Sim helpers
   const canAfford = useCallback((cost: Partial<SimResourcesLocal>) => {
     if (!simResources) return false;
-    return (['grain','coin','mana','favor'] as SimResourceKey[]).every(k => {
-      const need = (cost as any)[k] ?? 0; return (simResources as any)[k] >= need;
+    return (['grain','coin','mana','favor'] as (keyof SimResourcesLocal)[]).every(k => {
+      const need = cost[k] ?? 0;
+      return simResources[k] >= need;
     });
   }, [simResources]);
 
@@ -313,8 +316,9 @@ export default function PlayPage() {
     setSimResources(prev => {
       if (!prev) return prev;
       const next = { ...prev };
-      (['grain','coin','mana','favor'] as SimResourceKey[]).forEach(k => {
-        const need = (cost as any)[k] ?? 0; (next as any)[k] = Math.max(0, (next as any)[k] - need);
+      (['grain','coin','mana','favor'] as (keyof SimResourcesLocal)[]).forEach(k => {
+        const need = cost[k] ?? 0;
+        next[k] = Math.max(0, next[k] - need);
       });
       return next;
     });
@@ -519,7 +523,7 @@ export default function PlayPage() {
     id: p.id,
     title: p.title,
     description: p.description,
-    type: p.guild.toLowerCase() as any,
+    type: p.guild.toLowerCase() as CouncilProposal['type'],
     cost: p.predicted_delta,
     benefit: p.predicted_delta,
     risk: 25,
@@ -574,7 +578,10 @@ export default function PlayPage() {
                     className={`px-3 py-2 rounded border text-sm ${selectedBuildType === b.id ? 'bg-emerald-600 text-white border-emerald-700' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'}`}
                   >
                     <div className="font-medium">{b.name}</div>
-                    <div className="text-[11px] text-slate-500">Cost: {['coin','grain','mana','favor'].map(k => (b.cost as any)[k] ? `${k[0].toUpperCase()+k.slice(1)} ${(b.cost as any)[k]}` : null).filter(Boolean).join(', ') || 'Free'}</div>
+                    <div className="text-[11px] text-slate-500">Cost: {(['coin','grain','mana','favor'] as (keyof SimResourcesLocal)[])
+                      .map(k => b.cost[k] ? `${k[0].toUpperCase()+k.slice(1)} ${b.cost[k]}` : null)
+                      .filter(Boolean)
+                      .join(', ') || 'Free'}</div>
                   </button>
                 ))}
               </div>
