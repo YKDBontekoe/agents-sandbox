@@ -14,6 +14,10 @@ import EffectsLayer from '@/components/game/EffectsLayer';
 import HeatLayer from '@/components/game/HeatLayer';
 import MarkersLayer from '@/components/game/MarkersLayer';
 import SurvivalTracker from '@/components/game/SurvivalTracker';
+import FlavorEvent from '@/components/game/FlavorEvent';
+import { FlavorEventDef, getRandomFlavorEvent } from '@/components/game/flavorEvents';
+import CrisisModal, { CrisisData } from '@/components/game/CrisisModal';
+import GoalBanner from '@/components/game/GoalBanner';
 
 interface GameState {
   id: string;
@@ -50,6 +54,7 @@ export default function PlayPage() {
   const [error, setError] = useState<string | null>(null);
   const [isPaused, setIsPaused] = useState(true);
   const [timeRemaining, setTimeRemaining] = useState(120); // 2 minutes per cycle
+  const [crisis, setCrisis] = useState<CrisisData | null>(null);
   
   // Panel states
   const [isCouncilOpen, setIsCouncilOpen] = useState(false);
@@ -58,6 +63,7 @@ export default function PlayPage() {
   const [dismissedGuide, setDismissedGuide] = useState(false);
   const [acceptedNotice, setAcceptedNotice] = useState<{ title: string; delta: Record<string, number> } | null>(null);
   const [markers, setMarkers] = useState<{ id: string; x: number; y: number; label?: string }[]>([]);
+  const [flavorEvent, setFlavorEvent] = useState<FlavorEventDef | null>(null);
   // onboarding & guidance
   const [gameMode, setGameMode] = useState<'casual' | 'advanced'>('casual');
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -138,9 +144,27 @@ export default function PlayPage() {
       const res = await fetch(`/api/state/tick`, { method: "POST" });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Failed to tick");
-      setState(json);
+      setState(json.state);
       setTimeRemaining(120); // Reset timer
+      if (json.crisis) {
+        setIsPaused(true);
+        setCrisis(json.crisis);
+      }
       await fetchProposals();
+      if (Math.random() < 0.2) {
+        const ev = getRandomFlavorEvent();
+        setFlavorEvent(ev);
+        if (ev.delta) {
+          setState(prev => {
+            if (!prev) return prev;
+            const resources = { ...prev.resources };
+            for (const [k, v] of Object.entries(ev.delta!)) {
+              resources[k] = (resources[k] || 0) + v;
+            }
+            return { ...prev, resources };
+          });
+        }
+      }
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -488,6 +512,7 @@ export default function PlayPage() {
 
   return (
     <div className="h-screen bg-neutral-50 overflow-hidden relative flex flex-col">
+      <GoalBanner />
 
       <div className="flex-1 relative min-h-0">
 
@@ -778,8 +803,23 @@ export default function PlayPage() {
               <button onClick={() => { setAcceptedNotice(null); tick(); }} className="px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-sm">Advance Cycle</button>
               <button onClick={() => setAcceptedNotice(null)} className="px-3 py-1.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm">Later</button>
             </div>
-          </div>
         </div>
+      </div>
+      )}
+
+      {/* Flavor event dialog */}
+      {flavorEvent && (
+        <FlavorEvent event={flavorEvent} onClose={() => setFlavorEvent(null)} />
+      )}
+
+      {crisis && (
+        <CrisisModal
+          crisis={crisis}
+          onResolve={() => {
+            setCrisis(null);
+            setIsPaused(false);
+          }}
+        />
       )}
 
       {error && (

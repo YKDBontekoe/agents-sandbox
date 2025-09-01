@@ -8,6 +8,7 @@ create table if not exists game_state (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   cycle int not null default 1,
+  max_cycle int not null default 0,
   resources jsonb not null default '{"grain": 1000, "coin": 500, "mana": 200, "favor": 10, "unrest": 0, "threat": 0}',
   notes text
 );
