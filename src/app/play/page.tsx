@@ -13,6 +13,7 @@ import { createSupabaseBrowserClient } from '@/lib/supabase/browser'
 import EffectsLayer from '@/components/game/EffectsLayer';
 import HeatLayer from '@/components/game/HeatLayer';
 import MarkersLayer from '@/components/game/MarkersLayer';
+import SurvivalTracker from '@/components/game/SurvivalTracker';
 
 interface GameState {
   id: string;
@@ -684,31 +685,43 @@ export default function PlayPage() {
         </div>
       )}
 
-      {/* Objective Tracker */}
-      {!dismissedGuide && !showOnboarding && (
-        <div className="absolute top-4 right-4 z-40 max-w-sm w-[280px]">
-          <div className="bg-white/95 backdrop-blur-sm border border-slate-200 rounded-lg shadow-lg p-4">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-slate-900 font-semibold">Objectives</h3>
-              <button onClick={skipGuide} className="text-xs text-slate-500 hover:text-slate-900">Skip</button>
+      {/* Guide Objectives or Survival Tracker */}
+      {!showOnboarding && (
+        dismissedGuide ? (
+          state && (
+            <div className="absolute top-4 right-4 z-40 max-w-sm w-[280px]">
+              <SurvivalTracker
+                cycle={state.cycle}
+                unrest={state.resources.unrest || 0}
+                threat={state.resources.threat || 0}
+              />
             </div>
-            <ul className="text-sm text-slate-700 space-y-1">
-              <li className="flex items-center gap-2"><span className={`inline-block h-2.5 w-2.5 rounded-full ${guideProgress.selectedTile ? 'bg-emerald-500' : 'bg-slate-300'}`}></span>Select any tile</li>
-              <li className="flex items-center gap-2"><span className={`inline-block h-2.5 w-2.5 rounded-full ${guideProgress.openedCouncil ? 'bg-emerald-500' : 'bg-slate-300'}`}></span>Open the Council</li>
-              <li className="flex items-center gap-2"><span className={`inline-block h-2.5 w-2.5 rounded-full ${guideProgress.generated ? 'bg-emerald-500' : 'bg-slate-300'}`}></span>Summon proposals</li>
-              <li className="flex items-center gap-2"><span className={`inline-block h-2.5 w-2.5 rounded-full ${guideProgress.accepted ? 'bg-emerald-500' : 'bg-slate-300'}`}></span>Accept one proposal</li>
-              <li className="flex items-center gap-2"><span className={`inline-block h-2.5 w-2.5 rounded-full ${guideProgress.advanced ? 'bg-emerald-500' : 'bg-slate-300'}`}></span>Advance the cycle</li>
-            </ul>
-            {!guideProgress.advanced && (
-              <div className="mt-3 text-xs text-slate-500">Complete these steps to finish the intro.</div>
-            )}
-            {guideProgress.advanced && (
-              <div className="mt-3 flex justify-end">
-                <button onClick={skipGuide} className="px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-sm">Finish</button>
+          )
+        ) : (
+          <div className="absolute top-4 right-4 z-40 max-w-sm w-[280px]">
+            <div className="bg-white/95 backdrop-blur-sm border border-slate-200 rounded-lg shadow-lg p-4">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-slate-900 font-semibold">Objectives</h3>
+                <button onClick={skipGuide} className="text-xs text-slate-500 hover:text-slate-900">Skip</button>
               </div>
-            )}
+              <ul className="text-sm text-slate-700 space-y-1">
+                <li className="flex items-center gap-2"><span className={`inline-block h-2.5 w-2.5 rounded-full ${guideProgress.selectedTile ? 'bg-emerald-500' : 'bg-slate-300'}`}></span>Select any tile</li>
+                <li className="flex items-center gap-2"><span className={`inline-block h-2.5 w-2.5 rounded-full ${guideProgress.openedCouncil ? 'bg-emerald-500' : 'bg-slate-300'}`}></span>Open the Council</li>
+                <li className="flex items-center gap-2"><span className={`inline-block h-2.5 w-2.5 rounded-full ${guideProgress.generated ? 'bg-emerald-500' : 'bg-slate-300'}`}></span>Summon proposals</li>
+                <li className="flex items-center gap-2"><span className={`inline-block h-2.5 w-2.5 rounded-full ${guideProgress.accepted ? 'bg-emerald-500' : 'bg-slate-300'}`}></span>Accept one proposal</li>
+                <li className="flex items-center gap-2"><span className={`inline-block h-2.5 w-2.5 rounded-full ${guideProgress.advanced ? 'bg-emerald-500' : 'bg-slate-300'}`}></span>Advance the cycle</li>
+              </ul>
+              {!guideProgress.advanced && (
+                <div className="mt-3 text-xs text-slate-500">Complete these steps to finish the intro.</div>
+              )}
+              {guideProgress.advanced && (
+                <div className="mt-3 flex justify-end">
+                  <button onClick={skipGuide} className="px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-sm">Finish</button>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        )
       )}
 
       {/* Onboarding Modal */}
