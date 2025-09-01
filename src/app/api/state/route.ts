@@ -1,25 +1,13 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import logger from '@/lib/logger'
+import { getLatestGameState } from '@/lib/server/gameState'
 
 export async function GET() {
   try {
     const supabase = createSupabaseServerClient()
-    
-    const { data: state, error } = await supabase
-      .from('game_state')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-
-    if (error) {
-      logger.error('Supabase error:', error.message)
-      return NextResponse.json(
-        { error: `Database error: ${error.message}` },
-        { status: 503 }
-      )
-    }
+    const { state, error } = await getLatestGameState(supabase)
+    if (error) return error
 
     // If no state, create one
     if (!state) {
@@ -32,7 +20,7 @@ export async function GET() {
         logger.error('Supabase create error:', createErr.message)
         return NextResponse.json(
           { error: 'Failed to create game state' },
-          { status: 503 }
+          { status: 503 },
         )
       }
       return NextResponse.json(created)
@@ -43,7 +31,7 @@ export async function GET() {
     logger.error('Supabase connection error:', error)
     return NextResponse.json(
       { error: 'Service unavailable - database not configured' },
-      { status: 503 }
+      { status: 503 },
     )
   }
 }
