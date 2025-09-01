@@ -1,6 +1,7 @@
 import React from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as Tooltip from '@radix-ui/react-tooltip';
+import { Modal } from '../ui';
 
 export interface SeasonalEvent {
   id: string;
@@ -261,16 +262,16 @@ export const OmenPanel: React.FC<OmenPanelProps> = ({
   const canAffordReading = currentMana >= readingCost;
 
   return (
-    <Dialog.Root open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
-      <Dialog.Portal>
-        <Dialog.Overlay
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 data-[state=open]:opacity-100 data-[state=closed]:opacity-0 motion-safe:transition-opacity motion-safe:duration-200 motion-safe:data-[state=open]:animate-fade-in"
-        />
-        <Dialog.Content
-          className="card-elevated fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white/95 backdrop-blur-sm z-50 w-full max-w-6xl max-h-[90vh] overflow-hidden data-[state=open]:opacity-100 data-[state=closed]:opacity-0 data-[state=closed]:scale-95 motion-safe:transition-[opacity,transform] motion-safe:duration-200 motion-safe:data-[state=open]:animate-scale-in"
-        >
-          {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b border-neutral-200">
+    <Modal
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+      size="xl"
+      className="card-elevated bg-white/95 backdrop-blur-sm"
+    >
+      {/* Header */}
+      <div className="flex items-center justify-between p-6 border-b border-neutral-200">
             <div className="flex items-center gap-3">
               <span className="text-2xl">🔮</span>
               <div>
@@ -318,10 +319,10 @@ export const OmenPanel: React.FC<OmenPanelProps> = ({
                 </button>
               </Dialog.Close>
             </div>
-          </div>
+      </div>
 
-          {/* Content */}
-          <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
+      {/* Content */}
+      <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Timeline */}
               <div className="lg:col-span-1">
@@ -398,10 +399,8 @@ export const OmenPanel: React.FC<OmenPanelProps> = ({
                 )}
               </div>
             </div>
-          </div>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+      </div>
+    </Modal>
   );
 };
 
