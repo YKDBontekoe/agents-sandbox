@@ -1,7 +1,7 @@
 import React from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { ActionButton, ResourceIcon } from '../ui';
-import type { ResourceType } from '../ui/ResourceIcon';
+import type { ResourceType } from '@/lib/resources';
 
 export interface CrisisData {
   type: 'unrest' | 'threat';

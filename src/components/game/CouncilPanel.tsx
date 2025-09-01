@@ -1,7 +1,8 @@
 import React from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { GameResources } from './GameHUD';
-import { getResourceIcon, getResourceColor } from './resourceUtils';
+import { ResourceIcon } from '../ui';
+import type { ResourceType } from '@/lib/resources';
 
 export interface ProposalDelta {
   grain?: number;
@@ -50,12 +51,13 @@ const ResourceDelta: React.FC<{ delta: ProposalDelta; type: 'cost' | 'benefit' }
   return (
     <div className="flex flex-wrap gap-2">
       {entries.map(([resource, value]) => (
-        <div key={resource} className="flex items-center gap-1">
-          <span className="text-xs">{getResourceIcon(resource as keyof GameResources)}</span>
-          <span className={`text-xs font-mono ${getResourceColor(resource as keyof GameResources)}`}>
-            {value as number > 0 ? '+' : ''}{value}
-          </span>
-        </div>
+        <ResourceIcon
+          key={resource}
+          type={resource as ResourceType}
+          value={value as number}
+          delta={value as number}
+          className="text-xs"
+        />
       ))}
     </div>
   );
