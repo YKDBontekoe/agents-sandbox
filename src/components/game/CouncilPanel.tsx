@@ -2,6 +2,7 @@ import React from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { GameResources } from './GameHUD';
 import { getResourceIcon, getResourceColor } from './resourceUtils';
+import { ActionButton } from '../ui';
 
 export interface ProposalDelta {
   grain?: number;
@@ -184,33 +185,26 @@ const ProposalCard: React.FC<{
       {/* Actions */}
       <div className="flex gap-2">
         {proposal.canScry && !proposal.scryResult && (proposal.status ?? 'pending') === 'pending' && (
-          <button
-            onClick={onScry}
-            className="px-3 py-1 bg-accent hover:opacity-80 text-inverse text-xs rounded transition-colors"
-          >
+          <ActionButton onClick={onScry} variant="accent" className="px-3 py-1 text-xs">
             🔮 Scry
-          </button>
+          </ActionButton>
         )}
-        <button
+        <ActionButton
           onClick={onAccept}
           disabled={!isActionable}
-          className={`px-3 py-1 text-xs rounded transition-colors ${
-            isActionable
-              ? 'bg-success hover:opacity-80 text-inverse'
-              : 'bg-muted text-muted cursor-not-allowed'
-          }`}
+          variant="success"
+          className="px-3 py-1 text-xs"
         >
           ✓ Accept
-        </button>
-        <button
+        </ActionButton>
+        <ActionButton
           onClick={onReject}
           disabled={(proposal.status ?? 'pending') !== 'pending'}
-          className={`px-3 py-1 text-inverse text-xs rounded transition-colors ${
-            (proposal.status ?? 'pending') === 'pending' ? 'bg-danger hover:opacity-80' : 'bg-muted text-muted cursor-not-allowed'
-          }`}
+          variant="danger"
+          className="px-3 py-1 text-xs"
         >
           ✗ Reject
-        </button>
+        </ActionButton>
       </div>
 
       {/* Affordability Warning */}
@@ -257,17 +251,14 @@ export const CouncilPanel: React.FC<CouncilPanelProps> = ({
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <button
+              <ActionButton
                 onClick={onGenerateProposals}
                 disabled={!canGenerateProposals}
-                className={`px-4 py-2 rounded text-sm font-medium transition-colors ${
-                  canGenerateProposals
-                    ? 'bg-primary hover:bg-secondary text-inverse'
-                    : 'bg-muted text-muted cursor-not-allowed'
-                }`}
+                variant="primary"
+                className="px-4 py-2 text-sm font-medium"
               >
                 📜 Summon Proposals
-              </button>
+              </ActionButton>
               <Dialog.Close asChild>
                 <button className="p-2 hover:bg-muted rounded text-muted hover:text-foreground transition-colors">
                   ✕
@@ -285,17 +276,14 @@ export const CouncilPanel: React.FC<CouncilPanelProps> = ({
                 <p className="text-muted mb-4">
                   The council chamber is quiet. Summon your advisors to generate new proposals.
                 </p>
-                <button
+                <ActionButton
                   onClick={onGenerateProposals}
                   disabled={!canGenerateProposals}
-                  className={`px-6 py-3 rounded font-medium transition-colors ${
-                    canGenerateProposals
-                      ? 'bg-primary hover:bg-secondary text-inverse'
-                      : 'bg-muted text-muted cursor-not-allowed'
-                  }`}
-              >
-                📜 Summon Proposals
-              </button>
+                  variant="primary"
+                  className="px-6 py-3 font-medium"
+                >
+                  📜 Summon Proposals
+                </ActionButton>
               </div>
             ) : (
               <div className="grid gap-4">
