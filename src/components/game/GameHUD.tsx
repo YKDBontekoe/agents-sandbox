@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faPlay,
@@ -12,9 +12,6 @@ import {
   faMagnifyingGlass
 } from '@/lib/icons';
 import { ActionButton, ResourceIcon } from '../ui';
-import * as Dialog from '@radix-ui/react-dialog';
-import * as Tooltip from '@radix-ui/react-tooltip';
-import { getResourceIcon, getResourceColor } from './resourceUtils';
 import '../../styles/design-tokens.css';
 import '../../styles/animations.css';
 
@@ -108,6 +105,34 @@ export const GameHUD: React.FC<GameHUDProps> = ({
   onOpenOmens,
   highlightAdvance = false
 }) => {
+  const prevResources = useRef<GameResources>(resources);
+  const [resourceChanges, setResourceChanges] = useState<Record<keyof GameResources, number | null>>({
+    grain: null,
+    coin: null,
+    mana: null,
+    favor: null,
+    unrest: null,
+    threat: null
+  });
+
+  useEffect(() => {
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    (Object.keys(resources) as (keyof GameResources)[]).forEach((key) => {
+      const prev = prevResources.current[key];
+      const curr = resources[key];
+      if (prev !== curr) {
+        const delta = curr - prev;
+        setResourceChanges((changes) => ({ ...changes, [key]: delta }));
+        const timer = setTimeout(() => {
+          setResourceChanges((changes) => ({ ...changes, [key]: null }));
+        }, 1000);
+        timers.push(timer);
+      }
+    });
+    prevResources.current = { ...resources };
+    return () => timers.forEach((t) => clearTimeout(t));
+  }, [resources]);
+
   return (
     <div className="absolute inset-0 z-50 pointer-events-none animate-fade-in flex flex-col">
       {/* Top HUD Bar - Mobile optimized */}
@@ -132,12 +157,12 @@ export const GameHUD: React.FC<GameHUDProps> = ({
             className="grid grid-cols-6 sm:grid-cols-6 md:grid-cols-3 xl:grid-cols-6 2xl:grid-cols-3"
             style={{ gap: 'var(--spacing-xs)' }}
           >
-            <ResourceIcon type="grain" value={resources.grain} className="animate-scale-in stagger-1" />
-            <ResourceIcon type="coin" value={resources.coin} className="animate-scale-in stagger-2" />
-            <ResourceIcon type="mana" value={resources.mana} className="animate-scale-in stagger-3" />
-            <ResourceIcon type="favor" value={resources.favor} className="animate-scale-in stagger-4" />
-            <ResourceIcon type="unrest" value={resources.unrest} className="animate-scale-in stagger-5" />
-            <ResourceIcon type="threat" value={resources.threat} className="animate-scale-in stagger-6" />
+            <ResourceIcon type="grain" value={resources.grain} delta={resourceChanges.grain} className="animate-scale-in stagger-1" />
+            <ResourceIcon type="coin" value={resources.coin} delta={resourceChanges.coin} className="animate-scale-in stagger-2" />
+            <ResourceIcon type="mana" value={resources.mana} delta={resourceChanges.mana} className="animate-scale-in stagger-3" />
+            <ResourceIcon type="favor" value={resources.favor} delta={resourceChanges.favor} className="animate-scale-in stagger-4" />
+            <ResourceIcon type="unrest" value={resources.unrest} delta={resourceChanges.unrest} className="animate-scale-in stagger-5" />
+            <ResourceIcon type="threat" value={resources.threat} delta={resourceChanges.threat} className="animate-scale-in stagger-6" />
           </div>
         </div>
 
