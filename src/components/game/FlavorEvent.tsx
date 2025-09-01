@@ -1,5 +1,6 @@
 import { FlavorEventDef } from './flavorEvents';
-import { getResourceColor, getResourceIcon, ResourceType } from './resourceUtils';
+import { ResourceIcon } from '../ui';
+import type { ResourceType } from '@/lib/resources';
 
 interface Props {
   event: FlavorEventDef;
@@ -25,10 +26,13 @@ export default function FlavorEvent({ event, onClose }: Props) {
         {event.delta && Object.keys(event.delta).length > 0 && (
           <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
             {Object.entries(event.delta).map(([key, value]) => (
-              <div key={key} className="flex items-center gap-1">
-                <span className={getResourceColor(key as ResourceType)}>{getResourceIcon(key as ResourceType)}</span>
-                <span className="font-mono">{value! >= 0 ? '+' : ''}{value}</span>
-              </div>
+              <ResourceIcon
+                key={key}
+                type={key as ResourceType}
+                value={value!}
+                delta={value!}
+                className="text-sm"
+              />
             ))}
           </div>
         )}

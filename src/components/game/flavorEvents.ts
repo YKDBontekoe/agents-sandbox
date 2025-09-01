@@ -1,4 +1,4 @@
-import { ResourceType } from './resourceUtils';
+import type { ResourceType } from '@/lib/resources';
 
 export interface FlavorEventDef {
   message: string;
