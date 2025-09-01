@@ -8,6 +8,10 @@ create extension if not exists pgcrypto;
 alter table if exists game_state
   add column if not exists updated_at timestamptz not null default now();
 
+-- Ensure max_cycle column exists on game_state
+alter table if exists game_state
+  add column if not exists max_cycle int not null default 0;
+
 -- Ensure proposals index exists
 create index if not exists proposals_state_status_idx on proposals(state_id, status);
 
