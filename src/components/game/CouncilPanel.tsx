@@ -3,6 +3,8 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { Modal } from '../ui';
 import { GameResources } from './GameHUD';
 import { getResourceIcon, getResourceColor } from './resourceUtils';
+import { CategoryIcon } from '../ui';
+import { CategoryType } from '@/lib/categories';
 
 export interface ProposalDelta {
   grain?: number;
@@ -17,7 +19,7 @@ export interface CouncilProposal {
   id: string;
   title: string;
   description: string;
-  type: 'economic' | 'military' | 'diplomatic' | 'mystical' | 'infrastructure';
+  type: CategoryType;
   cost: ProposalDelta;
   benefit: ProposalDelta;
   risk: number; // 0-100 percentage
@@ -69,25 +71,15 @@ const ProposalCard: React.FC<{
   onReject: () => void;
   onScry: () => void;
 }> = ({ proposal, currentResources, onAccept, onReject, onScry }) => {
-  const getTypeColor = (type: CouncilProposal['type']) => {
+  const getTypeColor = (type: CategoryType) => {
     switch (type) {
       case 'economic': return 'bg-yellow-100 text-yellow-800 border border-yellow-200';
       case 'military': return 'bg-red-100 text-red-800 border border-red-200';
       case 'diplomatic': return 'bg-blue-100 text-blue-800 border border-blue-200';
       case 'mystical': return 'bg-purple-100 text-purple-800 border border-purple-200';
       case 'infrastructure': return 'bg-green-100 text-green-800 border border-green-200';
+      case 'social': return 'bg-pink-100 text-pink-800 border border-pink-200';
       default: return 'bg-gray-100 text-gray-800 border border-gray-200';
-    }
-  };
-
-  const getTypeIcon = (type: CouncilProposal['type']) => {
-    switch (type) {
-      case 'economic': return '💰';
-      case 'military': return '⚔️';
-      case 'diplomatic': return '🤝';
-      case 'mystical': return '🔮';
-      case 'infrastructure': return '🏗️';
-      default: return '📋';
     }
   };
 
@@ -112,7 +104,7 @@ const ProposalCard: React.FC<{
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-2">
           <span className={`px-2 py-1 rounded text-xs font-medium ${getTypeColor(proposal.type)}`}>
-            {getTypeIcon(proposal.type)} {proposal.type.toUpperCase()}
+            <CategoryIcon category={proposal.type} className="text-xs" /> {proposal.type.toUpperCase()}
           </span>
           <div className="flex items-center gap-1">
             <span className="text-xs text-muted">Risk:</span>

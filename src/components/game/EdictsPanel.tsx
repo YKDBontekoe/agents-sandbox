@@ -6,13 +6,15 @@ import * as Tooltip from '@radix-ui/react-tooltip';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faCrown, faScroll, faXmark, faLock } from '@/lib/icons';
 import { CategoryIcon, Modal } from '../ui';
+import { CategoryIcon } from '../ui';
+import { CategoryType, CATEGORY_TYPES } from '@/lib/categories';
 
 export interface EdictSetting {
   id: string;
   name: string;
   description: string;
   type: 'slider' | 'toggle';
-  category: 'economic' | 'military' | 'social' | 'mystical';
+  category: CategoryType;
   currentValue: number; // 0-100 for sliders, 0/1 for toggles
   defaultValue: number;
   cost?: number; // Favor cost to change
@@ -159,11 +161,13 @@ const CategorySection: React.FC<{
   
   if (categoryEdicts.length === 0) return null;
 
-  const categoryNames = {
+  const categoryNames: Record<CategoryType, string> = {
     economic: 'Economic Policy',
     military: 'Military Doctrine',
     social: 'Social Order',
-    mystical: 'Mystical Arts'
+    mystical: 'Mystical Arts',
+    diplomatic: 'Diplomacy',
+    infrastructure: 'Infrastructure',
   };
 
   return (
@@ -250,7 +254,7 @@ export const EdictsPanel: React.FC<EdictsPanelProps> = ({
       <div className="flex flex-col h-[calc(90vh-120px)]">
             <div className="flex-1 p-6 overflow-y-auto">
               <div className="space-y-8">
-                {(['economic', 'military', 'social', 'mystical'] as const).map(category => (
+                {CATEGORY_TYPES.filter(category => edicts.some(e => e.category === category)).map(category => (
                   <CategorySection
                     key={category}
                     category={category}
