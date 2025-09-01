@@ -1,6 +1,7 @@
 import React from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as Tooltip from '@radix-ui/react-tooltip';
+import { ActionButton } from '../ui';
 
 export interface SeasonalEvent {
   id: string;
@@ -287,17 +288,14 @@ export const OmenPanel: React.FC<OmenPanelProps> = ({
                 <Tooltip.Provider>
                   <Tooltip.Root>
                     <Tooltip.Trigger asChild>
-                      <button
+                      <ActionButton
                         onClick={onRequestReading}
                         disabled={!canRequestReading || !canAffordReading}
-                        className={`btn-primary text-sm ${
-                          canRequestReading && canAffordReading
-                            ? ''
-                            : 'opacity-50 cursor-not-allowed'
-                        }`}
+                        variant="primary"
+                        className="text-sm"
                       >
                         🔮 Divine Reading (✨ {readingCost})
-                      </button>
+                      </ActionButton>
                     </Tooltip.Trigger>
                     {(!canRequestReading || !canAffordReading) && (
                       <Tooltip.Portal>
