@@ -9,7 +9,7 @@ import { GameHUD, GameResources, GameTime } from '@/components/game/GameHUD';
 import { CouncilPanel, CouncilProposal } from '@/components/game/CouncilPanel';
 import { EdictsPanel, EdictSetting } from '@/components/game/EdictsPanel';
 import { OmenPanel, SeasonalEvent, OmenReading } from '@/components/game/OmenPanel';
-import DistrictSprites, { District } from '@/components/game/DistrictSprites';
+import DistrictSprites, { District } from '@/components/game/districts';
 import { LeylineSystem, Leyline } from '@/components/game/LeylineSystem';
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
 import EffectsLayer from '@/components/game/EffectsLayer';
@@ -51,6 +51,13 @@ const SIM_BUILDINGS: Record<string, SimBuildingType> = {
   shrine: { id: 'shrine', name: 'Shrine', cost: { coin: 25, mana: 5 }, production: { favor: 2 } },
 };
 
+const BUILDABLE_TILES: Record<keyof typeof SIM_BUILDINGS, string[]> = {
+  farm: ['grass'],
+  house: ['grass'],
+  shrine: ['grass'],
+};
+
+
 export default function PlayPage() {
   const generateId = useIdGenerator();
   const [layoutPreset, setLayoutPreset] = useUserPreference<LayoutPreset>(LAYOUT_PRESET_KEY, 'compact');
@@ -87,6 +94,21 @@ export default function PlayPage() {
   // Game world state
   const [districts, setDistricts] = useState<District[]>([]);
   const [leylines, setLeylines] = useState<Leyline[]>([]);
+  const [gridSize, setGridSize] = useState(20);
+  const [tileTypes, setTileTypes] = useState<string[][]>([]);
+  useEffect(() => {
+    async function loadMap() {
+      try {
+        const res = await fetch(`/api/map?size=${gridSize}`);
+        if (!res.ok) throw new Error('Failed to load map');
+        const data = await res.json();
+        setTileTypes(data.map);
+      } catch (err) {
+        logger.error('Map load error', err);
+      }
+    }
+    loadMap();
+  }, [gridSize]);
   const [selectedTile, setSelectedTile] = useState<{ x: number; y: number } | null>(null);
   const [selectedLeyline, setSelectedLeyline] = useState<Leyline | null>(null);
   const [isDrawingMode, setIsDrawingMode] = useState(false);
@@ -94,7 +116,7 @@ export default function PlayPage() {
 
   // Tooltip state
   const [cursorPos, setCursorPos] = useState({ x: 0, y: 0 });
-  const [tooltip, setTooltip] = useState<{ x: number; y: number; district: District } | null>(null);
+  const [tooltip, setTooltip] = useState<{ x: number; y: number; district?: District; tileType?: string } | null>(null);
   
   // Panels data (empty until backend features are implemented)
   const [edicts, setEdicts] = useState<EdictSetting[]>([]);
@@ -131,6 +153,7 @@ export default function PlayPage() {
       simInitRef.current = true;
     }
   }, [state]);
+
   const fetchState = useCallback(async () => {
     logger.debug('Fetching state from /api/state');
     const res = await fetch("/api/state");
@@ -342,27 +365,31 @@ export default function PlayPage() {
     // celebratory marker
     setMarkers(prev => [{ id: `harvest-${generateId()}`, x: selectedTile?.x ?? 10, y: selectedTile?.y ?? 10, label: 'Harvest' }, ...prev]);
   }, [placedBuildings, selectedTile]);
-  const handleTileHover = (x: number, y: number) => {
+  const handleTileHover = (x: number, y: number, tileType?: string) => {
     setSelectedTile({ x, y });
     const district = districts.find(d => d.gridX === x && d.gridY === y);
+    const tt = tileType || tileTypes[y]?.[x];
     if (district) {
-      setTooltip({ x: cursorPos.x, y: cursorPos.y, district });
+      setTooltip({ x: cursorPos.x, y: cursorPos.y, district, tileType: tt });
+    } else if (tt) {
+      setTooltip({ x: cursorPos.x, y: cursorPos.y, tileType: tt });
     } else {
       setTooltip(null);
     }
   };
 
-  const handleDistrictHover = (district: District | null, e?: PIXI.FederatedPointerEvent) => {
+  const handleDistrictHover = (district: District | null, tileType?: string, e?: PIXI.FederatedPointerEvent) => {
     if (district) {
       const x = e?.clientX ?? cursorPos.x;
       const y = e?.clientY ?? cursorPos.y;
-      setTooltip({ x, y, district });
+      const tt = tileType || tileTypes[district.gridY]?.[district.gridX];
+      setTooltip({ x, y, district, tileType: tt });
     } else {
       setTooltip(null);
     }
   };
 
-  const handleTileClick = (x: number, y: number) => {
+  const handleTileClick = (x: number, y: number, tileType?: string) => {
     setSelectedTile({ x, y });
 
     // Sim Mode: place building when a type is selected
@@ -378,6 +405,12 @@ export default function PlayPage() {
         return;
       }
       const def = SIM_BUILDINGS[selectedBuildType];
+      const tt = tileType || tileTypes[y]?.[x];
+      if (tt && !BUILDABLE_TILES[selectedBuildType].includes(tt)) {
+        setGuideHint('Cannot build on this tile.');
+        setTimeout(() => setGuideHint(null), 1500);
+        return;
+      }
       if (!canAfford(def.cost)) {
         setGuideHint('Not enough resources to build.');
         setTimeout(() => setGuideHint(null), 1500);
@@ -598,8 +631,8 @@ export default function PlayPage() {
           </>
         )}
 
-        <GameRenderer onTileHover={handleTileHover} onTileClick={handleTileClick}>
-          <DistrictSprites districts={districts} onDistrictHover={handleDistrictHover} />
+        <GameRenderer gridSize={gridSize} tileTypes={tileTypes} onTileHover={handleTileHover} onTileClick={handleTileClick}>
+          <DistrictSprites districts={districts} tileTypes={tileTypes} onDistrictHover={handleDistrictHover} />
           <LeylineSystem
             leylines={leylines}
             onLeylineCreate={handleLeylineCreate}
@@ -607,7 +640,7 @@ export default function PlayPage() {
             selectedLeyline={selectedLeyline}
             isDrawingMode={isDrawingMode}
           />
-          <HeatLayer gridSize={20} tileWidth={64} tileHeight={32} unrest={resources.unrest} threat={resources.threat} />
+          <HeatLayer gridSize={gridSize} tileWidth={64} tileHeight={32} unrest={resources.unrest} threat={resources.threat} />
           {acceptedNotice && (
             <EffectsLayer
               trigger={{
@@ -631,8 +664,15 @@ export default function PlayPage() {
             className="pointer-events-none fixed bg-white rounded shadow px-2 py-1 text-xs"
             style={{ left: tooltip.x + 12, top: tooltip.y + 12 }}
           >
-            <div className="font-semibold capitalize">{tooltip.district.type}</div>
-            <div className="text-[10px] text-slate-500">Tier {tooltip.district.tier}</div>
+            {tooltip.tileType && (
+              <div className="capitalize">{tooltip.tileType}</div>
+            )}
+            {tooltip.district && (
+              <>
+                <div className="font-semibold capitalize">{tooltip.district.type}</div>
+                <div className="text-[10px] text-slate-500">Tier {tooltip.district.tier}</div>
+              </>
+            )}
           </div>
         )}
       </div>

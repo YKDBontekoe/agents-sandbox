@@ -1,15 +1,17 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import * as PIXI from "pixi.js";
 import { useGameContext } from "./GameContext";
 import logger from "@/lib/logger";
+import { gridToWorld, TILE_COLORS } from "@/lib/isometric";
 
 interface GridTile {
   x: number;
   y: number;
   worldX: number;
   worldY: number;
+  tileType: string;
   sprite: PIXI.Graphics;
 }
 
@@ -17,14 +19,16 @@ interface IsometricGridProps {
   gridSize: number;
   tileWidth: number;
   tileHeight: number;
-  onTileHover?: (x: number, y: number) => void;
-  onTileClick?: (x: number, y: number) => void;
+  tileTypes?: string[][];
+  onTileHover?: (x: number, y: number, tileType?: string) => void;
+  onTileClick?: (x: number, y: number, tileType?: string) => void;
 }
 
 export default function IsometricGrid({
   gridSize,
   tileWidth = 64,
   tileHeight = 32,
+  tileTypes = [],
   onTileHover,
   onTileClick,
 }: IsometricGridProps) {
@@ -36,29 +40,16 @@ export default function IsometricGrid({
   const centeredRef = useRef<boolean>(false);
   const initializedRef = useRef<boolean>(false);
 
-  // Convert grid coordinates to world coordinates (isometric)
-  const gridToWorld = (gridX: number, gridY: number) => {
-    const worldX = (gridX - gridY) * (tileWidth / 2);
-    const worldY = (gridX + gridY) * (tileHeight / 2);
-    return { worldX, worldY };
-  };
-
-  // Convert world coordinates to grid coordinates
-  const worldToGrid = (worldX: number, worldY: number) => {
-    const gridX = Math.floor((worldX / (tileWidth / 2) + worldY / (tileHeight / 2)) / 2);
-    const gridY = Math.floor((worldY / (tileHeight / 2) - worldX / (tileWidth / 2)) / 2);
-    return { gridX, gridY };
-  };
-
   // Create a tile sprite
-  const createTileSprite = (gridX: number, gridY: number) => {
-    const { worldX, worldY } = gridToWorld(gridX, gridY);
+  const createTileSprite = useCallback((gridX: number, gridY: number) => {
+    const { worldX, worldY } = gridToWorld(gridX, gridY, tileWidth, tileHeight);
+    const tileType = tileTypes[gridY]?.[gridX] || "grass";
     
     const tile = new PIXI.Graphics();
     
-    // Draw isometric tile shape (lighter theme)
-    tile.fill({ color: 0xdde7f7, alpha: 0.35 });
-    tile.setStrokeStyle({ width: 1, color: 0xa5b4fc, alpha: 0.9 });
+    const color = TILE_COLORS[tileType] ?? 0xdde7f7;
+    tile.fill({ color, alpha: 0.9 });
+    tile.setStrokeStyle({ width: 1, color: 0x374151, alpha: 0.9 });
     
     // Isometric diamond shape
     tile.moveTo(0, -tileHeight / 2);
@@ -80,10 +71,10 @@ export default function IsometricGrid({
         hoveredTileRef.current.sprite.tint = 0xffffff;
       }
       
-      hoveredTileRef.current = { x: gridX, y: gridY, worldX, worldY, sprite: tile };
+      hoveredTileRef.current = { x: gridX, y: gridY, worldX, worldY, tileType, sprite: tile };
       tile.tint = 0x4f46e5; // indigo highlight
-      
-      onTileHover?.(gridX, gridY);
+
+      onTileHover?.(gridX, gridY, tileType);
     });
     
     tile.on('pointerout', () => {
@@ -99,14 +90,14 @@ export default function IsometricGrid({
         selectedTileRef.current.sprite.tint = 0xffffff;
       }
       
-      selectedTileRef.current = { x: gridX, y: gridY, worldX, worldY, sprite: tile };
+      selectedTileRef.current = { x: gridX, y: gridY, worldX, worldY, tileType, sprite: tile };
       tile.tint = 0x10b981; // emerald for selection
-      
-      onTileClick?.(gridX, gridY);
+
+      onTileClick?.(gridX, gridY, tileType);
     });
-    
-    return { x: gridX, y: gridY, worldX, worldY, sprite: tile };
-  };
+
+    return { x: gridX, y: gridY, worldX, worldY, tileType, sprite: tile };
+  }, [tileHeight, tileTypes, tileWidth, onTileHover, onTileClick]);
 
   // Initialize grid
   useEffect(() => {
@@ -145,10 +136,10 @@ export default function IsometricGrid({
 
     // Compute world bounds for clamping based on isometric grid extents
     // For an isometric grid, we need to find the actual world bounds of all tiles
-    const topLeft = gridToWorld(0, 0);
-    const topRight = gridToWorld(gridSize - 1, 0);
-    const bottomLeft = gridToWorld(0, gridSize - 1);
-    const bottomRight = gridToWorld(gridSize - 1, gridSize - 1);
+    const topLeft = gridToWorld(0, 0, tileWidth, tileHeight);
+    const topRight = gridToWorld(gridSize - 1, 0, tileWidth, tileHeight);
+    const bottomLeft = gridToWorld(0, gridSize - 1, tileWidth, tileHeight);
+    const bottomRight = gridToWorld(gridSize - 1, gridSize - 1, tileWidth, tileHeight);
     
     const allX = [topLeft.worldX, topRight.worldX, bottomLeft.worldX, bottomRight.worldX];
     const allY = [topLeft.worldY, topRight.worldY, bottomLeft.worldY, bottomRight.worldY];
@@ -208,7 +199,7 @@ export default function IsometricGrid({
       centeredRef.current = false;
       initializedRef.current = false;
     };
-  }, [viewport, gridSize, tileWidth, tileHeight]);
+  }, [viewport, gridSize, tileWidth, tileHeight, createTileSprite]);
 
   // Performance optimization: Level of Detail (LOD)
   useEffect(() => {
@@ -230,9 +221,10 @@ export default function IsometricGrid({
           const lineWidth = Math.max(0.5, Math.min(2, scale * 1.5));
           // Only redraw on zoom changes (this effect listens to 'zoomed' only now)
           tile.sprite.clear();
-          
-          tile.sprite.fill({ color: 0xdde7f7, alpha: 0.35 });
-          tile.sprite.setStrokeStyle({ width: lineWidth, color: 0xa5b4fc, alpha: 0.9 });
+
+          const baseColor = TILE_COLORS[tile.tileType] ?? 0xdde7f7;
+          tile.sprite.fill({ color: baseColor, alpha: 0.9 });
+          tile.sprite.setStrokeStyle({ width: lineWidth, color: 0x374151, alpha: 0.9 });
           
           tile.sprite.moveTo(0, -tileHeight / 2);
           tile.sprite.lineTo(tileWidth / 2, 0);

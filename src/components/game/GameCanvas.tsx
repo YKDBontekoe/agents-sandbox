@@ -9,8 +9,8 @@ import logger from "@/lib/logger";
 interface GameCanvasProps {
   width?: number;
   height?: number;
-  onTileHover?: (x: number, y: number) => void;
-  onTileClick?: (x: number, y: number) => void;
+  onTileHover?: (x: number, y: number, tileType?: string) => void;
+  onTileClick?: (x: number, y: number, tileType?: string) => void;
 }
 
 export default function GameCanvas({
