@@ -26,20 +26,20 @@ describe('resourceUtils', () => {
 
 describe('applyProduction', () => {
   const catalog: Record<string, SimBuildingDef> = {
-    mill: { inputs: { grain: 2 }, outputs: { coin: 1 } }
+    mill: { inputs: { grain: 2 }, outputs: { coin: 1 }, workCapacity: 1 }
   };
 
   it('produces outputs when inputs are available', () => {
-    const res: SimResources = { grain: 5, coin: 0, mana: 0, favor: 0, population: 0 };
-    const { updated, shortages } = applyProduction(res, [{ typeId: 'mill' }], catalog);
+    const res: SimResources = { grain: 5, coin: 0, mana: 0, favor: 0, workers: 0 };
+    const { updated, shortages } = applyProduction(res, [{ typeId: 'mill', workers: 1 }], catalog);
     expect(updated.grain).toBe(3);
     expect(updated.coin).toBe(1);
     expect(shortages).toEqual({});
   });
 
   it('records shortages when inputs are missing', () => {
-    const res: SimResources = { grain: 1, coin: 0, mana: 0, favor: 0, population: 0 };
-    const { updated, shortages } = applyProduction(res, [{ typeId: 'mill' }], catalog);
+    const res: SimResources = { grain: 1, coin: 0, mana: 0, favor: 0, workers: 0 };
+    const { updated, shortages } = applyProduction(res, [{ typeId: 'mill', workers: 1 }], catalog);
     expect(updated.grain).toBe(1);
     expect(updated.coin).toBe(0);
     expect(shortages).toEqual({ grain: 1 });
@@ -47,7 +47,7 @@ describe('applyProduction', () => {
 });
 
 describe('canAfford and applyCost', () => {
-  const base: SimResources = { grain: 5, coin: 5, mana: 5, favor: 5, population: 0 };
+  const base: SimResources = { grain: 5, coin: 5, mana: 5, favor: 5, workers: 0 };
 
   it('determines affordability correctly', () => {
     expect(canAfford({ grain: 3, coin: 2 }, base)).toBe(true);

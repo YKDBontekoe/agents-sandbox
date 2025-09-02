@@ -66,7 +66,14 @@ export async function POST() {
   const newMax = Math.max(Number(state.max_cycle ?? 0), newCycle)
   const { data: updated, error: upErr } = await supabase
     .from('game_state')
-    .update({ cycle: newCycle, max_cycle: newMax, resources, updated_at: new Date().toISOString() })
+    .update({
+      cycle: newCycle,
+      max_cycle: newMax,
+      resources,
+      workers: state.workers ?? 0,
+      buildings: state.buildings ?? [],
+      updated_at: new Date().toISOString(),
+    })
     .eq('id', state.id)
     .select('*')
     .single()

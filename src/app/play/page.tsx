@@ -8,6 +8,7 @@ import logger from '@/lib/logger';
 import { GameHUD, GameResources, GameTime } from '@/components/game/GameHUD';
 import { SimResources, applyProduction, canAfford, applyCost } from '@/components/game/resourceUtils';
 import { SIM_BUILDINGS, BUILDABLE_TILES } from '@/components/game/simCatalog';
+import WorkerPanel from '@/components/game/WorkerPanel';
 import { CouncilPanel, CouncilProposal } from '@/components/game/CouncilPanel';
 import { EdictsPanel, EdictSetting } from '@/components/game/EdictsPanel';
 import { OmenPanel, SeasonalEvent, OmenReading } from '@/components/game/OmenPanel';
@@ -28,10 +29,21 @@ import { LayoutPreset, LAYOUT_PRESET_KEY } from '@/lib/preferences';
 import { useUserPreference } from '@/hooks/useUserPreference';
 
 
+interface StoredBuilding {
+  id: string;
+  typeId: keyof typeof SIM_BUILDINGS;
+  x: number;
+  y: number;
+  level: number;
+  workers: number;
+}
+
 interface GameState {
   id: string;
   cycle: number;
   resources: Record<string, number>;
+  workers: number;
+  buildings: StoredBuilding[];
 }
 
 interface Proposal {
@@ -74,10 +86,9 @@ export default function PlayPage() {
   // Sim Mode state
   const [isSimMode, setIsSimMode] = useState(false);
   const [simResources, setSimResources] = useState<SimResources | null>(null);
-  const [placedBuildings, setPlacedBuildings] = useState<Array<{ id: string; typeId: keyof typeof SIM_BUILDINGS; x: number; y: number; level: number }>>([]);
+  const [placedBuildings, setPlacedBuildings] = useState<StoredBuilding[]>([]);
   const [selectedBuildType, setSelectedBuildType] = useState<keyof typeof SIM_BUILDINGS | null>(null);
   const [inputShortages, setInputShortages] = useState<Partial<SimResources>>({});
-  const simInitRef = useRef(false);
 
   // Game world state
   const [districts, setDistricts] = useState<District[]>([]);
@@ -128,18 +139,19 @@ export default function PlayPage() {
     } catch {}
   }, []);
 
-  // Initialize Sim resources from server state once
+  // Sync local simulation state from server state
   useEffect(() => {
-    if (state && !simInitRef.current) {
-      setSimResources({
-        grain: state.resources.grain || 0,
-        coin: state.resources.coin || 0,
-        mana: state.resources.mana || 0,
-        favor: state.resources.favor || 0,
-        population: 0,
-      });
-      simInitRef.current = true;
-    }
+    if (!state) return;
+    const buildings = state.buildings || [];
+    setPlacedBuildings(buildings);
+    const assigned = buildings.reduce((sum, b) => sum + (b.workers || 0), 0);
+    setSimResources({
+      grain: state.resources.grain || 0,
+      coin: state.resources.coin || 0,
+      mana: state.resources.mana || 0,
+      favor: state.resources.favor || 0,
+      workers: (state.workers || 0) - assigned,
+    });
   }, [state]);
 
   const fetchState = useCallback(async () => {
@@ -149,7 +161,7 @@ export default function PlayPage() {
     const json = await res.json();
     logger.debug('Response JSON:', json);
     if (!res.ok) throw new Error(json.error || "Failed to fetch state");
-    setState(json);
+    setState({ ...json, workers: json.workers ?? 0, buildings: json.buildings ?? [] });
   }, []);
 
   const fetchProposals = useCallback(async () => {
@@ -159,6 +171,23 @@ export default function PlayPage() {
     setProposals(json.proposals || []);
   }, []);
 
+  const saveState = useCallback(async (partial: { resources?: Record<string, number>; workers?: number; buildings?: StoredBuilding[] }) => {
+    if (!state) return;
+    try {
+      const body: any = { id: state.id };
+      if (partial.resources) body.resources = partial.resources;
+      if (typeof partial.workers === 'number') body.workers = partial.workers;
+      if (partial.buildings) body.buildings = partial.buildings;
+      await fetch('/api/state', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+    } catch (e) {
+      logger.error('Failed to save state', e);
+    }
+  }, [state]);
+
   const tick = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -166,7 +195,18 @@ export default function PlayPage() {
       const res = await fetch(`/api/state/tick`, { method: "POST" });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Failed to tick");
-      setState(json.state);
+      const serverState: GameState = { ...json.state, workers: json.state.workers ?? 0, buildings: json.state.buildings ?? [] };
+      setState(serverState);
+      const assigned = serverState.buildings.reduce((sum, b) => sum + (b.workers || 0), 0);
+      const simRes: SimResources = {
+        grain: serverState.resources.grain || 0,
+        coin: serverState.resources.coin || 0,
+        mana: serverState.resources.mana || 0,
+        favor: serverState.resources.favor || 0,
+        workers: (serverState.workers || 0) - assigned,
+      };
+      setSimResources(simRes);
+      setPlacedBuildings(serverState.buildings);
       setTimeRemaining(120); // Reset timer
       if (json.crisis) {
         setIsPaused(true);
@@ -187,8 +227,10 @@ export default function PlayPage() {
           });
         }
       }
+      return { simRes, state: serverState };
     } catch (e: any) {
       setError(e.message);
+      return null;
     } finally {
       setLoading(false);
     }
@@ -238,9 +280,18 @@ export default function PlayPage() {
     const channel = client
       .channel('game_changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'game_state' }, (payload: any) => {
-        const next = payload?.new;
+        const next = payload?.new as GameState | undefined;
         if (next && typeof next === 'object') {
           setState(next);
+          const assigned = (next.buildings || []).reduce((sum, b) => sum + (b.workers || 0), 0);
+          setPlacedBuildings(next.buildings || []);
+          setSimResources({
+            grain: next.resources.grain || 0,
+            coin: next.resources.coin || 0,
+            mana: next.resources.mana || 0,
+            favor: next.resources.favor || 0,
+            workers: (next.workers || 0) - assigned,
+          });
         } else {
           fetchState();
         }
@@ -317,14 +368,57 @@ export default function PlayPage() {
 
   // Sim helpers
 
-  const runProductionCycle = useCallback(() => {
-    if (!simResources) return;
-    const { updated, shortages } = applyProduction(simResources, placedBuildings, SIM_BUILDINGS);
+  const runProductionCycle = useCallback((baseRes?: SimResources, baseState?: GameState) => {
+    const start = baseRes ?? simResources;
+    const currentState = baseState ?? state;
+    if (!start || !currentState) return;
+    const { updated, shortages } = applyProduction(start, placedBuildings, SIM_BUILDINGS);
     setSimResources(updated);
     setInputShortages(shortages);
+    const totalAssigned = placedBuildings.reduce((sum, b) => sum + b.workers, 0);
+    const totalWorkers = totalAssigned + updated.workers;
+    const resToSave = {
+      ...currentState.resources,
+      grain: updated.grain,
+      coin: updated.coin,
+      mana: updated.mana,
+      favor: updated.favor,
+    };
+    setState(prev => (prev ? { ...prev, workers: totalWorkers, buildings: placedBuildings, resources: resToSave } : prev));
+    saveState({ resources: resToSave, workers: totalWorkers, buildings: placedBuildings });
     // celebratory marker
     setMarkers(prev => [{ id: `harvest-${generateId()}`, x: selectedTile?.x ?? 10, y: selectedTile?.y ?? 10, label: 'Harvest' }, ...prev]);
-  }, [simResources, placedBuildings, selectedTile, generateId]);
+  }, [simResources, placedBuildings, selectedTile, generateId, state, saveState]);
+
+  const assignWorker = useCallback((buildingId: string) => {
+    if (!simResources || simResources.workers <= 0 || !state) return;
+    const target = placedBuildings.find(b => b.id === buildingId);
+    if (!target) return;
+    const capacity = SIM_BUILDINGS[target.typeId].workCapacity ?? 0;
+    if (target.workers >= capacity) return;
+    const newBuildings = placedBuildings.map(b => (b.id === buildingId ? { ...b, workers: b.workers + 1 } : b));
+    const newSim = { ...simResources, workers: simResources.workers - 1 };
+    const totalAssigned = newBuildings.reduce((sum, b) => sum + b.workers, 0);
+    const totalWorkers = totalAssigned + newSim.workers;
+    setPlacedBuildings(newBuildings);
+    setSimResources(newSim);
+    setState(prev => (prev ? { ...prev, workers: totalWorkers, buildings: newBuildings } : prev));
+    saveState({ workers: totalWorkers, buildings: newBuildings });
+  }, [simResources, placedBuildings, state, saveState]);
+
+  const unassignWorker = useCallback((buildingId: string) => {
+    if (!state || !simResources) return;
+    const target = placedBuildings.find(b => b.id === buildingId);
+    if (!target || target.workers <= 0) return;
+    const newBuildings = placedBuildings.map(b => (b.id === buildingId ? { ...b, workers: b.workers - 1 } : b));
+    const newSim = { ...simResources, workers: simResources.workers + 1 };
+    const totalAssigned = newBuildings.reduce((sum, b) => sum + b.workers, 0);
+    const totalWorkers = totalAssigned + newSim.workers;
+    setPlacedBuildings(newBuildings);
+    setSimResources(newSim);
+    setState(prev => (prev ? { ...prev, workers: totalWorkers, buildings: newBuildings } : prev));
+    saveState({ workers: totalWorkers, buildings: newBuildings });
+  }, [placedBuildings, simResources, state, saveState]);
   const handleTileHover = (x: number, y: number, tileType?: string) => {
     setSelectedTile({ x, y });
     const district = districts.find(d => d.gridX === x && d.gridY === y);
@@ -354,7 +448,7 @@ export default function PlayPage() {
 
     // Sim Mode: place building when a type is selected
     if (isSimMode && selectedBuildType) {
-      if (!simResources) {
+      if (!simResources || !state) {
         setGuideHint('Preparing resources...');
         setTimeout(() => setGuideHint(null), 1500);
         return;
@@ -376,9 +470,24 @@ export default function PlayPage() {
         setTimeout(() => setGuideHint(null), 1500);
         return;
       }
-      setSimResources(prev => (prev ? applyCost(prev, def.cost) : prev));
-      const newB = { id: generateId(), typeId: selectedBuildType, x, y, level: 1 };
-      setPlacedBuildings(prev => [newB, ...prev]);
+      const nextRes = applyCost(simResources, def.cost);
+      const newB: StoredBuilding = { id: generateId(), typeId: selectedBuildType, x, y, level: 1, workers: 0 };
+      const newBuildings = [newB, ...placedBuildings];
+      const totalAssigned = newBuildings.reduce((sum, b) => sum + b.workers, 0);
+      const totalWorkers = totalAssigned + nextRes.workers;
+      setSimResources(nextRes);
+      setPlacedBuildings(newBuildings);
+      setState(prev => (prev ? {
+        ...prev,
+        workers: totalWorkers,
+        buildings: newBuildings,
+        resources: { ...prev.resources, grain: nextRes.grain, coin: nextRes.coin, mana: nextRes.mana, favor: nextRes.favor },
+      } : prev));
+      saveState({
+        resources: { ...state.resources, grain: nextRes.grain, coin: nextRes.coin, mana: nextRes.mana, favor: nextRes.favor },
+        workers: totalWorkers,
+        buildings: newBuildings,
+      });
       setMarkers(prev => [{ id: `b-${generateId()}`, x, y, label: def.name }, ...prev]);
       setSelectedBuildType(null);
       return; // don't auto-open council for sim placement
@@ -511,6 +620,14 @@ export default function PlayPage() {
     timeRemaining
   };
 
+  const totalAssigned = placedBuildings.reduce((sum, b) => sum + b.workers, 0);
+  const totalWorkers = totalAssigned + (simResources?.workers ?? 0);
+  const idleWorkers = simResources?.workers ?? 0;
+  const neededWorkers = placedBuildings.reduce((sum, b) => {
+    const cap = SIM_BUILDINGS[b.typeId].workCapacity ?? 0;
+    return sum + Math.max(0, cap - b.workers);
+  }, 0);
+
   const councilProposals: CouncilProposal[] = proposals.map(p => ({
     id: p.id,
     title: p.title,
@@ -558,7 +675,7 @@ export default function PlayPage() {
                 <span>Coin</span><span className="text-right">{simResources?.coin ?? '...'}</span>
                 <span>Mana</span><span className="text-right">{simResources?.mana ?? '...'}</span>
                 <span>Favor</span><span className="text-right">{simResources?.favor ?? '...'}</span>
-                <span>Population</span><span className="text-right">{simResources?.population ?? '...'}</span>
+                <span>Workers</span><span className="text-right">{simResources?.workers ?? '...'}</span>
               </div>
             </div>
 
@@ -640,16 +757,27 @@ export default function PlayPage() {
       <GameHUD
         resources={resources}
         time={gameTime}
+        workforce={{ total: totalWorkers, idle: idleWorkers, needed: neededWorkers }}
         isPaused={isPaused}
         onPause={() => setIsPaused(true)}
         onResume={() => setIsPaused(false)}
-        onAdvanceCycle={async () => { setAcceptedNotice(null); setMarkers([]); await tick(); runProductionCycle(); setGuideProgress(prev => ({ ...prev, advanced: true })); }}
+        onAdvanceCycle={async () => { setAcceptedNotice(null); setMarkers([]); const base = await tick(); runProductionCycle(base?.simRes, base?.state); setGuideProgress(prev => ({ ...prev, advanced: true })); }}
         onOpenCouncil={openCouncil}
         onOpenEdicts={openEdicts}
         onOpenOmens={openOmens}
         highlightAdvance={acceptedNotice !== null || proposals.some(p => p.status === 'accepted')}
         shortages={inputShortages}
       />
+
+      {isSimMode && (
+        <WorkerPanel
+          buildings={placedBuildings}
+          catalog={SIM_BUILDINGS}
+          idleWorkers={idleWorkers}
+          onAssign={assignWorker}
+          onUnassign={unassignWorker}
+        />
+      )}
 
 
       <CouncilPanel
