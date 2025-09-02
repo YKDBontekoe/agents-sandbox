@@ -51,7 +51,7 @@ export async function GET() {
 
 const UpdateSchema = z.object({
   id: z.string().uuid(),
-  resources: z.record(z.number()).optional(),
+  resources: z.record(z.string(), z.number()).optional(),
   workers: z.number().optional(),
   buildings: z.array(z.any()).optional(),
 })
