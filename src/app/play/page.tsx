@@ -6,6 +6,8 @@ import GameRenderer from '@/components/game/GameRenderer';
 import logger from '@/lib/logger';
 
 import { GameHUD, GameResources, GameTime } from '@/components/game/GameHUD';
+import { SimResources, applyProduction, canAfford, applyCost } from '@/components/game/resourceUtils';
+import { SIM_BUILDINGS, BUILDABLE_TILES } from '@/components/game/simCatalog';
 import { CouncilPanel, CouncilProposal } from '@/components/game/CouncilPanel';
 import { EdictsPanel, EdictSetting } from '@/components/game/EdictsPanel';
 import { OmenPanel, SeasonalEvent, OmenReading } from '@/components/game/OmenPanel';
@@ -41,21 +43,6 @@ interface Proposal {
   predicted_delta: Record<string, number>;
 }
 
-// Sim Mode types and catalog
-type SimResourceKey = 'grain' | 'coin' | 'mana' | 'favor' | 'population';
-interface SimResourcesLocal { grain: number; coin: number; mana: number; favor: number; population: number }
-interface SimBuildingType { id: string; name: string; cost: Partial<SimResourcesLocal>; production: Partial<SimResourcesLocal> }
-const SIM_BUILDINGS: Record<string, SimBuildingType> = {
-  farm: { id: 'farm', name: 'Farm', cost: { coin: 20, grain: 0 }, production: { grain: 10 } },
-  house: { id: 'house', name: 'House', cost: { coin: 30, grain: 10 }, production: { population: 5 } },
-  shrine: { id: 'shrine', name: 'Shrine', cost: { coin: 25, mana: 5 }, production: { favor: 2 } },
-};
-
-const BUILDABLE_TILES: Record<keyof typeof SIM_BUILDINGS, string[]> = {
-  farm: ['grass'],
-  house: ['grass'],
-  shrine: ['grass'],
-};
 
 
 export default function PlayPage() {
@@ -86,9 +73,10 @@ export default function PlayPage() {
   
   // Sim Mode state
   const [isSimMode, setIsSimMode] = useState(false);
-  const [simResources, setSimResources] = useState<SimResourcesLocal | null>(null);
+  const [simResources, setSimResources] = useState<SimResources | null>(null);
   const [placedBuildings, setPlacedBuildings] = useState<Array<{ id: string; typeId: keyof typeof SIM_BUILDINGS; x: number; y: number; level: number }>>([]);
   const [selectedBuildType, setSelectedBuildType] = useState<keyof typeof SIM_BUILDINGS | null>(null);
+  const [inputShortages, setInputShortages] = useState<Partial<SimResources>>({});
   const simInitRef = useRef(false);
 
   // Game world state
@@ -328,43 +316,15 @@ export default function PlayPage() {
   }
 
   // Sim helpers
-  const canAfford = useCallback((cost: Partial<SimResourcesLocal>) => {
-    if (!simResources) return false;
-    return (['grain','coin','mana','favor'] as SimResourceKey[]).every(k => {
-      const need = (cost as any)[k] ?? 0; return (simResources as any)[k] >= need;
-    });
-  }, [simResources]);
 
-  const spend = useCallback((cost: Partial<SimResourcesLocal>) => {
-    setSimResources(prev => {
-      if (!prev) return prev;
-      const next = { ...prev };
-      (['grain','coin','mana','favor'] as SimResourceKey[]).forEach(k => {
-        const need = (cost as any)[k] ?? 0; (next as any)[k] = Math.max(0, (next as any)[k] - need);
-      });
-      return next;
-    });
-  }, []);
-
-  const produceTick = useCallback(() => {
-    if (placedBuildings.length === 0) return;
-    const total: Partial<SimResourcesLocal> = {};
-    placedBuildings.forEach(b => {
-      const prod = SIM_BUILDINGS[b.typeId].production;
-      Object.entries(prod).forEach(([k, v]) => {
-        total[k as SimResourceKey] = (total[k as SimResourceKey] || 0) + (v || 0);
-      });
-    });
-    setSimResources(prev => prev ? {
-      grain: prev.grain + (total.grain || 0),
-      coin: prev.coin + (total.coin || 0),
-      mana: prev.mana + (total.mana || 0),
-      favor: prev.favor + (total.favor || 0),
-      population: prev.population + (total.population || 0),
-    } : prev);
+  const runProductionCycle = useCallback(() => {
+    if (!simResources) return;
+    const { updated, shortages } = applyProduction(simResources, placedBuildings, SIM_BUILDINGS);
+    setSimResources(updated);
+    setInputShortages(shortages);
     // celebratory marker
     setMarkers(prev => [{ id: `harvest-${generateId()}`, x: selectedTile?.x ?? 10, y: selectedTile?.y ?? 10, label: 'Harvest' }, ...prev]);
-  }, [placedBuildings, selectedTile]);
+  }, [simResources, placedBuildings, selectedTile, generateId]);
   const handleTileHover = (x: number, y: number, tileType?: string) => {
     setSelectedTile({ x, y });
     const district = districts.find(d => d.gridX === x && d.gridY === y);
@@ -411,12 +371,12 @@ export default function PlayPage() {
         setTimeout(() => setGuideHint(null), 1500);
         return;
       }
-      if (!canAfford(def.cost)) {
+      if (!canAfford(def.cost, simResources)) {
         setGuideHint('Not enough resources to build.');
         setTimeout(() => setGuideHint(null), 1500);
         return;
       }
-      spend(def.cost);
+      setSimResources(prev => (prev ? applyCost(prev, def.cost) : prev));
       const newB = { id: generateId(), typeId: selectedBuildType, x, y, level: 1 };
       setPlacedBuildings(prev => [newB, ...prev]);
       setMarkers(prev => [{ id: `b-${generateId()}`, x, y, label: def.name }, ...prev]);
@@ -683,11 +643,12 @@ export default function PlayPage() {
         isPaused={isPaused}
         onPause={() => setIsPaused(true)}
         onResume={() => setIsPaused(false)}
-        onAdvanceCycle={async () => { setAcceptedNotice(null); setMarkers([]); await tick(); produceTick(); setGuideProgress(prev => ({ ...prev, advanced: true })); }}
+        onAdvanceCycle={async () => { setAcceptedNotice(null); setMarkers([]); await tick(); runProductionCycle(); setGuideProgress(prev => ({ ...prev, advanced: true })); }}
         onOpenCouncil={openCouncil}
         onOpenEdicts={openEdicts}
         onOpenOmens={openOmens}
         highlightAdvance={acceptedNotice !== null || proposals.some(p => p.status === 'accepted')}
+        shortages={inputShortages}
       />
 
 

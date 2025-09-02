@@ -41,7 +41,21 @@ export interface GameHUDProps {
   onOpenEdicts?: () => void;
   onOpenOmens?: () => void;
   highlightAdvance?: boolean;
+  shortages?: Partial<Record<keyof GameResources, number>>;
 }
+
+const ShortageDisplay: React.FC<{ shortages: Partial<Record<keyof GameResources, number>> }> = ({ shortages }) => {
+  const entries = Object.entries(shortages) as [keyof GameResources, number][];
+  if (entries.length === 0) return null;
+  return (
+    <div className="mt-2 flex flex-wrap items-center text-xs text-red-600" style={{ gap: 'var(--spacing-xs)' }}>
+      <span>Needs:</span>
+      {entries.map(([k, v]) => (
+        <ResourceIcon key={k} type={k} value={v} />
+      ))}
+    </div>
+  );
+};
 
 // Using imported ResourceIcon component from '../ui'
 
@@ -103,7 +117,8 @@ export const GameHUD: React.FC<GameHUDProps> = ({
   onOpenCouncil,
   onOpenEdicts,
   onOpenOmens,
-  highlightAdvance = false
+  highlightAdvance = false,
+  shortages = {}
 }) => {
   const prevResources = useRef<GameResources>(resources);
   const [resourceChanges, setResourceChanges] = useState<Record<keyof GameResources, number | null>>({
@@ -153,7 +168,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
               Resources
             </h3>
           </div>
-          <div 
+          <div
             className="grid grid-cols-6 sm:grid-cols-6 md:grid-cols-3 xl:grid-cols-6 2xl:grid-cols-3"
             style={{ gap: 'var(--spacing-xs)' }}
           >
@@ -164,6 +179,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
             <ResourceIcon type="unrest" value={resources.unrest} delta={resourceChanges.unrest} className="animate-scale-in stagger-5" />
             <ResourceIcon type="threat" value={resources.threat} delta={resourceChanges.threat} className="animate-scale-in stagger-6" />
           </div>
+          <ShortageDisplay shortages={shortages} />
         </div>
 
         {/* Time Controls */}
