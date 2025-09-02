@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { generateText } from 'ai'
 import { createOpenAI } from '@ai-sdk/openai'
 import { z } from 'zod'
+import { getLatestGameState } from '@/lib/server/gameState'
 
 const openai = createOpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
@@ -30,14 +31,8 @@ export async function POST(req: NextRequest) {
   }
   const { guild = 'Wardens' } = parsedBody.data
 
-  // Get latest state
-  const { data: state, error: stateErr } = await supabase
-    .from('game_state')
-    .select('*')
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-  if (stateErr) return NextResponse.json({ error: stateErr.message }, { status: 500 })
+  const { state, error } = await getLatestGameState(supabase)
+  if (error) return error
   if (!state) return NextResponse.json({ error: 'No game state' }, { status: 400 })
 
   const hasOpenAI = !!process.env.OPENAI_API_KEY &&

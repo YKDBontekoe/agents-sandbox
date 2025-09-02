@@ -1,25 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import logger from '@/lib/logger'
+import { getLatestGameState } from '@/lib/server/gameState'
 
 export async function GET(_req: NextRequest) {
   try {
     const supabase = createSupabaseServerClient()
 
-    // Get latest state
-    const { data: state, error: stateErr } = await supabase
-      .from('game_state')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-    if (stateErr) {
-      logger.error('Supabase error in proposals route:', stateErr.message)
-      return NextResponse.json(
-        { error: 'Database connection failed' },
-        { status: 503 }
-      )
-    }
+    const { state, error } = await getLatestGameState(supabase)
+    if (error) return error
     if (!state) return NextResponse.json({ proposals: [] })
 
     const { data: proposals, error: propErr } = await supabase
@@ -32,7 +21,7 @@ export async function GET(_req: NextRequest) {
       logger.error('Supabase error fetching proposals:', propErr.message)
       return NextResponse.json(
         { error: 'Failed to fetch proposals' },
-        { status: 503 }
+        { status: 503 },
       )
     }
 
@@ -41,7 +30,7 @@ export async function GET(_req: NextRequest) {
     logger.error('Supabase connection error in proposals route:', error)
     return NextResponse.json(
       { error: 'Service unavailable - database not configured' },
-      { status: 503 }
+      { status: 503 },
     )
   }
 }

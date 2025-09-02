@@ -1,18 +1,13 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { getLatestGameState } from '@/lib/server/gameState'
 
 // Advance one cycle: apply accepted proposals to resources with simple rules and clear applied
 export async function POST() {
   const supabase = createSupabaseServerClient()
 
-  // Get latest state
-  const { data: state, error: stateErr } = await supabase
-    .from('game_state')
-    .select('*')
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-  if (stateErr) return NextResponse.json({ error: stateErr.message }, { status: 500 })
+  const { state, error } = await getLatestGameState(supabase)
+  if (error) return error
   if (!state) return NextResponse.json({ error: 'No game state' }, { status: 400 })
 
   // Fetch accepted proposals
