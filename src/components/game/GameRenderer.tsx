@@ -14,8 +14,9 @@ interface GameRendererProps {
   width?: number;
   height?: number;
   gridSize?: number;
-  onTileHover?: (x: number, y: number) => void;
-  onTileClick?: (x: number, y: number) => void;
+  tileTypes?: string[][];
+  onTileHover?: (x: number, y: number, tileType?: string) => void;
+  onTileClick?: (x: number, y: number, tileType?: string) => void;
   children?: React.ReactNode;
 }
 
@@ -23,6 +24,7 @@ function GameRendererContent({
   width = 800,
   height = 600,
   gridSize = 20,
+  tileTypes,
   onTileHover,
   onTileClick,
 }: GameRendererProps) {
@@ -55,11 +57,12 @@ function GameRendererContent({
         onTileHover={onTileHover}
         onTileClick={onTileClick}
       />
-      
+
       <IsometricGrid
         gridSize={gridSize}
         tileWidth={64}
         tileHeight={32}
+        tileTypes={tileTypes}
         onTileHover={onTileHover}
         onTileClick={onTileClick}
       />
