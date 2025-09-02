@@ -30,9 +30,16 @@ export interface GameTime {
   timeRemaining: number; // seconds until next cycle
 }
 
+export interface WorkforceInfo {
+  total: number;
+  idle: number;
+  needed: number;
+}
+
 export interface GameHUDProps {
   resources: GameResources;
   time: GameTime;
+  workforce: WorkforceInfo;
   isPaused?: boolean;
   onPause?: () => void;
   onResume?: () => void;
@@ -110,6 +117,7 @@ const TimeDisplay: React.FC<{ time: GameTime; isPaused?: boolean }> = ({ time, i
 export const GameHUD: React.FC<GameHUDProps> = ({
   resources,
   time,
+  workforce,
   isPaused = false,
   onPause,
   onResume,
@@ -178,6 +186,15 @@ export const GameHUD: React.FC<GameHUDProps> = ({
             <ResourceIcon type="favor" value={resources.favor} delta={resourceChanges.favor} className="animate-scale-in stagger-4" />
             <ResourceIcon type="unrest" value={resources.unrest} delta={resourceChanges.unrest} className="animate-scale-in stagger-5" />
             <ResourceIcon type="threat" value={resources.threat} delta={resourceChanges.threat} className="animate-scale-in stagger-6" />
+          </div>
+          <div className="mt-2 flex items-center text-xs" style={{ gap: 'var(--spacing-xs)' }}>
+            <span className="text-muted">Workers:</span>
+            <span className="font-mono text-foreground">{workforce.total}</span>
+            <span className="text-muted">Idle:</span>
+            <span className={`font-mono ${workforce.idle === 0 ? 'text-warning' : 'text-foreground'}`}>{workforce.idle}</span>
+            {workforce.needed > workforce.idle && (
+              <span className="text-red-600">Need {workforce.needed - workforce.idle}</span>
+            )}
           </div>
           <ShortageDisplay shortages={shortages} />
         </div>

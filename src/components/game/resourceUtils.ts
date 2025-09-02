@@ -12,19 +12,21 @@ export function getResourceColor(resource: ResourceType): string {
 }
 
 // Simulation resource helpers
-export type SimResourceKey = 'grain' | 'coin' | 'mana' | 'favor' | 'population';
+export type SimResourceKey = 'grain' | 'coin' | 'mana' | 'favor' | 'workers';
 
 export interface SimResources {
   grain: number;
   coin: number;
   mana: number;
   favor: number;
-  population: number;
+  workers: number;
 }
 
 export interface SimBuildingDef {
   inputs: Partial<SimResources>;
   outputs: Partial<SimResources>;
+  /** Maximum number of workers that can staff this building */
+  workCapacity?: number;
 }
 
 export interface ApplyProductionResult {
@@ -34,7 +36,7 @@ export interface ApplyProductionResult {
 
 export function applyProduction(
   resources: SimResources,
-  buildings: Array<{ typeId: string }>,
+  buildings: Array<{ typeId: string; workers?: number }>,
   catalog: Record<string, SimBuildingDef>
 ): ApplyProductionResult {
   const next: SimResources = { ...resources };
@@ -44,12 +46,17 @@ export function applyProduction(
     const def = catalog[b.typeId];
     if (!def) return;
 
+    const capacity = def.workCapacity ?? 0;
+    const assigned = Math.min(b.workers ?? 0, capacity);
+    const ratio = capacity > 0 ? assigned / capacity : 1;
+
     let canProduce = true;
     for (const [key, amount] of Object.entries(def.inputs) as [SimResourceKey, number | undefined][]) {
+      const required = (amount ?? 0) * ratio;
       const current = next[key] ?? 0;
-      if (current < (amount ?? 0)) {
+      if (current < required) {
         canProduce = false;
-        const deficit = (amount ?? 0) - current;
+        const deficit = required - current;
         shortages[key] = (shortages[key] ?? 0) + deficit;
       }
     }
@@ -57,10 +64,10 @@ export function applyProduction(
     if (!canProduce) return;
 
     for (const [key, amount] of Object.entries(def.inputs) as [SimResourceKey, number | undefined][]) {
-      next[key] = next[key] - (amount ?? 0);
+      next[key] = next[key] - (amount ?? 0) * ratio;
     }
     for (const [key, amount] of Object.entries(def.outputs) as [SimResourceKey, number | undefined][]) {
-      next[key] = (next[key] ?? 0) + (amount ?? 0);
+      next[key] = (next[key] ?? 0) + (amount ?? 0) * ratio;
     }
   });
 
