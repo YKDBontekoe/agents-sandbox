@@ -53,7 +53,7 @@ const UpdateSchema = z.object({
   id: z.string().uuid(),
   resources: z.record(z.string(), z.number()).optional(),
   workers: z.number().optional(),
-  buildings: z.array(z.any()).optional(),
+  buildings: z.array(z.unknown()).optional(),
 })
 
 export async function PATCH(req: NextRequest) {
@@ -64,7 +64,7 @@ export async function PATCH(req: NextRequest) {
   }
 
   const { id, resources, workers, buildings } = parsed.data
-  const updates: Record<string, any> = { updated_at: new Date().toISOString() }
+  const updates: Partial<{ resources: Record<string, number>; workers: number; buildings: unknown[]; updated_at: string }> = { updated_at: new Date().toISOString() }
   if (resources) updates.resources = resources
   if (typeof workers === 'number') updates.workers = workers
   if (buildings) updates.buildings = buildings

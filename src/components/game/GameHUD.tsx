@@ -1,329 +1,65 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import {
-  faPlay,
-  faPause,
-  faForward,
-  faLandmark,
-  faScroll,
-  faEye,
-  faMousePointer,
-  faArrowsAlt,
-  faMagnifyingGlass
-} from '@/lib/icons';
-import { ActionButton, ResourceIcon } from '../ui';
+import React from 'react';
 import '../../styles/design-tokens.css';
 import '../../styles/animations.css';
+import type { GameHUDProps, Notification } from './hud/types';
+import { useResourceDeltas } from './hud/useResourceDeltas';
+import { NotificationCenter } from './hud/NotificationCenter';
+import { ResourcePanel } from './hud/ResourcePanel';
+import { TimePanel } from './hud/TimePanel';
+import { ActionPanel } from './hud/ActionPanel';
+import { StatusBar } from './hud/StatusBar';
+import { TopBar } from './hud/TopBar';
 
-export interface GameResources {
-  grain: number;
-  coin: number;
-  mana: number;
-  favor: number;
-  unrest: number;
-  threat: number;
-}
+export const GameHUD: React.FC<GameHUDProps> = (props) => {
+  const {
+    resources,
+    time,
+    workforce,
+    isPaused = false,
+    onPause,
+    onResume,
+    onAdvanceCycle,
+    onOpenCouncil,
+    onOpenEdicts,
+    onOpenOmens,
+    onOpenSettings,
+    highlightAdvance = false, // currently unused with simplified TopBar
+    shortages = {},
+    fps = 60,
+    quality = 'High',
+  } = props;
 
-export interface GameTime {
-  cycle: number;
-  season: string;
-  timeRemaining: number; // seconds until next cycle
-}
+  const { changes: resourceChanges } = useResourceDeltas(resources, 10);
+  const [notifications, setNotifications] = React.useState<Notification[]>([]);
 
-export interface WorkforceInfo {
-  total: number;
-  idle: number;
-  needed: number;
-}
-
-export interface GameHUDProps {
-  resources: GameResources;
-  time: GameTime;
-  workforce: WorkforceInfo;
-  isPaused?: boolean;
-  onPause?: () => void;
-  onResume?: () => void;
-  onAdvanceCycle?: () => void;
-  onOpenCouncil?: () => void;
-  onOpenEdicts?: () => void;
-  onOpenOmens?: () => void;
-  highlightAdvance?: boolean;
-  shortages?: Partial<Record<keyof GameResources, number>>;
-}
-
-const ShortageDisplay: React.FC<{ shortages: Partial<Record<keyof GameResources, number>> }> = ({ shortages }) => {
-  const entries = Object.entries(shortages) as [keyof GameResources, number][];
-  if (entries.length === 0) return null;
-  return (
-    <div className="mt-2 flex flex-wrap items-center text-xs text-red-600" style={{ gap: 'var(--spacing-xs)' }}>
-      <span>Needs:</span>
-      {entries.map(([k, v]) => (
-        <ResourceIcon key={k} type={k} value={v} />
-      ))}
-    </div>
-  );
-};
-
-// Using imported ResourceIcon component from '../ui'
-
-const TimeDisplay: React.FC<{ time: GameTime; isPaused?: boolean }> = ({ time, isPaused }) => {
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
+  const dismissNotification = (id: string) => setNotifications((prev) => prev.filter((n) => n.id !== id));
 
   return (
-    <div
-      className="flex items-center bg-panel px-2 sm:px-3 lg:px-4 py-2 sm:py-3 border border-border animate-scale-in transition-smooth hover-lift"
-      style={{
-        gap: 'var(--spacing-xs)',
-        borderRadius: 'var(--radius-lg)',
-        boxShadow: 'var(--shadow-sm)',
-        animationDelay: '0.2s'
-      }}
-    >
-      <div className="text-center min-w-[2rem] sm:min-w-[2.5rem] lg:min-w-[3rem]">
-        <div className="font-medium text-muted uppercase tracking-wide mb-1 hidden md:block" style={{ fontSize: 'var(--font-size-xs)' }}>Cycle</div>
-        <div className="text-sm sm:text-base lg:text-lg font-bold text-foreground">{time.cycle}</div>
-      </div>
-      <div className="w-px h-6 sm:h-8 lg:h-10 bg-gradient-to-b from-transparent via-border to-transparent" />
-      <div className="text-center min-w-[2.5rem] sm:min-w-[3rem] lg:min-w-[4rem]">
-        <div className="font-medium text-muted uppercase tracking-wide mb-1 hidden md:block" style={{ fontSize: 'var(--font-size-xs)' }}>Season</div>
-        <div className="text-xs sm:text-sm font-semibold text-foreground capitalize">{time.season}</div>
-      </div>
-      <div className="w-px h-6 sm:h-8 lg:h-10 bg-gradient-to-b from-transparent via-border to-transparent" />
-      <div className="text-center min-w-[2.5rem] sm:min-w-[3rem] lg:min-w-[4rem]">
-        <div className="font-medium text-muted uppercase tracking-wide mb-1 hidden md:block" style={{ fontSize: 'var(--font-size-xs)' }}>Time</div>
-        <div
-          className={`font-mono text-xs sm:text-sm font-semibold transition-colors duration-200 ${
-            isPaused ? 'text-warning animate-pulse animate-pulse-slow animate-bounce-gentle' : 'text-success'
-          }`}
-        >
-          {isPaused ? (
-            <>
-              <span className="hidden sm:inline">PAUSED</span>
-              <span className="sm:hidden">⏸</span>
-            </>
-          ) : formatTime(time.timeRemaining)}
-        </div>
-      </div>
-    </div>
-  );
-};
+    <>
+      <TopBar objective={undefined} fps={fps} quality={quality} />
 
-// Using imported ActionButton component from '../ui'
-
-export const GameHUD: React.FC<GameHUDProps> = ({
-  resources,
-  time,
-  workforce,
-  isPaused = false,
-  onPause,
-  onResume,
-  onAdvanceCycle,
-  onOpenCouncil,
-  onOpenEdicts,
-  onOpenOmens,
-  highlightAdvance = false,
-  shortages = {}
-}) => {
-  const prevResources = useRef<GameResources>(resources);
-  const [resourceChanges, setResourceChanges] = useState<Record<keyof GameResources, number | null>>({
-    grain: null,
-    coin: null,
-    mana: null,
-    favor: null,
-    unrest: null,
-    threat: null
-  });
-
-  useEffect(() => {
-    const timers: ReturnType<typeof setTimeout>[] = [];
-    (Object.keys(resources) as (keyof GameResources)[]).forEach((key) => {
-      const prev = prevResources.current[key];
-      const curr = resources[key];
-      if (prev !== curr) {
-        const delta = curr - prev;
-        setResourceChanges((changes) => ({ ...changes, [key]: delta }));
-        const timer = setTimeout(() => {
-          setResourceChanges((changes) => ({ ...changes, [key]: null }));
-        }, 1000);
-        timers.push(timer);
-      }
-    });
-    prevResources.current = { ...resources };
-    return () => timers.forEach((t) => clearTimeout(t));
-  }, [resources]);
-
-  return (
-    <div className="absolute inset-0 z-50 pointer-events-none animate-fade-in flex flex-col">
-      {/* Top HUD Bar - Mobile optimized */}
-      <div className="flex flex-col xl:flex-row justify-between items-stretch xl:items-start p-2 sm:p-3 lg:p-4 gap-2 sm:gap-3">
-        {/* Resources Panel */}
-        <div
-          className="bg-panel backdrop-blur-md border border-border p-2 sm:p-3 lg:p-4 pointer-events-auto transition-all duration-200 hover:shadow-xl w-full xl:w-auto animate-slide-in-left"
-          style={{
-            borderRadius: 'var(--radius-lg)',
-            boxShadow: 'var(--shadow-lg)'
-          }}
-        >
-          <div className="mb-1 sm:mb-2 hidden md:block" style={{ marginBottom: 'var(--spacing-sm)' }}>
-            <h3
-              className="font-semibold text-foreground uppercase tracking-wide"
-              style={{ fontSize: 'var(--font-size-xs)' }}
-            >
-              Resources
-            </h3>
-          </div>
-          <div
-            className="grid grid-cols-6 sm:grid-cols-6 md:grid-cols-3 xl:grid-cols-6 2xl:grid-cols-3"
-            style={{ gap: 'var(--spacing-xs)' }}
-          >
-            <ResourceIcon type="grain" value={resources.grain} delta={resourceChanges.grain} className="animate-scale-in stagger-1" />
-            <ResourceIcon type="coin" value={resources.coin} delta={resourceChanges.coin} className="animate-scale-in stagger-2" />
-            <ResourceIcon type="mana" value={resources.mana} delta={resourceChanges.mana} className="animate-scale-in stagger-3" />
-            <ResourceIcon type="favor" value={resources.favor} delta={resourceChanges.favor} className="animate-scale-in stagger-4" />
-            <ResourceIcon type="unrest" value={resources.unrest} delta={resourceChanges.unrest} className="animate-scale-in stagger-5" />
-            <ResourceIcon type="threat" value={resources.threat} delta={resourceChanges.threat} className="animate-scale-in stagger-6" />
-          </div>
-          <div className="mt-2 flex items-center text-xs" style={{ gap: 'var(--spacing-xs)' }}>
-            <span className="text-muted">Workers:</span>
-            <span className="font-mono text-foreground">{workforce.total}</span>
-            <span className="text-muted">Idle:</span>
-            <span className={`font-mono ${workforce.idle === 0 ? 'text-warning' : 'text-foreground'}`}>{workforce.idle}</span>
-            {workforce.needed > workforce.idle && (
-              <span className="text-red-600">Need {workforce.needed - workforce.idle}</span>
-            )}
-          </div>
-          <ShortageDisplay shortages={shortages} />
+      <div className="absolute inset-0 z-50 pointer-events-none animate-fade-in">
+        <div className="absolute left-6 top-20 pointer-events-auto">
+          <ResourcePanel resources={resources} workforce={workforce} changes={resourceChanges} shortages={shortages} />
         </div>
 
-        {/* Time Controls */}
-        <div
-          className="bg-panel backdrop-blur-md border border-border p-2 sm:p-3 lg:p-4 pointer-events-auto transition-all duration-200 hover:shadow-xl w-full xl:w-auto animate-slide-in-right"
-          style={{
-            borderRadius: 'var(--radius-lg)',
-            boxShadow: 'var(--shadow-lg)'
-          }}
-        >
-          <div 
-            className="flex flex-col sm:flex-row items-center"
-            style={{ gap: 'var(--spacing-sm)' }}
-          >
-            <TimeDisplay time={time} isPaused={isPaused} />
-            <div 
-              className="flex w-full sm:w-auto"
-              style={{ gap: 'var(--spacing-xs)' }}
-            >
-              {isPaused ? (
-                <ActionButton onClick={onResume} variant="primary" className="flex-1 sm:flex-none transition-smooth hover-lift text-xs sm:text-sm">
-                  <FontAwesomeIcon icon={faPlay} className="mr-1 sm:mr-2" /> 
-                  <span className="hidden sm:inline">Resume</span>
-                </ActionButton>
-              ) : (
-                <ActionButton onClick={onPause} className="flex-1 sm:flex-none transition-smooth hover-lift text-xs sm:text-sm">
-                  <FontAwesomeIcon icon={faPause} className="mr-1 sm:mr-2" /> 
-                  <span className="hidden sm:inline">Pause</span>
-                </ActionButton>
-              )}
-              <ActionButton onClick={onAdvanceCycle} variant="danger" className={`flex-1 sm:flex-none transition-smooth hover-lift text-xs sm:text-sm ${highlightAdvance ? 'ring-2 ring-amber-400 animate-pulse' : ''}`}>
-                <FontAwesomeIcon icon={faForward} className="mr-1 sm:mr-2" /> 
-                <span className="hidden sm:inline">Advance</span>
-              </ActionButton>
-            </div>
+        <div className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-auto">
+          <ActionPanel onOpenCouncil={onOpenCouncil} onOpenEdicts={onOpenEdicts} onOpenOmens={onOpenOmens} onOpenSettings={onOpenSettings} />
+        </div>
+
+        <div className="absolute top-20 right-6 pointer-events-auto">
+          <TimePanel time={time} isPaused={!!isPaused} onPause={onPause} onResume={onResume} onAdvanceCycle={onAdvanceCycle} />
+        </div>
+
+        <div className="absolute bottom-0 left-0 right-0 p-6">
+          <div className="flex justify-center pointer-events-auto">
+            <StatusBar fps={fps} quality={quality} />
           </div>
         </div>
       </div>
 
-      {/* Panel Controls - Mobile responsive positioning */}
-      <div className="flex-1 flex flex-col justify-center">
-      <div
-        className="self-end mr-2 sm:mr-3 lg:mr-4 z-40 animate-slide-in-right"
-      >
-          <div
-            className="bg-panel backdrop-blur-md border border-border p-2 sm:p-3 pointer-events-auto transition-all duration-200 hover:shadow-xl hover-lift"
-            style={{
-              borderRadius: 'var(--radius-lg)',
-              boxShadow: 'var(--shadow-lg)'
-            }}
-          >
-            <div 
-              className="flex flex-row xl:flex-col"
-              style={{ gap: 'var(--spacing-xs)' }}
-            >
-              <ActionButton 
-                 onClick={onOpenCouncil} 
-                 variant="secondary" 
-                 className="w-full justify-center xl:justify-start text-xs sm:text-sm transition-smooth hover-lift animate-scale-in stagger-1 px-2 sm:px-3"
-               >
-                 <FontAwesomeIcon icon={faLandmark} className="xl:mr-2" /> 
-                 <span className="hidden sm:inline xl:inline ml-1 xl:ml-0">Council</span>
-               </ActionButton>
-               <ActionButton 
-                 onClick={onOpenEdicts} 
-                 variant="secondary" 
-                 className="w-full justify-center xl:justify-start text-xs sm:text-sm transition-smooth hover-lift animate-scale-in stagger-2 px-2 sm:px-3"
-               >
-                 <FontAwesomeIcon icon={faScroll} className="xl:mr-2" /> 
-                 <span className="hidden sm:inline xl:inline ml-1 xl:ml-0">Edicts</span>
-               </ActionButton>
-               <ActionButton 
-                 onClick={onOpenOmens} 
-                 variant="secondary" 
-                 className="w-full justify-center xl:justify-start text-xs sm:text-sm transition-smooth hover-lift animate-scale-in stagger-3 px-2 sm:px-3"
-               >
-                 <FontAwesomeIcon icon={faEye} className="xl:mr-2" /> 
-                 <span className="hidden sm:inline xl:inline ml-1 xl:ml-0">Omens</span>
-               </ActionButton>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Bottom Status Bar - Mobile optimized */}
-      <div 
-        className="mt-auto pointer-events-auto bg-panel backdrop-blur-md border border-border mx-2 sm:mx-3 lg:mx-4 mb-2 sm:mb-3 lg:mb-4 px-2 sm:px-3 lg:px-4 py-2 sm:py-3 flex flex-col sm:flex-row justify-between items-center gap-2 sm:gap-4 animate-fade-in transition-smooth hover-lift"
-        style={{
-          borderRadius: 'var(--radius-lg)',
-          boxShadow: 'var(--shadow-lg)',
-          fontSize: 'var(--font-size-sm)',
-          animationDelay: '0.3s'
-        }}
-      >
-        <div className="flex flex-col sm:flex-row justify-between items-center w-full gap-2 sm:gap-4">
-          <div className="flex flex-row sm:flex-row items-center gap-3 sm:gap-4 flex-wrap justify-center sm:justify-start">
-            <div className="flex items-center text-muted text-xs">
-              <FontAwesomeIcon icon={faMousePointer} className="text-muted mr-1" />
-              <span className="hidden sm:inline">Click tiles to select</span>
-              <span className="sm:hidden">Click</span>
-            </div>
-            <div className="flex items-center text-muted text-xs">
-              <FontAwesomeIcon icon={faArrowsAlt} className="text-muted mr-1" />
-              <span className="hidden sm:inline">Drag to pan</span>
-              <span className="sm:hidden">Drag</span>
-            </div>
-            <div className="flex items-center text-muted text-xs">
-              <FontAwesomeIcon icon={faMagnifyingGlass} className="text-muted mr-1" />
-              <span className="hidden sm:inline">Scroll to zoom</span>
-              <span className="sm:hidden">Zoom</span>
-            </div>
-          </div>
-          <div className="flex items-center">
-            <div
-              className="flex items-center px-2 sm:px-3 py-1 bg-success border border-success rounded-md"
-            >
-              <span className="font-medium text-success text-xs mr-1">
-                FPS:
-              </span>
-              <span className="font-mono font-bold text-success text-xs">
-                60
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+      <NotificationCenter notifications={notifications} onDismiss={dismissNotification} />
+    </>
   );
 };
 

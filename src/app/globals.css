@@ -1,38 +1,52 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Lexend:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500;600&display=swap');
 @import '../styles/design-tokens.css';
+@import './animations.css';
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --color-background: #ffffff;
-  --color-foreground: #171717;
-  --color-primary: #0ea5e9;
-  --color-secondary: #0369a1;
+  /* Semantic color tokens - consistent with design-tokens.css */
+  --color-background: var(--neutral-50);
+  --color-foreground: var(--neutral-900);
+  --color-primary: var(--primary-500);
+  --color-secondary: var(--primary-600);
   --color-accent: #d946ef;
-  --color-muted: #737373;
-  --color-panel: #f5f5f5;
-  --color-border: #e5e5e5;
-  --color-inverse: #ffffff;
+  --color-muted: var(--neutral-500);
+  --color-panel: var(--neutral-100);
+  --color-border: var(--neutral-200);
+  --color-inverse: var(--neutral-50);
   --color-success: #22c55e;
   --color-warning: #f59e0b;
   --color-danger: #ef4444;
+  
+  /* Game-specific colors */
+  --color-game-bg: #f5f7fb;
+  --color-tile-stroke: #374151;
+  --color-hover: var(--primary-600);
+  --color-selected: #10b981;
 }
 
 .dark {
-  --color-background: #0a0a0a;
-  --color-foreground: #ededed;
-  --color-primary: #38bdf8;
-  --color-secondary: #0ea5e9;
+  --color-background: var(--neutral-900);
+  --color-foreground: var(--neutral-100);
+  --color-primary: var(--primary-400);
+  --color-secondary: var(--primary-500);
   --color-accent: #f0abfc;
-  --color-muted: #a3a3a3;
-  --color-panel: #262626;
-  --color-border: #404040;
-  --color-inverse: #000000;
+  --color-muted: var(--neutral-400);
+  --color-panel: var(--neutral-800);
+  --color-border: var(--neutral-700);
+  --color-inverse: var(--neutral-900);
   --color-success: #4ade80;
   --color-warning: #fbbf24;
   --color-danger: #f87171;
+  
+  /* Game-specific dark colors */
+  --color-game-bg: #1f2937;
+  --color-tile-stroke: #6b7280;
+  --color-hover: var(--primary-400);
+  --color-selected: #34d399;
 }
 
 body {
@@ -67,6 +81,25 @@ html {
 [class*="animate-"] {
   transform: translateZ(0);
   -webkit-transform: translateZ(0);
+  will-change: transform, opacity;
+}
+
+/* GPU acceleration for game elements */
+.game-canvas,
+.pixi-canvas,
+[data-pixi] {
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  will-change: transform;
+}
+
+/* Smooth transitions for UI elements */
+.transition-smooth {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.transition-fast {
+  transition: all 0.15s ease-out;
 }
 
 /* Reduce motion for users who prefer it */

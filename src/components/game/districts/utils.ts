@@ -149,7 +149,9 @@ export const createDistrictSprite = (
   );
   container.x = worldX;
   container.y = worldY;
-  container.interactive = true;
+  // Enable pointer events on PIXI v8
+  // @ts-expect-error pixi v8 eventMode
+  (container as any).eventMode = 'static';
   container.cursor = "pointer";
 
   const background = new PIXI.Graphics();

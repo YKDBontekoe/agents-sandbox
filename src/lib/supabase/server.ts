@@ -19,7 +19,22 @@ export function createSupabaseServerClient() {
     throw new Error('Supabase not configured - check environment variables')
   }
 
+  // Provide a fetch with timeout so DB issues fail fast instead of hanging
+  const fetchWithTimeout = (timeoutMs: number): typeof fetch => {
+    return async (input: RequestInfo | URL, init?: RequestInit) => {
+      const controller = new AbortController()
+      const id = setTimeout(() => controller.abort(), timeoutMs)
+      try {
+        const res = await fetch(input as RequestInfo, { ...(init || {}), signal: controller.signal })
+        return res
+      } finally {
+        clearTimeout(id)
+      }
+    }
+  }
+
   return createClient(url, serviceKey, {
     auth: { persistSession: false },
+    global: { fetch: fetchWithTimeout(6000) }, // 6s hard cap per request
   })
 }

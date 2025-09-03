@@ -22,7 +22,22 @@ import {
   faShieldHalved,
   faUsers,
   faHatWizard,
-  faHandshake
+  faHandshake,
+  faCog,
+  faChartLine,
+  faExclamationTriangle,
+  faInfoCircle,
+  faTimes,
+  faSearch,
+  faDesktop,
+  faGamepad,
+  faVolumeUp,
+  faUniversalAccess,
+  faChevronDown,
+  faChevronRight,
+  faCheck,
+  faUndo,
+  faSave
 } from '@fortawesome/free-solid-svg-icons';
 
 // Add icons to the library for tree-shaking optimization
@@ -48,7 +63,22 @@ library.add(
   faShieldHalved,
   faUsers,
   faHatWizard,
-  faHandshake
+  faHandshake,
+  faCog,
+  faChartLine,
+  faExclamationTriangle,
+  faInfoCircle,
+  faTimes,
+  faSearch,
+  faDesktop,
+  faGamepad,
+  faVolumeUp,
+  faUniversalAccess,
+  faChevronDown,
+  faChevronRight,
+  faCheck,
+  faUndo,
+  faSave
 );
 
 // Export icons for direct use
@@ -74,5 +104,20 @@ export {
   faShieldHalved,
   faUsers,
   faHatWizard,
-  faHandshake
+  faHandshake,
+  faCog,
+  faChartLine,
+  faExclamationTriangle,
+  faInfoCircle,
+  faTimes,
+  faSearch,
+  faDesktop,
+  faGamepad,
+  faVolumeUp,
+  faUniversalAccess,
+  faChevronDown,
+  faChevronRight,
+  faCheck,
+  faUndo,
+  faSave
 };

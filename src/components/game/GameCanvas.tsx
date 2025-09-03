@@ -5,6 +5,7 @@ import * as PIXI from "pixi.js";
 import { Viewport } from "pixi-viewport";
 import { useGameContext } from "./GameContext";
 import logger from "@/lib/logger";
+import { AdaptiveQualityManager } from "@/utils/performance";
 
 interface GameCanvasProps {
   width?: number;
@@ -28,6 +29,9 @@ export default function GameCanvas({
   const contextRestoredHandlerRef = useRef<((event: Event) => void) | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
   const [initError, setInitError] = useState<string | null>(null);
+  const [fps, setFps] = useState(60);
+  const [quality, setQuality] = useState<'high' | 'medium' | 'low'>('high');
+  const qualityManagerRef = useRef<AdaptiveQualityManager | null>(null);
   const { setApp, setViewport } = useGameContext();
 
   useEffect(() => {
@@ -66,9 +70,32 @@ export default function GameCanvas({
           clearBeforeRender: true,
           preserveDrawingBuffer: false,
           failIfMajorPerformanceCaveat: false, // Allow fallback to software rendering
+          powerPreference: 'high-performance' as const, // Request high-performance GPU
+          premultipliedAlpha: false, // Better performance for most use cases
         };
         
-        await app.init(initOptions);
+        // Guard against init hanging by racing with a timeout
+        const initWithTimeout = (ms: number) => new Promise<void>((resolve, reject) => {
+          let done = false;
+          const tid = setTimeout(() => {
+            if (done) return;
+            done = true;
+            reject(new Error('PIXI init timeout'));
+          }, ms);
+          app.init(initOptions).then(() => {
+            if (done) return;
+            done = true;
+            clearTimeout(tid);
+            resolve();
+          }).catch((e) => {
+            if (done) return;
+            done = true;
+            clearTimeout(tid);
+            reject(e);
+          });
+        });
+
+        await initWithTimeout(3000);
 
         // Add WebGL context loss handling
         const canvas = app.canvas as HTMLCanvasElement;
@@ -94,30 +121,54 @@ export default function GameCanvas({
         canvas.addEventListener('webglcontextlost', contextLostHandlerRef.current);
         canvas.addEventListener('webglcontextrestored', contextRestoredHandlerRef.current);
 
-        // Performance optimizations
+        // Enhanced performance optimizations
         app.ticker.maxFPS = 60; // Cap frame rate for consistent performance
         app.ticker.minFPS = 30; // Minimum acceptable frame rate
         
         // Enable texture garbage collection (modern PIXI.js API)
         if (app.renderer.textureGC) {
           app.renderer.textureGC.maxIdle = 60 * 60; // 1 minute idle time
+          app.renderer.textureGC.checkCountMax = 600; // Check every 10 seconds at 60fps
         }
         
-        // Optimize rendering performance settings are handled in init options
+        // Optimize renderer settings
+        if ('batchSize' in app.renderer) {
+          // Increase batch size for better performance if supported
+          (app.renderer as PIXI.Renderer & { batchSize?: number }).batchSize = 4096;
+        }
         
-        // Set up performance monitoring
-        let lastTime = performance.now();
-        app.ticker.add(() => {
-          const currentTime = performance.now();
-          const deltaTime = currentTime - lastTime;
+        // Initialize adaptive quality manager
+        const qualityManager = new AdaptiveQualityManager((newQuality) => {
+          setQuality(newQuality);
+          const settings = qualityManager.getQualitySettings();
           
-          // Skip frame if performance is poor
-          if (deltaTime > 33.33) { // More than 30fps threshold
-            return;
-          }
+          // Apply quality settings to renderer
+          app.renderer.resolution = settings.resolution;
+          app.renderer.resize(canvas.width, canvas.height);
           
-          lastTime = currentTime;
+          // Update antialias if possible (requires renderer recreation for full effect)
+          console.log(`Quality adjusted to: ${newQuality} (Resolution: ${settings.resolution})`);
         });
+        
+        qualityManagerRef.current = qualityManager;
+        qualityManager.start();
+        
+        // FPS monitoring for display
+        let lastTime = performance.now();
+        let frameCount = 0;
+        
+        const fpsMonitor = () => {
+          const currentTime = performance.now();
+          frameCount++;
+          
+          if (frameCount % 60 === 0) {
+            const fps = Math.round(1000 / ((currentTime - lastTime) / 60));
+            setFps(fps);
+            lastTime = currentTime;
+          }
+        };
+        
+        app.ticker.add(fpsMonitor);
 
         appRef.current = app;
 
@@ -136,21 +187,10 @@ export default function GameCanvas({
 
         // Configure viewport plugins
         viewport
-          .drag({
-            mouseButtons: "all",
-          })
+          .drag({ mouseButtons: "all" })
           .pinch()
-          // Removed decelerate to avoid clamp bounce feedback causing jitter
-          // .decelerate({
-          //   friction: 0.95,
-          //   bounce: 0.8,
-          //   minSpeed: 0.01,
-          // })
-          .clampZoom({
-            minScale: 0.2,
-            maxScale: 3,
-          })
-          .wheel({ smooth: 0, percent: 0.12 });
+          // Cursor-anchored zoom (default when center is omitted)
+          .wheel({ smooth: 0, percent: 0.05 });
 
         // Removed default centering/zoom; IsometricGrid manages it to prevent conflicts
         // viewport.moveCenter(0, 0);
@@ -188,7 +228,28 @@ export default function GameCanvas({
           failIfMajorPerformanceCaveat: true,
         };
         
-        await app.init(fallbackOptions);
+        // Fallback init also protected by timeout
+        const initFallbackWithTimeout = (ms: number) => new Promise<void>((resolve, reject) => {
+          let done = false;
+          const tid = setTimeout(() => {
+            if (done) return;
+            done = true;
+            reject(new Error('PIXI fallback init timeout'));
+          }, ms);
+          app.init(fallbackOptions).then(() => {
+            if (done) return;
+            done = true;
+            clearTimeout(tid);
+            resolve();
+          }).catch((e) => {
+            if (done) return;
+            done = true;
+            clearTimeout(tid);
+            reject(e);
+          });
+        });
+
+        await initFallbackWithTimeout(3000);
         
         appRef.current = app;
         
@@ -206,11 +267,7 @@ export default function GameCanvas({
         
         // Basic viewport configuration
         viewport.drag({ mouseButtons: "left" })
-          .clampZoom({
-            minScale: 0.2,
-            maxScale: 3,
-          })
-          .wheel({ smooth: 0, percent: 0.12 });
+          .wheel({ smooth: 0, percent: 0.05 });
         // Removed default centering/zoom to avoid conflict with grid centering
         // viewport.moveCenter(1000, 1000);
         // viewport.setZoom(0.8);
@@ -248,11 +305,17 @@ export default function GameCanvas({
     };
 
     initPixi();
-  }, [width, height, isInitialized]);
+  }, [width, height]);
 
   // Enhanced cleanup with memory management
   useEffect(() => {
     return () => {
+      // Stop performance monitoring
+      if (qualityManagerRef.current) {
+        qualityManagerRef.current.stop();
+        qualityManagerRef.current = null;
+      }
+      
       if (appRef.current) {
         // Remove WebGL context event listeners
         const canvas = appRef.current.canvas as HTMLCanvasElement;
@@ -314,9 +377,17 @@ export default function GameCanvas({
 
   return (
     <div className="relative w-full h-full" style={{ minHeight: '400px' }}>
+      {/* Performance indicator */}
+      {process.env.NODE_ENV === 'development' && isInitialized && (
+        <div className="absolute top-2 right-2 bg-black/70 text-white px-2 py-1 rounded text-xs font-mono z-10">
+          <div>FPS: {fps}</div>
+          <div>Quality: {quality}</div>
+        </div>
+      )}
+      
       <canvas
         ref={canvasRef}
-        className="border border-slate-200 rounded-lg shadow-sm w-full h-full"
+        className="border border-slate-200 rounded-lg shadow-sm w-full h-full game-canvas"
         style={{
           display: "block",
           width: "100%",

@@ -17,6 +17,14 @@ const AIResponseSchema = z.object({
   risk_note: z.string(),
 })
 
+// Minimal shape for proposals to avoid 'any' usages
+interface ProposalRow {
+  guild?: string;
+  title?: string;
+  description?: string;
+  game_state?: { resources?: Record<string, number> };
+}
+
 export async function POST(req: NextRequest, context: RouteContext) {
   const params = await context.params
   const supabase = createSupabaseServerClient()
@@ -44,9 +52,10 @@ export async function POST(req: NextRequest, context: RouteContext) {
 
   // Deterministic fallback when OpenAI is not configured
   if (!hasOpenAI) {
-    const guild = String((proposal as any).guild || '')
-    const title = String((proposal as any).title || '')
-    const description = String((proposal as any).description || '')
+    const p = proposal as unknown as ProposalRow
+    const guild = String(p.guild ?? '')
+    const title = String(p.title ?? '')
+    const description = String(p.description ?? '')
 
     function inferDelta() {
       const t = `${title} ${description}`.toLowerCase()
@@ -118,7 +127,8 @@ export async function POST(req: NextRequest, context: RouteContext) {
   const system = `You are a scrying oracle. Given a proposal and current resources, forecast likely deltas in a conservative, numeric way.
 Return JSON: { predicted_delta: {resource:number,...}, risk_note: string }`
 
-  const user = `Resources: ${JSON.stringify((proposal as any).game_state.resources)}\nProposal: ${String((proposal as any).title)} - ${String((proposal as any).description)}`
+  const p = proposal as unknown as ProposalRow
+  const user = `Resources: ${JSON.stringify(p.game_state?.resources ?? {})}\nProposal: ${String(p.title ?? '')} - ${String(p.description ?? '')}`
   const { text } = await generateText({ model: openai('gpt-4o-mini'), system, prompt: user })
 
   let parsedJson: unknown

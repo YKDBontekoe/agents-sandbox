@@ -1,0 +1,351 @@
+/* HUD Accessibility Styles */
+
+/* Screen reader only content */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.sr-only:focus {
+  position: static;
+  width: auto;
+  height: auto;
+  padding: inherit;
+  margin: inherit;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+}
+
+/* High contrast mode */
+.hud-high-contrast {
+  --hud-bg-primary: #000000;
+  --hud-bg-secondary: #1a1a1a;
+  --hud-text-primary: #ffffff;
+  --hud-text-secondary: #e0e0e0;
+  --hud-border: #ffffff;
+  --hud-accent: #ffff00;
+  --hud-success: #00ff00;
+  --hud-warning: #ffaa00;
+  --hud-danger: #ff0000;
+  --hud-focus: #00ffff;
+}
+
+.hud-high-contrast .hud-panel {
+  background-color: var(--hud-bg-primary);
+  border: 2px solid var(--hud-border);
+  color: var(--hud-text-primary);
+}
+
+.hud-high-contrast .hud-panel-header {
+  background-color: var(--hud-bg-secondary);
+  border-bottom: 1px solid var(--hud-border);
+}
+
+.hud-high-contrast button {
+  background-color: var(--hud-bg-secondary) !important;
+  border: 2px solid var(--hud-border) !important;
+  color: var(--hud-text-primary) !important;
+}
+
+.hud-high-contrast button:hover {
+  background-color: var(--hud-accent) !important;
+  color: var(--hud-bg-primary) !important;
+}
+
+.hud-high-contrast button:focus {
+  outline: 3px solid var(--hud-focus) !important;
+  outline-offset: 2px;
+}
+
+.hud-high-contrast .text-green-400,
+.hud-high-contrast .text-green-500 {
+  color: var(--hud-success) !important;
+}
+
+.hud-high-contrast .text-yellow-400,
+.hud-high-contrast .text-yellow-500 {
+  color: var(--hud-warning) !important;
+}
+
+.hud-high-contrast .text-red-400,
+.hud-high-contrast .text-red-500 {
+  color: var(--hud-danger) !important;
+}
+
+/* Reduced motion preferences */
+.hud-reduced-motion *,
+.hud-reduced-motion *::before,
+.hud-reduced-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
+.hud-reduced-motion .animate-pulse {
+  animation: none !important;
+}
+
+.hud-reduced-motion .animate-spin {
+  animation: none !important;
+}
+
+.hud-reduced-motion .animate-bounce {
+  animation: none !important;
+}
+
+/* Focus management */
+.hud-panel:focus {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+.hud-high-contrast .hud-panel:focus {
+  outline: 3px solid var(--hud-focus);
+  outline-offset: 2px;
+}
+
+/* Keyboard navigation indicators */
+.hud-keyboard-nav .hud-panel {
+  position: relative;
+}
+
+.hud-keyboard-nav .hud-panel:focus::before {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  border: 2px solid #3b82f6;
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+.hud-high-contrast.hud-keyboard-nav .hud-panel:focus::before {
+  border-color: var(--hud-focus);
+  border-width: 3px;
+}
+
+/* Skip to content link */
+.skip-to-content {
+  position: absolute;
+  top: -40px;
+  left: 6px;
+  background: #000;
+  color: #fff;
+  padding: 8px;
+  text-decoration: none;
+  border-radius: 4px;
+  z-index: 1000;
+  transition: top 0.3s;
+}
+
+.skip-to-content:focus {
+  top: 6px;
+}
+
+.hud-reduced-motion .skip-to-content {
+  transition: none;
+}
+
+/* Panel state announcements */
+.hud-panel[aria-expanded="true"] {
+  /* Expanded state styling */
+}
+
+.hud-panel[aria-expanded="false"] {
+  /* Collapsed state styling */
+}
+
+/* Resource status indicators for screen readers */
+.resource-status-positive::after {
+  content: ' (increasing)';
+  position: absolute;
+  left: -10000px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+.resource-status-negative::after {
+  content: ' (decreasing)';
+  position: absolute;
+  left: -10000px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+.resource-status-critical::after {
+  content: ' (critical level)';
+  position: absolute;
+  left: -10000px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+/* Button states for accessibility */
+button[aria-pressed="true"] {
+  background-color: #1d4ed8;
+  color: white;
+}
+
+.hud-high-contrast button[aria-pressed="true"] {
+  background-color: var(--hud-accent) !important;
+  color: var(--hud-bg-primary) !important;
+}
+
+button[aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Loading states */
+.hud-loading[aria-busy="true"] {
+  position: relative;
+}
+
+.hud-loading[aria-busy="true"]::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 20px;
+  height: 20px;
+  margin: -10px 0 0 -10px;
+  border: 2px solid #ccc;
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.hud-reduced-motion .hud-loading[aria-busy="true"]::after {
+  animation: none;
+  border: 2px solid #3b82f6;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Responsive text sizing for accessibility */
+@media (prefers-reduced-motion: reduce) {
+  .hud-panel {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+@media (prefers-contrast: high) {
+  .hud-panel {
+    border: 2px solid currentColor;
+  }
+  
+  button {
+    border: 2px solid currentColor;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .hud-panel {
+    background-color: #1a1a1a;
+    color: #ffffff;
+  }
+}
+
+/* Focus trap styling */
+.hud-focus-trap {
+  position: relative;
+}
+
+.hud-focus-trap::before,
+.hud-focus-trap::after {
+  content: '';
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}
+
+/* Landmark regions */
+.hud-main[role="main"] {
+  /* Main content area */
+}
+
+.hud-navigation[role="navigation"] {
+  /* Navigation panels */
+}
+
+.hud-complementary[role="complementary"] {
+  /* Sidebar and supplementary content */
+}
+
+/* Status updates */
+.hud-status-update {
+  position: absolute;
+  left: -10000px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+/* Tooltip accessibility */
+.hud-tooltip[role="tooltip"] {
+  position: absolute;
+  z-index: 1000;
+  padding: 4px 8px;
+  background: #000;
+  color: #fff;
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.hud-high-contrast .hud-tooltip[role="tooltip"] {
+  background: var(--hud-bg-primary);
+  color: var(--hud-text-primary);
+  border: 2px solid var(--hud-border);
+}
+
+/* Error states */
+.hud-error[role="alert"] {
+  background-color: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+  padding: 8px;
+  border-radius: 4px;
+}
+
+.hud-high-contrast .hud-error[role="alert"] {
+  background-color: var(--hud-bg-primary);
+  border: 2px solid var(--hud-danger);
+  color: var(--hud-danger);
+}
+
+/* Success states */
+.hud-success[role="status"] {
+  background-color: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #166534;
+  padding: 8px;
+  border-radius: 4px;
+}
+
+.hud-high-contrast .hud-success[role="status"] {
+  background-color: var(--hud-bg-primary);
+  border: 2px solid var(--hud-success);
+  color: var(--hud-success);
+}

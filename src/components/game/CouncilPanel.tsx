@@ -1,6 +1,6 @@
 import React from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
-import { GameResources } from './GameHUD';
+import { GameResources } from './hud/types';
 import { ResourceIcon } from '../ui';
 import type { ResourceType } from '@/lib/resources';
 import { getResourceIcon, getResourceColor } from './resourceUtils';

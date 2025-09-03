@@ -74,7 +74,7 @@ export default function Home() {
                   </div>
                   <h3 className="text-heading-3 text-neutral-900 mb-2">Strategic Building</h3>
                   <p className="text-body-small text-neutral-600">
-                    Construct and optimize your empire's infrastructure
+                    Construct and optimize your empire&apos;s infrastructure
                   </p>
                 </div>
                 
