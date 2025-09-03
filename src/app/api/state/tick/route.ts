@@ -1,6 +1,26 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 
+// Minimal server-side catalog for building production. Mirrors client SIM_BUILDINGS where relevant.
+type ResKey = 'grain' | 'coin' | 'mana' | 'favor' | 'unrest' | 'threat';
+type MaybeWorkers = ResKey | 'workers';
+interface ServerBuildingDef {
+  inputs: Partial<Record<MaybeWorkers, number>>;
+  outputs: Partial<Record<MaybeWorkers, number>>;
+  workCapacity?: number;
+}
+
+const SERVER_BUILDINGS: Record<string, ServerBuildingDef> = {
+  // New base + economy buildings
+  council_hall: { inputs: {}, outputs: { favor: 1 }, workCapacity: 0 },
+  trade_post: { inputs: { grain: 2 }, outputs: { coin: 8 }, workCapacity: 0 },
+  automation_workshop: { inputs: { mana: 1 }, outputs: { coin: 6 }, workCapacity: 0 },
+  // Existing sample buildings (subset; ignore workers on server)
+  farm: { inputs: { coin: 1 }, outputs: { grain: 10 }, workCapacity: 5 },
+  house: { inputs: { grain: 1 }, outputs: { /* workers: 5 */ }, workCapacity: 0 },
+  shrine: { inputs: { mana: 1 }, outputs: { favor: 2 }, workCapacity: 2 },
+};
+
 // Advance one cycle: apply accepted proposals to resources with simple rules and clear applied
 export async function POST() {
   const supabase = createSupabaseServerClient()
@@ -30,6 +50,40 @@ export async function POST() {
     for (const key of Object.keys(delta)) {
       const value = Number(delta[key] ?? 0)
       resources[key] = Math.max(0, (Number(resources[key] ?? 0) + value))
+    }
+  }
+
+  // Apply per-building production (conservative: skip building if any input is missing)
+  const buildings: Array<{ typeId?: string; workers?: number } & Record<string, unknown>> = Array.isArray(state.buildings) ? state.buildings as any : []
+  for (const b of buildings) {
+    const typeId = String(b.typeId || '')
+    const def = SERVER_BUILDINGS[typeId]
+    if (!def) continue
+    const capacity = def.workCapacity ?? 0
+    const assigned = Math.min(typeof b.workers === 'number' ? b.workers : 0, capacity)
+    const ratio = capacity > 0 ? assigned / capacity : 1
+    // Check inputs
+    let canProduce = true
+    for (const [k, v] of Object.entries(def.inputs)) {
+      if (k === 'workers') continue
+      const need = (Number(v ?? 0)) * ratio
+      const cur = Number(resources[k as ResKey] ?? 0)
+      if (cur < need) { canProduce = false; break }
+    }
+    if (!canProduce) continue
+    // Consume inputs
+    for (const [k, v] of Object.entries(def.inputs)) {
+      if (k === 'workers') continue
+      const need = (Number(v ?? 0)) * ratio
+      const key = k as ResKey
+      resources[key] = Math.max(0, Number(resources[key] ?? 0) - need)
+    }
+    // Produce outputs
+    for (const [k, v] of Object.entries(def.outputs)) {
+      if (k === 'workers') continue // server does not track workers as a resource
+      const out = (Number(v ?? 0)) * ratio
+      const key = k as ResKey
+      resources[key] = Math.max(0, Number(resources[key] ?? 0) + out)
     }
   }
 

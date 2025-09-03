@@ -21,6 +21,7 @@ import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
 import EffectsLayer from '@/components/game/EffectsLayer';
 import HeatLayer from '@/components/game/HeatLayer';
 import MarkersLayer from '@/components/game/MarkersLayer';
+import BuildingsLayer from '@/components/game/BuildingsLayer';
 import SurvivalTracker from '@/components/game/SurvivalTracker';
 import FlavorEvent from '@/components/game/FlavorEvent';
 import { FlavorEventDef, getRandomFlavorEvent } from '@/components/game/flavorEvents';
@@ -32,6 +33,100 @@ import { LayoutPreset, LAYOUT_PRESET_KEY } from '@/lib/preferences';
 import { useUserPreference } from '@/hooks/useUserPreference';
 import type { GameResources, GameTime } from '@/components/game/hud/types';
 import type { CategoryType } from '@/lib/categories';
+
+type BuildTypeId = keyof typeof SIM_BUILDINGS;
+
+function TileInfoPanel({
+  selected,
+  resources,
+  simResources,
+  placedBuildings,
+  onBuild,
+  onOpenCouncil,
+}: {
+  selected: { x: number; y: number; tileType?: string };
+  resources: GameResources;
+  simResources: SimResources | null;
+  placedBuildings: StoredBuilding[];
+  onBuild: (typeId: BuildTypeId) => void | Promise<void>;
+  onOpenCouncil: () => void;
+}) {
+  const { x, y, tileType } = selected;
+  const occupied = placedBuildings.find(b => b.x === x && b.y === y) || null;
+  const hasCouncil = placedBuildings.some(b => b.typeId === 'council_hall');
+
+  const candidates: BuildTypeId[] = hasCouncil
+    ? ['trade_post', 'automation_workshop']
+    : ['council_hall'];
+
+  const canPlaceOnTile = (typeId: BuildTypeId) => {
+    const allowed = (BUILDABLE_TILES as any)[typeId] as string[] | undefined;
+    if (!allowed) return true;
+    if (!tileType) return false;
+    return allowed.includes(tileType);
+  };
+
+  const canAffordBuild = (typeId: BuildTypeId) => {
+    if (!simResources) return false;
+    return canAfford(SIM_BUILDINGS[typeId].cost, simResources);
+  };
+
+  const renderCost = (typeId: BuildTypeId) => {
+    const cost = SIM_BUILDINGS[typeId].cost;
+    const parts = Object.entries(cost)
+      .filter(([_, v]) => (v ?? 0) > 0)
+      .map(([k, v]) => `${k} -${v}`);
+    return parts.length ? parts.join('  ') : 'Free';
+  };
+
+  return (
+    <div className="absolute bottom-24 left-4 bg-white/95 border border-slate-200 text-slate-800 px-3 py-2 rounded-md text-sm shadow-sm pointer-events-auto w-[320px]">
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <div className="font-medium">Tile ({x}, {y})</div>
+          <div className="text-xs text-slate-500">{tileType ?? 'unknown'}{occupied ? ` • ${SIM_BUILDINGS[occupied.typeId].name}` : ''}</div>
+        </div>
+        <button
+          onClick={onOpenCouncil}
+          className="px-2 py-1 rounded bg-blue-600 hover:bg-blue-700 text-white text-xs"
+        >
+          Open Council
+        </button>
+      </div>
+
+      <div className="mt-2 border-t pt-2">
+        {occupied ? (
+          <div className="text-xs text-slate-600">A {SIM_BUILDINGS[occupied.typeId].name} already occupies this tile.</div>
+        ) : (
+          <div className="space-y-2">
+            <div className="text-xs text-slate-600">Available builds</div>
+            {candidates.map((typeId) => {
+              const placeable = canPlaceOnTile(typeId);
+              const affordable = canAffordBuild(typeId);
+              const disabled = !placeable || !affordable;
+              return (
+                <div key={typeId} className="flex items-center justify-between gap-2">
+                  <div>
+                    <div className="font-medium text-slate-800 text-sm">{SIM_BUILDINGS[typeId].name}</div>
+                    <div className="text-[11px] text-slate-500">{renderCost(typeId)}{!placeable ? ' • cannot build on this terrain' : ''}</div>
+                  </div>
+                  <button
+                    onClick={() => onBuild(typeId)}
+                    disabled={disabled}
+                    className={`px-2 py-1 rounded text-xs border ${disabled ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-700'}`}
+                  >
+                    Build
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 
 interface StoredBuilding {
   id: string;
@@ -109,7 +204,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     }
     loadMap();
   }, [gridSize]);
-  const [selectedTile, setSelectedTile] = useState<{ x: number; y: number } | null>(null);
+  const [selectedTile, setSelectedTile] = useState<{ x: number; y: number; tileType?: string } | null>(null);
   const [selectedLeyline, setSelectedLeyline] = useState<Leyline | null>(null);
   const [isDrawingMode, _setIsDrawingMode] = useState(false);
   const hasAutoOpenedCouncilRef = useRef(false);
@@ -488,10 +583,11 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
           onMouseMove={e => setCursorPos({ x: e.clientX, y: e.clientY })}
           onMouseLeave={() => setTooltip(null)}
         >
-          <GameRenderer gridSize={20} tileTypes={tileTypes} onTileHover={(x,y,t)=>{ setSelectedTile({x,y}); }} onTileClick={(x,y,t)=>{ setSelectedTile({x,y}); }}>
+          <GameRenderer gridSize={20} tileTypes={tileTypes} onTileHover={(x,y,t)=>{ setSelectedTile({x,y,tileType:t}); }} onTileClick={(x,y,t)=>{ setSelectedTile({x,y,tileType:t}); }}>
             <DistrictSprites districts={districts} tileTypes={tileTypes} onDistrictHover={()=>{}} />
             <LeylineSystem leylines={leylines} onLeylineCreate={()=>{}} onLeylineSelect={setSelectedLeyline} selectedLeyline={selectedLeyline} isDrawingMode={false} />
             <HeatLayer gridSize={20} tileWidth={64} tileHeight={32} unrest={resources.unrest} threat={resources.threat} />
+            <BuildingsLayer buildings={placedBuildings.map(b => ({ id: b.id, typeId: b.typeId, x: b.x, y: b.y }))} />
             {acceptedNotice && (
               <EffectsLayer trigger={{ eventKey: acceptedNoticeKeyRef.current || 'accept', deltas: acceptedNotice.delta || {}, gridX: selectedTile?.x ?? 10, gridY: selectedTile?.y ?? 10 }} />
             )}
@@ -499,15 +595,51 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
           </GameRenderer>
 
           {selectedTile && (
-            <div className="absolute bottom-24 left-4 bg-white/95 border border-slate-200 text-slate-800 px-3 py-2 rounded-md text-sm shadow-sm flex items-center gap-3 pointer-events-auto">
-              <span>Selected tile: ({selectedTile.x}, {selectedTile.y})</span>
-              <button
-                onClick={() => setIsCouncilOpen(true)}
-                className="px-2 py-1 rounded bg-blue-600 hover:bg-blue-700 text-white text-xs"
-              >
-                Open Council
-              </button>
-            </div>
+            <TileInfoPanel
+              selected={{ x: selectedTile.x, y: selectedTile.y, tileType: selectedTile.tileType ?? tileTypes[selectedTile.y]?.[selectedTile.x] }}
+              resources={resources}
+              simResources={simResources}
+              placedBuildings={placedBuildings}
+              onBuild={async (typeId) => {
+                if (!simResources) return;
+                const gx = selectedTile.x, gy = selectedTile.y;
+                const tt = selectedTile.tileType ?? tileTypes[gy]?.[gx];
+                // Prevent duplicate building per tile
+                const occupied = placedBuildings.some(b => b.x === gx && b.y === gy);
+                if (occupied) return;
+                const def = SIM_BUILDINGS[typeId];
+                if (!def) return;
+                const allowed = (BUILDABLE_TILES as any)[typeId] as string[] | undefined;
+                if (allowed && tt && !allowed.includes(tt)) return;
+                // Enforce Council Hall prerequisite for advanced builds
+                const hasCouncil = placedBuildings.some(b => b.typeId === 'council_hall');
+                if ((typeId === 'trade_post' || typeId === 'automation_workshop') && !hasCouncil) return;
+                // Affordability check
+                if (!canAfford(def.cost, simResources)) return;
+                const newBuilding: StoredBuilding = {
+                  id: `b-${generateId()}`,
+                  typeId: typeId as keyof typeof SIM_BUILDINGS,
+                  x: gx,
+                  y: gy,
+                  level: 1,
+                  workers: 0,
+                };
+                const newBuildings = [newBuilding, ...placedBuildings];
+                const newResSim = applyCost(simResources, def.cost);
+                // Update server state resources as well
+                const newResServer = { ...state!.resources } as Record<string, number>;
+                for (const [k, v] of Object.entries(def.cost)) {
+                  const key = k as keyof typeof newResServer;
+                  newResServer[key] = Math.max(0, (newResServer[key] || 0) - (v || 0));
+                }
+                setPlacedBuildings(newBuildings);
+                setSimResources(newResSim);
+                setState(prev => prev ? { ...prev, resources: newResServer, buildings: newBuildings } : prev);
+                await saveState({ resources: newResServer, buildings: newBuildings });
+                setMarkers(prev => [{ id: `m-${generateId()}`, x: gx, y: gy, label: SIM_BUILDINGS[typeId].name }, ...prev]);
+              }}
+              onOpenCouncil={() => setIsCouncilOpen(true)}
+            />
           )}
         </div>
       </div>

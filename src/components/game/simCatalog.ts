@@ -11,6 +11,33 @@ export interface SimBuildingType {
 }
 
 export const SIM_BUILDINGS: Record<string, SimBuildingType> = {
+  council_hall: {
+    id: 'council_hall',
+    name: 'Council Hall',
+    cost: { coin: 100, mana: 10 },
+    // Base provides small favor each cycle; operates without workers
+    inputs: {},
+    outputs: { favor: 1 },
+    workCapacity: 0,
+  },
+  trade_post: {
+    id: 'trade_post',
+    name: 'Trade Post',
+    cost: { coin: 60, grain: 10 },
+    // Converts grain into coin passively to represent a basic trade route
+    inputs: { grain: 2 },
+    outputs: { coin: 8 },
+    workCapacity: 0,
+  },
+  automation_workshop: {
+    id: 'automation_workshop',
+    name: 'Automation Workshop',
+    cost: { coin: 80, mana: 15 },
+    // Spends a bit of mana to steadily generate coin (arcane mechanization)
+    inputs: { mana: 1 },
+    outputs: { coin: 6 },
+    workCapacity: 0,
+  },
   farm: {
     id: 'farm',
     name: 'Farm',
@@ -38,6 +65,9 @@ export const SIM_BUILDINGS: Record<string, SimBuildingType> = {
 };
 
 export const BUILDABLE_TILES: Record<keyof typeof SIM_BUILDINGS, string[]> = {
+  council_hall: ['grass', 'mountain'],
+  trade_post: ['grass'],
+  automation_workshop: ['grass'],
   farm: ['grass'],
   house: ['grass'],
   shrine: ['grass'],
