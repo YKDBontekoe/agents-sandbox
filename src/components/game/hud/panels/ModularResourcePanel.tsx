@@ -167,6 +167,9 @@ export function ModularResourcePanel({
       zone: 'sidebar-right',
       priority: 10,
       persistent: true,
+      responsive: {
+        collapseOnMobile: true
+      },
       accessibility: {
         ariaLabel: 'Resource information panel',
         role: 'region'

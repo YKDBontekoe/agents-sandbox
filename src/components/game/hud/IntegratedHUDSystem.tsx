@@ -10,6 +10,7 @@ import './hud-accessibility.css';
 import { ModularResourcePanel } from './panels/ModularResourcePanel';
 import { ModularTimePanel } from './panels/ModularTimePanel';
 import { ModularActionPanel } from './panels/ModularActionPanel';
+import { ModularMiniMapPanel } from './panels/ModularMiniMapPanel';
 
 // Integrated HUD System Props
 interface IntegratedHUDSystemProps {
@@ -56,6 +57,23 @@ function HUDSystemCore({
   className = '' 
 }: Omit<IntegratedHUDSystemProps, 'defaultPreset'>) {
   const { currentPreset } = useHUDLayoutPresets();
+  // Expose sidebar width as CSS variable for safe-area aware overlays
+  React.useEffect(() => {
+    const updateVar = () => {
+      const el = document.querySelector('[data-hud-zone="sidebar-right"]') as HTMLElement | null;
+      const w = el ? el.offsetWidth : 0;
+      document.documentElement.style.setProperty('--hud-right-rail', w ? `${w}px` : '0px');
+    };
+    updateVar();
+    const ro = new ResizeObserver(updateVar);
+    const el = document.querySelector('[data-hud-zone="sidebar-right"]') as HTMLElement | null;
+    if (el) ro.observe(el);
+    window.addEventListener('resize', updateVar);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', updateVar);
+    };
+  }, []);
 
   return (
     <HUDLayoutProvider 
@@ -64,18 +82,24 @@ function HUDSystemCore({
     >
       <HUDPanelRegistryProvider>
         <HUDContainer className={`integrated-hud-system ${className}`}>
-          {/* Resource Panel */}
+          {/* Right Sidebar: stack all primary panels to prevent overlap */}
           <HUDZone zone="sidebar-right">
+            {/* Subtle left-edge gradient for depth */}
+            <div className="relative">
+              <div className="pointer-events-none absolute left-0 top-0 h-full w-2 bg-gradient-to-l from-black/10 to-transparent" />
+            </div>
+            {/* Sticky header with density toggle */}
+            <div className="sticky top-0 z-10 -mx-3 md:-mx-4 -mt-3 md:-mt-4 px-3 md:px-4 py-2 bg-white/70 dark:bg-slate-900/60 backdrop-blur-md border-b border-black/10">
+              <HUDDensityToggle />
+            </div>
+            <div className="mt-2" />
             <ModularResourcePanel
               resources={gameData.resources}
               changes={gameData.resourceChanges}
               workforce={gameData.workforce}
               variant={currentPreset.panelVariants.resources || 'default'}
             />
-          </HUDZone>
-
-          {/* Time Panel */}
-          <HUDZone zone="top-right">
+            <div className="mt-2" />
             <ModularTimePanel
               time={gameData.time}
               isPaused={gameData.time.isPaused}
@@ -84,10 +108,9 @@ function HUDSystemCore({
               onAdvanceCycle={() => onGameAction('advance-cycle')}
               variant={currentPreset.panelVariants['time-panel'] || 'default'}
             />
-          </HUDZone>
-
-          {/* Action Panel */}
-          <HUDZone zone="middle-right">
+            <div className="mt-2" />
+            <ModularMiniMapPanel gridSize={20} />
+            <div className="mt-2" />
             <ModularActionPanel
               onOpenCouncil={() => onGameAction('open-council')}
               onOpenEdicts={() => onGameAction('open-edicts')}
@@ -227,6 +250,46 @@ export function useIntegratedHUD() {
     presets: useHUDLayoutPresets(),
     // Add other HUD system hooks as needed
   };
+}
+
+// Lightweight density toggle component
+function HUDDensityToggle() {
+  const { currentPreset, customizePreset } = useHUDLayoutPresets();
+
+  const setDensity = (density: 'minimal' | 'compact' | 'default') => {
+    const variants = {
+      minimal: { 'resources': 'minimal', 'time-panel': 'minimal', 'action-panel': 'minimal' },
+      compact: { 'resources': 'compact', 'time-panel': 'compact', 'action-panel': 'compact' },
+      default: { 'resources': 'default', 'time-panel': 'default', 'action-panel': 'default' },
+    } as const;
+    customizePreset(currentPreset.id, { panelVariants: { ...currentPreset.panelVariants, ...variants[density] } });
+  };
+
+  return (
+    <div className="flex items-center gap-1 mb-2 text-xs">
+      <button
+        onClick={() => setDensity('minimal')}
+        className="px-2 py-1 rounded border border-border bg-panel hover:bg-muted text-foreground"
+        title="Minimal HUD"
+      >
+        Min
+      </button>
+      <button
+        onClick={() => setDensity('compact')}
+        className="px-2 py-1 rounded border border-border bg-panel hover:bg-muted text-foreground"
+        title="Compact HUD"
+      >
+        Compact
+      </button>
+      <button
+        onClick={() => setDensity('default')}
+        className="px-2 py-1 rounded border border-border bg-panel hover:bg-muted text-foreground"
+        title="Default HUD"
+      >
+        Full
+      </button>
+    </div>
+  );
 }
 
 // Example usage component

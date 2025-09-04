@@ -74,28 +74,7 @@ export default function GameCanvas({
           premultipliedAlpha: false, // Better performance for most use cases
         };
         
-        // Guard against init hanging by racing with a timeout
-        const initWithTimeout = (ms: number) => new Promise<void>((resolve, reject) => {
-          let done = false;
-          const tid = setTimeout(() => {
-            if (done) return;
-            done = true;
-            reject(new Error('PIXI init timeout'));
-          }, ms);
-          app.init(initOptions).then(() => {
-            if (done) return;
-            done = true;
-            clearTimeout(tid);
-            resolve();
-          }).catch((e) => {
-            if (done) return;
-            done = true;
-            clearTimeout(tid);
-            reject(e);
-          });
-        });
-
-        await initWithTimeout(3000);
+        await app.init(initOptions);
 
         // Add WebGL context loss handling
         const canvas = app.canvas as HTMLCanvasElement;
@@ -187,10 +166,21 @@ export default function GameCanvas({
 
         // Configure viewport plugins
         viewport
-          .drag({ mouseButtons: "all" })
+          .drag({
+            mouseButtons: "all",
+          })
           .pinch()
-          // Cursor-anchored zoom (default when center is omitted)
-          .wheel({ smooth: 0, percent: 0.05 });
+          // Removed decelerate to avoid clamp bounce feedback causing jitter
+          // .decelerate({
+          //   friction: 0.95,
+          //   bounce: 0.8,
+          //   minSpeed: 0.01,
+          // })
+          .clampZoom({
+            minScale: 0.2,
+            maxScale: 3,
+          })
+          .wheel({ smooth: 0, percent: 0.12 });
 
         // Removed default centering/zoom; IsometricGrid manages it to prevent conflicts
         // viewport.moveCenter(0, 0);
@@ -228,28 +218,7 @@ export default function GameCanvas({
           failIfMajorPerformanceCaveat: true,
         };
         
-        // Fallback init also protected by timeout
-        const initFallbackWithTimeout = (ms: number) => new Promise<void>((resolve, reject) => {
-          let done = false;
-          const tid = setTimeout(() => {
-            if (done) return;
-            done = true;
-            reject(new Error('PIXI fallback init timeout'));
-          }, ms);
-          app.init(fallbackOptions).then(() => {
-            if (done) return;
-            done = true;
-            clearTimeout(tid);
-            resolve();
-          }).catch((e) => {
-            if (done) return;
-            done = true;
-            clearTimeout(tid);
-            reject(e);
-          });
-        });
-
-        await initFallbackWithTimeout(3000);
+        await app.init(fallbackOptions);
         
         appRef.current = app;
         
@@ -267,7 +236,11 @@ export default function GameCanvas({
         
         // Basic viewport configuration
         viewport.drag({ mouseButtons: "left" })
-          .wheel({ smooth: 0, percent: 0.05 });
+          .clampZoom({
+            minScale: 0.2,
+            maxScale: 3,
+          })
+          .wheel({ smooth: 0, percent: 0.12 });
         // Removed default centering/zoom to avoid conflict with grid centering
         // viewport.moveCenter(1000, 1000);
         // viewport.setZoom(0.8);
@@ -328,9 +301,8 @@ export default function GameCanvas({
           }
         }
         
-        // Stop all tickers and animations
+        // Stop ticker; Application.destroy will dispose it safely
         appRef.current.ticker.stop();
-        appRef.current.ticker.destroy();
         
         // Clean up viewport
         if (viewportRef.current) {
@@ -338,16 +310,8 @@ export default function GameCanvas({
           viewportRef.current = null;
         }
         
-        // Destroy application with comprehensive cleanup
-        appRef.current.destroy(true, {
-          children: true,
-          texture: true,
-        });
-        
-        // Force garbage collection of textures
-        if (appRef.current.renderer?.textureGC) {
-          appRef.current.renderer.textureGC.run();
-        }
+        // Destroy application with comprehensive cleanup (destroys ticker/renderer internally)
+        appRef.current.destroy(true, { children: true, texture: true });
         
         appRef.current = null;
       }
@@ -379,7 +343,7 @@ export default function GameCanvas({
     <div className="relative w-full h-full" style={{ minHeight: '400px' }}>
       {/* Performance indicator */}
       {process.env.NODE_ENV === 'development' && isInitialized && (
-        <div className="absolute top-2 right-2 bg-black/70 text-white px-2 py-1 rounded text-xs font-mono z-10">
+        <div className="absolute top-2 left-2 bg-black/70 text-white px-2 py-1 rounded text-xs font-mono z-10">
           <div>FPS: {fps}</div>
           <div>Quality: {quality}</div>
         </div>

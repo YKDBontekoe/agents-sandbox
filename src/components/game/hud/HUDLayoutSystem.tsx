@@ -46,44 +46,44 @@ export const HUD_LAYOUTS: Record<LayoutPreset | string, HUDLayoutConfig> = {
     zones: {
       'top-left': { enabled: false, className: '' },
       'top-center': { enabled: true, className: 'absolute top-4 left-1/2 -translate-x-1/2 z-40', maxPanels: 1, priority: 10 },
-      'top-right': { enabled: true, className: 'absolute top-4 right-4 z-40', maxPanels: 2, priority: 9 },
+      'top-right': { enabled: false, className: '' },
       'middle-left': { enabled: false, className: '' },
       'middle-center': { enabled: false, className: '' },
-      'middle-right': { enabled: true, className: 'absolute right-4 top-1/2 -translate-y-1/2 z-40', maxPanels: 1, priority: 8 },
+      'middle-right': { enabled: false, className: '' },
       'bottom-left': { enabled: false, className: '' },
       'bottom-center': { enabled: true, className: 'absolute bottom-4 left-1/2 -translate-x-1/2 z-40', maxPanels: 1, priority: 7 },
       'bottom-right': { enabled: false, className: '' },
       'sidebar-left': { enabled: false, className: '' },
-      'sidebar-right': { enabled: true, className: 'flex flex-col gap-2 p-4 h-full overflow-y-auto', maxPanels: 10, priority: 6 },
+      'sidebar-right': { enabled: true, className: 'absolute top-0 right-0 h-full w-[300px] md:w-[340px] lg:w-[360px] flex flex-col gap-2 md:gap-3 p-3 md:p-4 overflow-y-auto z-40 bg-white/70 dark:bg-slate-900/40 backdrop-blur-md border-l border-black/10', maxPanels: 12, priority: 6 },
       'overlay': { enabled: true, className: 'absolute inset-0 z-50 pointer-events-none', priority: 11 }
     },
     responsive: {
       mobile: ['sidebar-right', 'overlay'],
       tablet: ['top-center', 'sidebar-right', 'overlay'],
-      desktop: ['top-center', 'top-right', 'middle-right', 'sidebar-right', 'overlay'],
-      wide: ['top-center', 'top-right', 'middle-right', 'bottom-center', 'sidebar-right', 'overlay']
+      desktop: ['top-center', 'sidebar-right', 'overlay'],
+      wide: ['top-center', 'bottom-center', 'sidebar-right', 'overlay']
     }
   },
   expanded: {
     zones: {
       'top-left': { enabled: true, className: 'absolute top-4 left-4 z-40', maxPanels: 2, priority: 8 },
       'top-center': { enabled: true, className: 'absolute top-4 left-1/2 -translate-x-1/2 z-40', maxPanels: 1, priority: 10 },
-      'top-right': { enabled: true, className: 'absolute top-4 right-4 z-40', maxPanels: 2, priority: 9 },
+      'top-right': { enabled: false, className: '' },
       'middle-left': { enabled: true, className: 'absolute left-4 top-1/2 -translate-y-1/2 z-40', maxPanels: 2, priority: 7 },
       'middle-center': { enabled: false, className: '' },
-      'middle-right': { enabled: true, className: 'absolute right-4 top-1/2 -translate-y-1/2 z-40', maxPanels: 2, priority: 6 },
+      'middle-right': { enabled: false, className: '' },
       'bottom-left': { enabled: true, className: 'absolute bottom-4 left-4 z-40', maxPanels: 2, priority: 5 },
       'bottom-center': { enabled: true, className: 'absolute bottom-4 left-1/2 -translate-x-1/2 z-40', maxPanels: 1, priority: 4 },
       'bottom-right': { enabled: true, className: 'absolute bottom-4 right-4 z-40', maxPanels: 2, priority: 3 },
       'sidebar-left': { enabled: false, className: '' },
-      'sidebar-right': { enabled: true, className: 'flex flex-col gap-2 p-4 h-full overflow-y-auto', maxPanels: 10, priority: 2 },
+      'sidebar-right': { enabled: true, className: 'absolute top-0 right-0 h-full w-[300px] md:w-[340px] lg:w-[360px] flex flex-col gap-2 md:gap-3 p-3 md:p-4 overflow-y-auto z-40 bg-white/70 dark:bg-slate-900/40 backdrop-blur-md border-l border-black/10', maxPanels: 12, priority: 2 },
       'overlay': { enabled: true, className: 'absolute inset-0 z-50 pointer-events-none', priority: 11 }
     },
     responsive: {
       mobile: ['sidebar-right', 'overlay'],
       tablet: ['top-center', 'bottom-center', 'sidebar-right', 'overlay'],
-      desktop: ['top-left', 'top-center', 'top-right', 'middle-left', 'middle-right', 'bottom-center', 'sidebar-right', 'overlay'],
-      wide: ['top-left', 'top-center', 'top-right', 'middle-left', 'middle-right', 'bottom-left', 'bottom-center', 'bottom-right', 'sidebar-right', 'overlay']
+      desktop: ['top-left', 'top-center', 'middle-left', 'bottom-center', 'sidebar-right', 'overlay'],
+      wide: ['top-left', 'top-center', 'bottom-left', 'bottom-center', 'bottom-right', 'sidebar-right', 'overlay']
     }
   }
 };
@@ -237,7 +237,7 @@ export function HUDZone({ zone, children, className = '' }: HUDZoneProps) {
     return null;
   }
 
-  const combinedClassName = `${zoneConfig.className} ${className}`.trim();
+  const combinedClassName = `${zoneConfig.className} pointer-events-auto ${className}`.trim();
 
   return (
     <div className={combinedClassName} data-hud-zone={zone}>
@@ -254,7 +254,7 @@ interface HUDContainerProps {
 
 export function HUDContainer({ children, className = '' }: HUDContainerProps) {
   return (
-    <div className={`relative w-full h-full pointer-events-none ${className}`} data-hud-container>
+    <div className={`absolute inset-0 pointer-events-none z-40 ${className}`} data-hud-container>
       {children}
     </div>
   );

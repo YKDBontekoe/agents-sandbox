@@ -59,12 +59,22 @@ export default function MiniMap({ gridSize, tileWidth = 64, tileHeight = 32, wid
     ctx.strokeStyle = 'rgba(148,163,184,1)';
     ctx.stroke();
 
-    // viewport rectangle in world coords
-    const scale = vp.scale.x || 1;
-    const worldW = vp.screenWidth / scale;
-    const worldH = vp.screenHeight / scale;
-    const tl = worldToMini(vp.x, vp.y);
-    const br = worldToMini(vp.x + worldW, vp.y + worldH);
+    // cardinal markers
+    ctx.fillStyle = 'rgba(30,41,59,0.7)';
+    ctx.font = '10px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('N', pts[0].x, Math.max(8, pts[0].y - 4));
+    ctx.fillText('S', pts[2].x, Math.min(height - 4, pts[2].y + 12));
+    ctx.textAlign = 'left';
+    ctx.fillText('W', Math.max(4, pts[3].x - 10), pts[3].y + 4);
+    ctx.textAlign = 'right';
+    ctx.fillText('E', Math.min(width - 4, pts[1].x + 10), pts[1].y + 4);
+
+    // viewport rectangle in world coords (use toWorld to account for pan/zoom properly)
+    const topLeftWorld = vp.toWorld(0, 0);
+    const bottomRightWorld = vp.toWorld(vp.screenWidth, vp.screenHeight);
+    const tl = worldToMini(topLeftWorld.x, topLeftWorld.y);
+    const br = worldToMini(bottomRightWorld.x, bottomRightWorld.y);
     ctx.fillStyle = 'rgba(99,102,241,0.15)';
     ctx.strokeStyle = 'rgba(99,102,241,0.7)';
     ctx.lineWidth = 1;
@@ -105,7 +115,7 @@ export default function MiniMap({ gridSize, tileWidth = 64, tileHeight = 32, wid
       width={width}
       height={height}
       onClick={handleClick}
-      className="bg-white/90 border border-slate-200 rounded shadow-sm cursor-pointer"
+      className="block cursor-pointer"
     />
   );
 }

@@ -135,7 +135,7 @@ export function ModularTimePanel({
   useHUDPanel({
     config: {
       id: 'time-panel',
-      zone: 'top-right',
+      zone: 'sidebar-right',
       priority: 9,
       persistent: true,
       responsive: {

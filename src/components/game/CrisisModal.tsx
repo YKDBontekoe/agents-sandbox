@@ -16,8 +16,9 @@ interface CrisisModalProps {
 
 const CrisisModal: React.FC<CrisisModalProps> = ({ crisis, onResolve }) => (
   <Dialog.Root open>
-    <Dialog.Overlay className="fixed inset-0 bg-black/50 z-50" />
-    <Dialog.Content className="fixed z-50 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+    <Dialog.Overlay className="fixed inset-0 bg-black/50 z-[100]" />
+    <Dialog.Content className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+      <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
       <Dialog.Title className="text-xl font-bold mb-2">
         {crisis.type === 'unrest' ? 'Unrest Boils Over' : 'Threat Escalates'}
       </Dialog.Title>
@@ -39,6 +40,7 @@ const CrisisModal: React.FC<CrisisModalProps> = ({ crisis, onResolve }) => (
         <Dialog.Close asChild>
           <ActionButton onClick={onResolve} variant="primary">Endure</ActionButton>
         </Dialog.Close>
+      </div>
       </div>
     </Dialog.Content>
   </Dialog.Root>

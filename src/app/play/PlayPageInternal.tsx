@@ -5,6 +5,9 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import GameRenderer from '@/components/game/GameRenderer';
+import { GameProvider } from '@/components/game/GameContext';
+import * as PIXI from 'pixi.js';
+import { Viewport } from 'pixi-viewport';
 import logger from '@/lib/logger';
 
 import { IntegratedHUDSystem } from '@/components/game/hud/IntegratedHUDSystem';
@@ -91,7 +94,7 @@ function TileInfoPanel({
   };
 
   return (
-    <div className="absolute bottom-24 left-4 bg-white/95 border border-slate-200 text-slate-800 px-3 py-2 rounded-md text-sm shadow-sm pointer-events-auto w-[320px]">
+    <div className="absolute bottom-56 left-4 bg-white/95 border border-slate-200 text-slate-800 px-3 py-2 rounded-md text-sm shadow-sm pointer-events-auto w-[320px]">
       <div className="flex items-center justify-between gap-2">
         <div>
           <div className="font-medium">Tile ({x}, {y})</div>
@@ -687,13 +690,18 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     };
   }, [simResources, placedBuildings, routes, totalWorkers, edicts]);
 
+  // Shared PIXI context for Game + HUD (so HUD panels can access viewport)
+  const [pixiApp, setPixiApp] = useState<PIXI.Application | null>(null);
+  const [pixiViewport, setPixiViewport] = useState<Viewport | null>(null);
+
   // Minimal inline scene to ensure we render beyond the spinner for validation
   return (
-    <div className={`h-dvh w-full bg-neutral-50 overflow-hidden grid ${isSimMode ? 'grid-cols-[320px_1fr_280px]' : 'grid-cols-[1fr_280px]'}`}>
-      <div className="relative flex flex-col min-w-0">
+    <div className="h-dvh w-full bg-neutral-50 overflow-hidden relative">
+      <div className="relative flex flex-col min-w-0 h-full">
         <GoalBanner />
         <div className="flex-1 relative min-h-0">
-          <GameRenderer gridSize={20} tileTypes={tileTypes} onTileHover={(x,y,t)=>{ setSelectedTile({x,y,tileType:t}); }} onTileClick={(x,y,t)=>{ setSelectedTile({x,y,tileType:t}); }}>
+          <GameProvider app={pixiApp} viewport={pixiViewport} setApp={setPixiApp} setViewport={setPixiViewport}>
+          <GameRenderer useExternalProvider gridSize={20} tileTypes={tileTypes} onTileHover={(x,y,t)=>{ setSelectedTile({x,y,tileType:t}); }} onTileClick={(x,y,t)=>{ setSelectedTile({x,y,tileType:t}); }}>
             <DistrictSprites districts={districts} tileTypes={tileTypes} onDistrictHover={()=>{}} />
             <LeylineSystem leylines={leylines} onLeylineCreate={()=>{}} onLeylineSelect={setSelectedLeyline} selectedLeyline={selectedLeyline} isDrawingMode={false} />
             <HeatLayer gridSize={20} tileWidth={64} tileHeight={32} unrest={resources.unrest} threat={resources.threat} />
@@ -704,6 +712,28 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
             )}
             <MarkersLayer markers={markers.map(m => ({ id: m.id, gridX: m.x, gridY: m.y, label: m.label }))} />
           </GameRenderer>
+
+          {/* Integrated HUD now shares the same GameProvider */}
+          <IntegratedHUDSystem
+            defaultPreset="default"
+            gameData={{
+              resources,
+              resourceChanges,
+              workforce: { total: totalWorkers, idle: idleWorkers, needed: neededWorkers },
+              time: { ...gameTime, isPaused }
+            }}
+            onGameAction={(action) => {
+              if (action === 'advance-cycle') tick();
+              if (action === 'pause') setIsPaused(true);
+              if (action === 'resume') setIsPaused(false);
+              if (action === 'open-council') setIsCouncilOpen(true);
+              if (action === 'open-edicts') setIsEdictsOpen(true);
+              if (action === 'open-omens') setIsOmensOpen(true);
+              if (action === 'open-settings') setIsSettingsOpen(true);
+            }}
+            className="absolute inset-0"
+          />
+          </GameProvider>
 
           {selectedTile && (
             <TileInfoPanel
@@ -906,25 +936,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
         </div>
       </div>
 
-      <IntegratedHUDSystem
-        defaultPreset="default"
-        gameData={{
-          resources,
-          resourceChanges,
-          workforce: { total: totalWorkers, idle: idleWorkers, needed: neededWorkers },
-          time: { ...gameTime, isPaused }
-        }}
-        onGameAction={(action) => {
-          if (action === 'advance-cycle') tick();
-          if (action === 'pause') setIsPaused(true);
-          if (action === 'resume') setIsPaused(false);
-          if (action === 'open-council') setIsCouncilOpen(true);
-          if (action === 'open-edicts') setIsEdictsOpen(true);
-          if (action === 'open-omens') setIsOmensOpen(true);
-          if (action === 'open-settings') setIsSettingsOpen(true);
-        }}
-        className="absolute inset-0"
-      />
+
 
       {/* Edicts Panel */}
       <EdictsPanel

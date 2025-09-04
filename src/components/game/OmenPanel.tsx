@@ -264,11 +264,12 @@ export const OmenPanel: React.FC<OmenPanelProps> = ({
     <Dialog.Root open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
       <Dialog.Portal>
         <Dialog.Overlay
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 data-[state=open]:opacity-100 data-[state=closed]:opacity-0 motion-safe:transition-opacity motion-safe:duration-200 motion-safe:data-[state=open]:animate-fade-in"
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] data-[state=open]:opacity-100 data-[state=closed]:opacity-0 motion-safe:transition-opacity motion-safe:duration-200 motion-safe:data-[state=open]:animate-fade-in"
         />
         <Dialog.Content
-          className="card-elevated fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white/95 backdrop-blur-sm z-50 w-full max-w-6xl max-h-[90vh] overflow-hidden data-[state=open]:opacity-100 data-[state=closed]:opacity-0 data-[state=closed]:scale-95 motion-safe:transition-[opacity,transform] motion-safe:duration-200 motion-safe:data-[state=open]:animate-scale-in"
+          className="card-elevated fixed inset-0 z-[110] flex items-center justify-center p-4 data-[state=open]:opacity-100 data-[state=closed]:opacity-0 data-[state=closed]:scale-95 motion-safe:transition-[opacity,transform] motion-safe:duration-200 motion-safe:data-[state=open]:animate-scale-in"
         >
+          <div className="bg-white/95 backdrop-blur-sm w-full max-w-6xl max-h-[90vh] overflow-hidden rounded-lg">
           {/* Header */}
           <div className="flex items-center justify-between p-6 border-b border-neutral-200">
             <div className="flex items-center gap-3">
@@ -398,6 +399,7 @@ export const OmenPanel: React.FC<OmenPanelProps> = ({
                 )}
               </div>
             </div>
+          </div>
           </div>
         </Dialog.Content>
       </Dialog.Portal>

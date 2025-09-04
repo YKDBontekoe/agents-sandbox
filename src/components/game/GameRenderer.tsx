@@ -18,6 +18,7 @@ interface GameRendererProps {
   onTileHover?: (x: number, y: number, tileType?: string) => void;
   onTileClick?: (x: number, y: number, tileType?: string) => void;
   children?: React.ReactNode;
+  useExternalProvider?: boolean;
 }
 
 function GameRendererContent({
@@ -90,12 +91,11 @@ function GameRendererContent({
       )}
 
       {/* Recenter button */}
-      <div className="absolute top-2 right-2 pointer-events-auto flex items-center gap-2">
+      <div className="absolute top-2 left-2 pointer-events-auto">
         <button
           onClick={() => {
             if (!viewport) return;
-            // Center on iso grid midpoint used by IsometricGrid
-            const midY = (gridSize - 1) * (32 / 2); // tileHeight default 32
+            const midY = (gridSize - 1) * (32 / 2);
             viewport.moveCenter(0, midY);
             viewport.setZoom(1.2);
           }}
@@ -103,27 +103,28 @@ function GameRendererContent({
         >
           Recenter
         </button>
-        <div className="hidden sm:block">
-          <MiniMap gridSize={gridSize} tileWidth={64} tileHeight={32} />
-        </div>
       </div>
     </div>
   );
 }
 
-export default function GameRenderer({ children, ...props }: GameRendererProps) {
+export default function GameRenderer({ children, useExternalProvider = false, ...props }: GameRendererProps) {
   logger.debug("GameRenderer component rendering with props:", props);
   
+  if (useExternalProvider) {
+    return (
+      <>
+        <GameRendererContent {...props} />
+        {children}
+      </>
+    );
+  }
+
   const [app, setApp] = useState<PIXI.Application | null>(null);
   const [viewport, setViewport] = useState<Viewport | null>(null);
 
   return (
-    <GameProvider
-      app={app}
-      viewport={viewport}
-      setApp={setApp}
-      setViewport={setViewport}
-    >
+    <GameProvider app={app} viewport={viewport} setApp={setApp} setViewport={setViewport}>
       <GameRendererContent {...props} />
       {children}
     </GameProvider>

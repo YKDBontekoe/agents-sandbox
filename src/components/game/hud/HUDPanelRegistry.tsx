@@ -62,7 +62,7 @@ interface HUDPanelRegistryProviderProps {
 
 export function HUDPanelRegistryProvider({ children }: HUDPanelRegistryProviderProps) {
   const [panels, setPanels] = useState<Map<string, HUDPanelComponent>>(new Map());
-  const { screenSize, layout, activeZones, registerPanel: registerLayoutPanel, unregisterPanel: unregisterLayoutPanel, getPanelsInZone } = useHUDLayout();
+  const { screenSize, activeZones, layout, registerPanel: registerLayoutPanel, unregisterPanel: unregisterLayoutPanel, getPanelsInZone } = useHUDLayout();
 
   const registerPanel = useCallback((panel: HUDPanelComponent) => {
     const { config } = panel;
@@ -87,11 +87,11 @@ export function HUDPanelRegistryProvider({ children }: HUDPanelRegistryProviderP
       return newPanels;
     });
 
-    // Do not register with HUDLayout here; defer to reconcile effect after render
+    // Do not register with layout here; defer to effect to avoid updates during render
   }, [screenSize, registerLayoutPanel]);
 
   const unregisterPanel = useCallback((panelId: string) => {
-    // Only update local registry; layout reconciliation effect will handle unregistering
+    // Only update local registry here; layout reconciliation effect will handle unregistering
     setPanels(prev => {
       if (!prev.has(panelId)) return prev;
       const newPanels = new Map(prev);
@@ -121,8 +121,8 @@ export function HUDPanelRegistryProvider({ children }: HUDPanelRegistryProviderP
     const panel = panels.get(panelId);
     if (panel) {
       const newVisibility = !panel.isVisible;
-      // Update local state; layout reconciliation effect will sync registration
       updatePanel(panelId, { isVisible: newVisibility });
+      // Layout registration changes are handled in the reconciliation effect
     }
   }, [panels, updatePanel]);
 
@@ -165,41 +165,35 @@ export function HUDPanelRegistryProvider({ children }: HUDPanelRegistryProviderP
     });
   }, [screenSize]);
 
-  // Reconcile layout registration after render to match local panel registry exactly
+  // Reconcile layout registration after render based on current panels
   useEffect(() => {
-    // Build desired registrations by zone
-    const desiredByZone = new Map<HUDZone, Set<string>>();
-    Array.from(panels.values()).forEach(panel => {
+    const currentPanels = Array.from(panels.values());
+
+    // 1) Ensure all visible panels are registered, and hidden ones are unregistered
+    currentPanels.forEach(panel => {
       const { config, isVisible } = panel;
-      const zoneCfg = layout.zones[config.zone];
-      const zoneActive = zoneCfg?.enabled && activeZones.includes(config.zone);
-      if (isVisible && zoneActive) {
-        if (!desiredByZone.has(config.zone)) desiredByZone.set(config.zone, new Set());
-        desiredByZone.get(config.zone)!.add(config.id);
+      const inZone = new Set(getPanelsInZone(config.zone));
+      const isRegistered = inZone.has(config.id);
+      if (isVisible && !isRegistered) {
+        registerLayoutPanel(config.zone, config.id, config.priority);
+      } else if (!isVisible && isRegistered) {
+        unregisterLayoutPanel(config.zone, config.id);
       }
     });
 
-    // For every known zone, diff current layout registration vs desired
-    (Object.keys(layout.zones) as HUDZone[]).forEach(zone => {
-      const registered = new Set(getPanelsInZone(zone));
-      const desired = desiredByZone.get(zone) || new Set<string>();
-
-      // Unregister any panels no longer desired
-      registered.forEach(id => {
-        if (!desired.has(id)) {
+    // 2) Unregister any layout-registered panels that no longer exist in the registry
+    const panelIds = new Set(Array.from(panels.keys()));
+    // Check all defined zones (covers zones with zero local panels too)
+    const allZones = Object.keys(layout.zones) as HUDZone[];
+    allZones.forEach(zone => {
+      const registeredIds = getPanelsInZone(zone);
+      registeredIds.forEach(id => {
+        if (!panelIds.has(id)) {
           unregisterLayoutPanel(zone, id);
         }
       });
-      // Register any desired panels not yet registered
-      desired.forEach(id => {
-        if (!registered.has(id)) {
-          const panel = panels.get(id);
-          const priority = panel?.config.priority;
-          registerLayoutPanel(zone, id, priority);
-        }
-      });
     });
-  }, [panels, layout.zones, activeZones, getPanelsInZone, registerLayoutPanel, unregisterLayoutPanel]);
+  }, [panels, layout.zones, getPanelsInZone, registerLayoutPanel, unregisterLayoutPanel]);
 
   const contextValue: HUDPanelRegistryContextType = {
     panels,

@@ -117,10 +117,10 @@ export function ModularActionPanel({
   useHUDPanel({
     config: {
       id: 'action-panel',
-      zone: 'middle-right',
+      zone: 'sidebar-right',
       priority: 8,
       responsive: {
-        hideOnMobile: variant === 'default'
+        hideOnMobile: true
       },
       accessibility: {
         ariaLabel: 'Game action buttons',
