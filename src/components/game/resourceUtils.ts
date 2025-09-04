@@ -74,6 +74,77 @@ export function applyProduction(
   return { updated: next, shortages };
 }
 
+// Project per-cycle deltas including level/adjacency and routes; mirrors server tick logic approximately.
+export function projectCycleDeltas(
+  base: SimResources,
+  buildings: Array<{ typeId: string; workers?: number; level?: number; traits?: { waterAdj?: number; mountainAdj?: number } }>,
+  routes: Array<{ fromId: string; toId: string; length: number }> = [],
+  catalog: Record<string, SimBuildingDef>,
+  opts?: { totalWorkers?: number; edicts?: Record<string, number> }
+): ApplyProductionResult {
+  const next: SimResources = { ...base };
+  const shortages: Partial<SimResources> = {};
+  const edicts = opts?.edicts || {};
+  const tariffValue = Math.max(0, Math.min(100, Number(edicts['tariffs'] ?? 50)));
+  const routeCoinMultiplier = 0.8 + (tariffValue * 0.006);
+  const patrolsEnabled = Number(edicts['patrols'] ?? 0) === 1;
+
+  buildings.forEach((b) => {
+    const def = catalog[b.typeId];
+    if (!def) return;
+    const level = Math.max(1, Number(b.level ?? 1));
+    const levelOutScale = 1 + 0.5 * (level - 1);
+    const levelCapScale = 1 + 0.25 * (level - 1);
+    const capacity = Math.round((def.workCapacity ?? 0) * levelCapScale);
+    const assigned = Math.min(b.workers ?? 0, capacity);
+    const ratio = capacity > 0 ? (assigned / Math.max(1, capacity)) : 1;
+
+    let canProduce = true;
+    for (const [key, amount] of Object.entries(def.inputs) as [keyof SimResources, number | undefined][]) {
+      const need = (amount ?? 0) * ratio;
+      if ((next as any)[key] < need) {
+        canProduce = false;
+        shortages[key] = ((shortages as any)[key] ?? 0) + (need - (next as any)[key]);
+      }
+    }
+    if (!canProduce) return;
+
+    for (const [key, amount] of Object.entries(def.inputs) as [keyof SimResources, number | undefined][]) {
+      const need = Math.max(0, Math.round((amount ?? 0) * ratio));
+      next[key] = Math.max(0, (next[key] ?? 0) - need);
+    }
+    for (const [key, amount] of Object.entries(def.outputs) as [keyof SimResources, number | undefined][]) {
+      let out = (amount ?? 0) * ratio * levelOutScale;
+      if (b.typeId === 'trade_post' && key === 'coin') {
+        const waterAdj = Math.min(2, Number(b.traits?.waterAdj ?? 0));
+        out += 2 * waterAdj;
+      }
+      if (b.typeId === 'shrine' && key === 'favor') {
+        const mountainAdj = Math.min(2, Number(b.traits?.mountainAdj ?? 0));
+        out += 1 * mountainAdj;
+      }
+      out = Math.max(0, Math.round(out));
+      next[key] = (next[key] ?? 0) + out;
+    }
+  });
+
+  // Routes
+  routes.forEach((r) => {
+    const coinGain = Math.max(1, Math.round(r.length * 0.5 * routeCoinMultiplier));
+    next.coin = (next.coin ?? 0) + coinGain;
+  });
+  // Patrol upkeep (coin)
+  if (routes.length > 0 && patrolsEnabled) {
+    next.coin = Math.max(0, (next.coin ?? 0) - 2);
+  }
+  // Worker upkeep on total workers, not just idle
+  const totalWorkers = Math.max(0, Number(opts?.totalWorkers ?? 0));
+  const upkeep = Math.round(totalWorkers * 0.2);
+  if (upkeep > 0) next.grain = Math.max(0, (next.grain ?? 0) - upkeep);
+
+  return { updated: next, shortages };
+}
+
 export function canAfford(cost: Partial<SimResources>, resources: SimResources): boolean {
   return (['grain', 'coin', 'mana', 'favor'] as SimResourceKey[]).every((key) => {
     const need = cost[key] ?? 0;

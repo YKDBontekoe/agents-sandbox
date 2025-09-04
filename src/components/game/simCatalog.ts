@@ -8,6 +8,8 @@ export interface SimBuildingType {
   outputs: Partial<SimResources>;
   /** Maximum number of workers this building can employ */
   workCapacity?: number;
+  /** Maximum upgrade level (>=1). Default 3. */
+  maxLevel?: number;
 }
 
 export const SIM_BUILDINGS: Record<string, SimBuildingType> = {
@@ -19,6 +21,7 @@ export const SIM_BUILDINGS: Record<string, SimBuildingType> = {
     inputs: {},
     outputs: { favor: 1 },
     workCapacity: 0,
+    maxLevel: 3,
   },
   trade_post: {
     id: 'trade_post',
@@ -28,6 +31,7 @@ export const SIM_BUILDINGS: Record<string, SimBuildingType> = {
     inputs: { grain: 2 },
     outputs: { coin: 8 },
     workCapacity: 0,
+    maxLevel: 3,
   },
   automation_workshop: {
     id: 'automation_workshop',
@@ -37,6 +41,7 @@ export const SIM_BUILDINGS: Record<string, SimBuildingType> = {
     inputs: { mana: 1 },
     outputs: { coin: 6 },
     workCapacity: 0,
+    maxLevel: 3,
   },
   farm: {
     id: 'farm',
@@ -45,6 +50,7 @@ export const SIM_BUILDINGS: Record<string, SimBuildingType> = {
     inputs: { coin: 1 },
     outputs: { grain: 10 },
     workCapacity: 5,
+    maxLevel: 3,
   },
   house: {
     id: 'house',
@@ -53,6 +59,7 @@ export const SIM_BUILDINGS: Record<string, SimBuildingType> = {
     inputs: { grain: 1 },
     outputs: { workers: 5 },
     workCapacity: 0,
+    maxLevel: 3,
   },
   shrine: {
     id: 'shrine',
@@ -61,6 +68,7 @@ export const SIM_BUILDINGS: Record<string, SimBuildingType> = {
     inputs: { mana: 1 },
     outputs: { favor: 2 },
     workCapacity: 2,
+    maxLevel: 3,
   },
 };
 

@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import * as PIXI from "pixi.js";
 import { useGameContext } from "./GameContext";
 import { gridToWorld } from "@/lib/isometric";
+import { getBuildingSpriteUrl } from "./buildingAssets";
 
 export interface SimpleBuilding {
   id: string;
@@ -136,11 +137,38 @@ export default function BuildingsLayer({ buildings, tileWidth = 64, tileHeight =
 
     buildings.forEach((b) => {
       const { worldX, worldY } = gridToWorld(b.x, b.y, tileWidth, tileHeight);
-      const g = new PIXI.Graphics();
-      g.position.set(worldX, worldY);
-      g.zIndex = 500; // above tiles
-      drawIcon(g, b.typeId, tileWidth, tileHeight);
-      container.addChild(g);
+      const url = getBuildingSpriteUrl(b.typeId);
+      if (url) {
+        const spr = PIXI.Sprite.from(url);
+        spr.anchor.set(0.5);
+        spr.position.set(worldX, worldY - tileHeight * 0.05);
+        spr.zIndex = 520;
+        // Scale to roughly fit within a tile diamond
+        const targetW = tileWidth * 0.6;
+        const targetH = tileHeight * 0.9;
+        // If base texture size is unknown yet, set scale after first update tick
+        const applyScale = () => {
+          const bw = spr.texture.width || 64;
+          const bh = spr.texture.height || 64;
+          const sx = targetW / bw;
+          const sy = targetH / bh;
+          const s = Math.min(sx, sy);
+          spr.scale.set(s);
+        };
+        if (spr.texture.width > 0 && spr.texture.height > 0) {
+          applyScale();
+        } else {
+          // Fallback: apply scale immediately if texture dimensions are not available
+          applyScale();
+        }
+        container.addChild(spr);
+      } else {
+        const g = new PIXI.Graphics();
+        g.position.set(worldX, worldY);
+        g.zIndex = 500; // above tiles
+        drawIcon(g, b.typeId, tileWidth, tileHeight);
+        container.addChild(g);
+      }
     });
   }, [JSON.stringify(buildings), tileWidth, tileHeight]);
 
@@ -148,4 +176,3 @@ export default function BuildingsLayer({ buildings, tileWidth = 64, tileHeight =
 }
 
 export type { BuildingsLayerProps };
-

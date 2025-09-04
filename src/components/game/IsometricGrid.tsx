@@ -68,7 +68,6 @@ export default function IsometricGrid({
     tile.x = worldX;
     tile.y = worldY;
     // Enable pointer events on v8
-    // @ts-expect-error pixi v8 eventMode
     (tile as any).eventMode = 'static';
     // Shrink hit area slightly to avoid edge flicker when moving across tile borders
     const hx = (tileWidth / 2) * 0.95;
@@ -105,7 +104,6 @@ export default function IsometricGrid({
     // ensure overlays can be drawn above tiles in order
     gridContainer.sortableChildren = true;
     // enable leave detection for hover overlay
-    // @ts-expect-error pixi v8 eventMode
     (gridContainer as any).eventMode = 'static';
     viewport.addChild(gridContainer);
     gridContainerRef.current = gridContainer;
@@ -130,7 +128,6 @@ export default function IsometricGrid({
     const makeOverlay = (color: number, alpha: number) => {
       const g = new PIXI.Graphics();
       g.zIndex = 9999;
-      // @ts-expect-error pixi v8 eventMode
       (g as any).eventMode = 'none';
       g.clear();
       g.fill({ color, alpha });

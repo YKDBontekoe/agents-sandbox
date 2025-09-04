@@ -273,30 +273,32 @@ export function HUDSystemExample() {
   };
 
   return (
-    <div className="w-full h-screen bg-green-100 relative">
-      {/* Game content area */}
-      <div className="w-full h-full flex items-center justify-center">
-        <div className="text-center text-gray-600">
-          <h1 className="text-2xl font-bold mb-2">Game World</h1>
-          <p>This is where your game content would be displayed.</p>
-          <p className="text-sm mt-2">The HUD system overlays on top without interfering.</p>
+    <HUDLayoutPresetProvider defaultPreset="default">
+      <div className="w-full h-screen bg-green-100 relative">
+        {/* Game content area */}
+        <div className="w-full h-full flex items-center justify-center">
+          <div className="text-center text-gray-600">
+            <h1 className="text-2xl font-bold mb-2">Game World</h1>
+            <p>This is where your game content would be displayed.</p>
+            <p className="text-sm mt-2">The HUD system overlays on top without interfering.</p>
+          </div>
         </div>
+        
+        {/* Integrated HUD System */}
+        <IntegratedHUDSystem
+          defaultPreset="default"
+          gameData={gameData}
+          onGameAction={handleGameAction}
+          className="absolute inset-0 pointer-events-none"
+        />
+        
+        {/* Settings Panel */}
+        <HUDSettingsPanel
+          isOpen={settingsOpen}
+          onClose={() => setSettingsOpen(false)}
+        />
       </div>
-      
-      {/* Integrated HUD System */}
-      <IntegratedHUDSystem
-        defaultPreset="default"
-        gameData={gameData}
-        onGameAction={handleGameAction}
-        className="absolute inset-0 pointer-events-none"
-      />
-      
-      {/* Settings Panel */}
-      <HUDSettingsPanel
-        isOpen={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-      />
-    </div>
+    </HUDLayoutPresetProvider>
   );
 }
 
