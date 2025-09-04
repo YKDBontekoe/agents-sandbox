@@ -12,7 +12,7 @@ export function getResourceColor(resource: ResourceType): string {
 }
 
 // Simulation resource helpers
-export type SimResourceKey = 'grain' | 'coin' | 'mana' | 'favor' | 'workers';
+export type SimResourceKey = 'grain' | 'coin' | 'mana' | 'favor' | 'workers' | 'wood' | 'planks';
 
 export interface SimResources {
   grain: number;
@@ -20,6 +20,8 @@ export interface SimResources {
   mana: number;
   favor: number;
   workers: number;
+  wood: number;
+  planks: number;
 }
 
 export interface SimBuildingDef {
@@ -32,6 +34,12 @@ export interface SimBuildingDef {
 export interface ApplyProductionResult {
   updated: SimResources;
   shortages: Partial<SimResources>;
+}
+
+export interface ProductionModifiers {
+  resourceOutputMultiplier?: Partial<Record<SimResourceKey, number>>;
+  buildingOutputMultiplier?: Partial<Record<string, number>>; // by building typeId
+  upkeepGrainPerWorkerDelta?: number; // adds to per-worker upkeep (can be negative)
 }
 
 export function applyProduction(
@@ -77,10 +85,10 @@ export function applyProduction(
 // Project per-cycle deltas including level/adjacency and routes; mirrors server tick logic approximately.
 export function projectCycleDeltas(
   base: SimResources,
-  buildings: Array<{ typeId: string; workers?: number; level?: number; traits?: { waterAdj?: number; mountainAdj?: number } }>,
+  buildings: Array<{ id?: string; typeId: string; workers?: number; level?: number; traits?: { waterAdj?: number; mountainAdj?: number; forestAdj?: number } }>,
   routes: Array<{ fromId: string; toId: string; length: number }> = [],
   catalog: Record<string, SimBuildingDef>,
-  opts?: { totalWorkers?: number; edicts?: Record<string, number> }
+  opts?: { totalWorkers?: number; edicts?: Record<string, number>; modifiers?: ProductionModifiers }
 ): ApplyProductionResult {
   const next: SimResources = { ...base };
   const shortages: Partial<SimResources> = {};
@@ -88,6 +96,23 @@ export function projectCycleDeltas(
   const tariffValue = Math.max(0, Math.min(100, Number(edicts['tariffs'] ?? 50)));
   const routeCoinMultiplier = 0.8 + (tariffValue * 0.006);
   const patrolsEnabled = Number(edicts['patrols'] ?? 0) === 1;
+  const mods = opts?.modifiers || {};
+  const resMul = mods.resourceOutputMultiplier || {};
+  const bldMul = mods.buildingOutputMultiplier || {};
+
+  // Build quick lookup by id for route effects
+  const byId: Record<string, typeof buildings[0]> = {} as any;
+  buildings.forEach((b) => { if (b.id) byId[b.id] = b; });
+
+  // Precompute buildings connected to a storehouse
+  const connectedToStorehouse = new Set<string>();
+  routes.forEach(r => {
+    const a = byId[r.fromId];
+    const b = byId[r.toId];
+    if (!a || !b) return;
+    if (a.typeId === 'storehouse' && b.id) connectedToStorehouse.add(b.id);
+    if (b.typeId === 'storehouse' && a.id) connectedToStorehouse.add(a.id);
+  });
 
   buildings.forEach((b) => {
     const def = catalog[b.typeId];
@@ -119,10 +144,26 @@ export function projectCycleDeltas(
         const waterAdj = Math.min(2, Number(b.traits?.waterAdj ?? 0));
         out += 2 * waterAdj;
       }
+      if (b.typeId === 'farm' && key === 'grain') {
+        const waterAdj = Math.min(2, Number(b.traits?.waterAdj ?? 0));
+        out += 3 * waterAdj; // farms near water yield more
+      }
+      if (b.typeId === 'lumber_camp' && key === 'wood') {
+        const forestAdj = Math.min(3, Number((b as any).traits?.forestAdj ?? 0));
+        out += 2 * forestAdj; // dense forest boosts logs
+      }
+      // Logistics: storehouse boosts connected producers
+      if ((b.id && connectedToStorehouse.has(b.id)) && (key === 'grain' || key === 'wood' || key === 'planks')) {
+        out *= 1.15; // efficient handling
+      }
       if (b.typeId === 'shrine' && key === 'favor') {
         const mountainAdj = Math.min(2, Number(b.traits?.mountainAdj ?? 0));
         out += 1 * mountainAdj;
       }
+      // Apply skill modifiers
+      const bm = bldMul[b.typeId] ?? 1;
+      const rm = resMul[key as SimResourceKey] ?? 1;
+      out *= bm * rm;
       out = Math.max(0, Math.round(out));
       next[key] = (next[key] ?? 0) + out;
     }
@@ -139,14 +180,15 @@ export function projectCycleDeltas(
   }
   // Worker upkeep on total workers, not just idle
   const totalWorkers = Math.max(0, Number(opts?.totalWorkers ?? 0));
-  const upkeep = Math.round(totalWorkers * 0.2);
+  const perWorker = 0.2 + (mods.upkeepGrainPerWorkerDelta ?? 0);
+  const upkeep = Math.round(totalWorkers * Math.max(0, perWorker));
   if (upkeep > 0) next.grain = Math.max(0, (next.grain ?? 0) - upkeep);
 
   return { updated: next, shortages };
 }
 
 export function canAfford(cost: Partial<SimResources>, resources: SimResources): boolean {
-  return (['grain', 'coin', 'mana', 'favor'] as SimResourceKey[]).every((key) => {
+  return (['grain', 'coin', 'mana', 'favor', 'wood', 'planks'] as SimResourceKey[]).every((key) => {
     const need = cost[key] ?? 0;
     return resources[key] >= need;
   });
@@ -154,7 +196,7 @@ export function canAfford(cost: Partial<SimResources>, resources: SimResources):
 
 export function applyCost(resources: SimResources, cost: Partial<SimResources>): SimResources {
   const next: SimResources = { ...resources };
-  (['grain', 'coin', 'mana', 'favor'] as SimResourceKey[]).forEach((key) => {
+  (['grain', 'coin', 'mana', 'favor', 'wood', 'planks'] as SimResourceKey[]).forEach((key) => {
     const need = cost[key] ?? 0;
     next[key] = Math.max(0, next[key] - need);
   });

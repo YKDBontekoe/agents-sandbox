@@ -11,6 +11,7 @@ import { ModularResourcePanel } from './panels/ModularResourcePanel';
 import { ModularTimePanel } from './panels/ModularTimePanel';
 import { ModularActionPanel } from './panels/ModularActionPanel';
 import { ModularMiniMapPanel } from './panels/ModularMiniMapPanel';
+import { ModularSkillTreePanel } from './panels/ModularSkillTreePanel';
 
 // Integrated HUD System Props
 interface IntegratedHUDSystemProps {
@@ -22,6 +23,8 @@ interface IntegratedHUDSystemProps {
       coin: number;
       mana: number;
       favor: number;
+      wood: number;
+      planks: number;
       unrest: number;
       threat: number;
     };
@@ -30,6 +33,8 @@ interface IntegratedHUDSystemProps {
       coin: number;
       mana: number;
       favor: number;
+      wood: number;
+      planks: number;
       unrest: number;
       threat: number;
     };
@@ -118,6 +123,8 @@ function HUDSystemCore({
               onOpenSettings={() => onGameAction('open-settings')}
               variant={currentPreset.panelVariants['action-panel'] || 'default'}
             />
+            <div className="mt-2" />
+            <ModularSkillTreePanel />
           </HUDZone>
 
           {/* Additional content */}
@@ -303,6 +310,8 @@ export function HUDSystemExample() {
       coin: 1200,
       mana: 45,
       favor: 75,
+      wood: 120,
+      planks: 80,
       unrest: 25,
       threat: 15
     },
@@ -311,6 +320,8 @@ export function HUDSystemExample() {
       coin: -8,
       mana: 3,
       favor: -2,
+      wood: 5,
+      planks: 2,
       unrest: 1,
       threat: 0
     },

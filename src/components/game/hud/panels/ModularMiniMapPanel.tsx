@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { ResponsivePanel, ResponsiveButton } from '../ResponsiveHUDPanels';
 import { useHUDPanel } from '../HUDPanelRegistry';
 import MiniMap from '../../MiniMap';
@@ -42,6 +42,7 @@ export function ModularMiniMapPanel({
   });
 
   const { viewport } = useGameContext();
+  const [followSelection, setFollowSelection] = useState(false);
 
   const handleRecenter = () => {
     if (!viewport) return;
@@ -49,6 +50,21 @@ export function ModularMiniMapPanel({
     viewport.moveCenter(0, midY);
     viewport.setZoom(1.2);
   };
+
+  useEffect(() => {
+    const onSelect = (e: any) => {
+      if (!followSelection || !viewport) return;
+      try {
+        const { gridX, gridY, tileWidth = 64, tileHeight = 32 } = e.detail || {};
+        const wx = (gridX - gridY) * (tileWidth / 2);
+        const wy = (gridX + gridY) * (tileHeight / 2);
+        viewport.moveCenter(wx, wy);
+      } catch {}
+    };
+    window.addEventListener('ad_select_tile', onSelect as any);
+    return () => window.removeEventListener('ad_select_tile', onSelect as any);
+  }, [followSelection, viewport]);
+
 
   const dims = useMemo(() => {
     // Slightly smaller map for compact/minimal
@@ -82,6 +98,13 @@ export function ModularMiniMapPanel({
               size={{ mobile: 'xs', tablet: 'xs', desktop: 'sm', wide: 'sm' }}
             >
               Recenter
+            </ResponsiveButton>
+            <ResponsiveButton
+              onClick={() => setFollowSelection((v: boolean) => !v)}
+              variant={followSelection ? 'primary' : 'secondary'}
+              size={{ mobile: 'xs', tablet: 'xs', desktop: 'sm', wide: 'sm' }}
+            >
+              {followSelection ? 'Following' : 'Follow Sel.'}
             </ResponsiveButton>
             <ResponsiveButton
               onClick={() => viewport?.setZoom((viewport.scale.x || 1) * 1.1, true)}

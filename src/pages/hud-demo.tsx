@@ -1,8 +1,14 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { HUDSystemExample } from '@/components/game/hud/IntegratedHUDSystem';
+import { GameProvider } from '@/components/game/GameContext';
 import Head from 'next/head';
+import * as PIXI from 'pixi.js';
+import { Viewport } from 'pixi-viewport';
 
 export default function HUDDemoPage() {
+  const [app, setApp] = useState<PIXI.Application | null>(null);
+  const [viewport, setViewport] = useState<Viewport | null>(null);
+
   return (
     <>
       <Head>
@@ -11,7 +17,9 @@ export default function HUDDemoPage() {
       </Head>
       
       <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50">
-        <HUDSystemExample />
+        <GameProvider app={app} viewport={viewport} setApp={setApp} setViewport={setViewport}>
+          <HUDSystemExample />
+        </GameProvider>
       </div>
     </>
   );

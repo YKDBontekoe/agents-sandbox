@@ -19,6 +19,7 @@ import { EdictsPanel, EdictSetting } from '@/components/game/EdictsPanel';
 import DistrictSprites, { District } from '@/components/game/districts';
 import { LeylineSystem, Leyline } from '@/components/game/LeylineSystem';
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
+import { accumulateEffects, generateSkillTree, SkillNode } from '@/components/game/skills/procgen';
 import EffectsLayer from '@/components/game/EffectsLayer';
 import HeatLayer from '@/components/game/HeatLayer';
 import MarkersLayer from '@/components/game/MarkersLayer';
@@ -26,8 +27,10 @@ import BuildingsLayer from '@/components/game/BuildingsLayer';
 import RoutesLayer from '@/components/game/RoutesLayer';
 import type { CrisisData } from '@/components/game/CrisisModal';
 import GoalBanner from '@/components/game/GoalBanner';
+import OnboardingGuide from '@/components/game/OnboardingGuide';
+import QuestTracker from '@/components/game/QuestTracker';
 import { useIdGenerator } from '@/hooks/useIdGenerator';
-// (settings and other panels are currently not rendered on this page)
+// (settings && other panels are currently not rendered on this page)
 // layout preferences not used on this page
 import type { GameResources, GameTime } from '@/components/game/hud/types';
 import type { CategoryType } from '@/lib/categories';
@@ -49,6 +52,9 @@ function TileInfoPanel({
   onFinalizeRoute,
   onCancelRoute,
   onOpenCouncil,
+  tutorialFree,
+  onConsumeTutorialFree,
+  onTutorialProgress,
 }: {
   selected: { x: number; y: number; tileType?: string };
   resources: GameResources;
@@ -64,14 +70,17 @@ function TileInfoPanel({
   onFinalizeRoute: (fromId: string, toId: string) => void;
   onCancelRoute: () => void;
   onOpenCouncil: () => void;
+  tutorialFree: Partial<Record<BuildTypeId, number>>;
+  onConsumeTutorialFree: (typeId: BuildTypeId) => void;
+  onTutorialProgress: (evt: { type: 'built' | 'openedCouncil' }) => void;
 }) {
   const { x, y, tileType } = selected;
   const occupied = placedBuildings.find(b => b.x === x && b.y === y) || null;
   const hasCouncil = placedBuildings.some(b => b.typeId === 'council_hall');
 
   const candidates: BuildTypeId[] = hasCouncil
-    ? ['trade_post', 'automation_workshop']
-    : ['council_hall'];
+    ? ['farm', 'house', 'lumber_camp', 'sawmill', 'storehouse', 'trade_post', 'automation_workshop', 'shrine'] as BuildTypeId[]
+    : ['farm', 'house', 'lumber_camp', 'sawmill', 'council_hall'] as BuildTypeId[];
 
   const canPlaceOnTile = (typeId: BuildTypeId) => {
     const allowed = (BUILDABLE_TILES as any)[typeId] as string[] | undefined;
@@ -82,6 +91,7 @@ function TileInfoPanel({
 
   const canAffordBuild = (typeId: BuildTypeId) => {
     if (!simResources) return false;
+    if ((tutorialFree[typeId] || 0) > 0) return true;
     return canAfford(SIM_BUILDINGS[typeId].cost, simResources);
   };
 
@@ -101,7 +111,7 @@ function TileInfoPanel({
           <div className="text-xs text-slate-500">{tileType ?? 'unknown'}{occupied ? ` • ${SIM_BUILDINGS[occupied.typeId].name}` : ''}</div>
         </div>
         <button
-          onClick={onOpenCouncil}
+          onClick={() => { onOpenCouncil(); onTutorialProgress({ type: 'openedCouncil' }); }}
           className="px-2 py-1 rounded bg-blue-600 hover:bg-blue-700 text-white text-xs"
         >
           Open Council
@@ -189,7 +199,11 @@ function TileInfoPanel({
                     <div className="text-[11px] text-slate-500">{renderCost(typeId)}{!placeable ? ' • cannot build on this terrain' : ''}</div>
                   </div>
                   <button
-                    onClick={() => onBuild(typeId)}
+                    onClick={() => {
+                      onBuild(typeId);
+                      if ((tutorialFree[typeId] || 0) > 0) onConsumeTutorialFree(typeId);
+                      onTutorialProgress({ type: 'built' });
+                    }}
                     disabled={disabled}
                     className={`px-2 py-1 rounded text-xs border ${disabled ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-700'}`}
                   >
@@ -213,7 +227,7 @@ interface StoredBuilding {
   y: number;
   level: number;
   workers: number;
-  traits?: { waterAdj?: number; mountainAdj?: number };
+  traits?: { waterAdj?: number; mountainAdj?: number; forestAdj?: number };
 }
 
 interface GameState {
@@ -272,6 +286,15 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   const [timeRemaining, setTimeRemaining] = useState(120);
   const [, setCrisis] = useState<CrisisData | null>(null);
   const [isCouncilOpen, setIsCouncilOpen] = useState(false);
+  const [onboardingStep, setOnboardingStep] = useState<number>(() => {
+    if (typeof window === 'undefined') return 1;
+    try { return parseInt(localStorage.getItem('ad_onboarding_step') || '1', 10) || 1; } catch { return 1; }
+  });
+  const [onboardingOpen, setOnboardingOpen] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    try { return localStorage.getItem('ad_onboarding_dismissed') !== '1'; } catch { return true; }
+  });
+  const [tutorialFree, setTutorialFree] = useState<Partial<Record<BuildTypeId, number>>>({ farm: 1, house: 1, council_hall: 1 });
   const [isEdictsOpen, setIsEdictsOpen] = useState(false);
   const [, setIsOmensOpen] = useState(false);
   const [, setIsSettingsOpen] = useState(false);
@@ -296,6 +319,42 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   const [routeDraftFrom, setRouteDraftFrom] = useState<string | null>(null);
   const [edicts, setEdicts] = useState<Record<string, number>>({ tariffs: 50, patrols: 0 });
   const [pendingEdictChanges, setPendingEdictChanges] = useState<Record<string, number>>({});
+
+  // Milestone helpers
+  const getMilestones = () => {
+    if (typeof window === 'undefined') return {} as Record<string, boolean>;
+    try { return JSON.parse(localStorage.getItem('ad_milestones_completed') || '{}'); } catch { return {}; }
+  };
+  const setMilestone = (k: string) => { try { const m = getMilestones(); m[k] = true; localStorage.setItem('ad_milestones_completed', JSON.stringify(m)); } catch {} };
+  const hasMilestone = (k: string) => !!getMilestones()[k];
+  const award = async (delta: Partial<Record<'coin'|'grain'|'mana'|'favor', number>>) => {
+    const newRes = { ...state!.resources } as Record<string, number>;
+    (Object.keys(delta) as Array<keyof typeof delta>).forEach(k => { newRes[k as string] = Math.max(0, (newRes[k as string] || 0) + (delta[k] || 0)); });
+    setState(prev => prev ? { ...prev, resources: newRes } : prev);
+    await saveState({ resources: newRes });
+  };
+  const checkMilestones = async () => {
+    if (!state) return;
+    // First farm
+    if (!hasMilestone('m_farm') && placedBuildings.some(b => b.typeId === 'farm')) { setMilestone('m_farm'); await award({ coin: 10 }); }
+    // First route
+    if (!hasMilestone('m_route') && (routes?.length || 0) > 0) { setMilestone('m_route'); await award({ favor: 5 }); }
+    // 5 workers assigned
+    const assigned = placedBuildings.reduce((s,b)=>s+(b.workers||0),0);
+    if (!hasMilestone('m_workers5') && assigned >= 5) { setMilestone('m_workers5'); await award({ grain: 20 }); }
+    // Storehouse logistics
+    const hasStore = placedBuildings.some(b => b.typeId === 'storehouse');
+    const connectedToStore = hasStore && (routes || []).some(r => {
+      const a = placedBuildings.find(b=>b.id===r.fromId); const b = placedBuildings.find(b=>b.id===r.toId);
+      return a?.typeId=='storehouse' || b?.typeId=='storehouse';
+    });
+    if (!hasMilestone('m_storehouse') && hasStore && connectedToStore) { setMilestone('m_storehouse'); await award({ coin: 20 }); }
+  };
+
+  const [unlockedSkillIds, setUnlockedSkillIds] = useState<string[]>(() => {
+    if (typeof window === 'undefined') return [];
+    try { return Object.keys(JSON.parse(localStorage.getItem('ad_skills_unlocked') || '{}')).filter(k => JSON.parse(localStorage.getItem('ad_skills_unlocked') || '{}')[k]); } catch { return []; }
+  });
   useEffect(() => {
     async function loadMap() {
       try {
@@ -309,6 +368,29 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     }
     loadMap();
   }, [gridSize]);
+  // Listen for skill unlock events to deduct costs && persist
+  useEffect(() => {
+    const onUnlock = async (e: any) => {
+      const n = e.detail as SkillNode;
+      if (unlockedSkillIds.includes(n.id)) return;
+      const needed = { coin: n.cost.coin || 0, mana: n.cost.mana || 0, favor: n.cost.favor || 0 } as Record<string, number>;
+      const have = { coin: state?.resources.coin || 0, mana: state?.resources.mana || 0, favor: state?.resources.favor || 0 } as Record<string, number>;
+      if (have.coin < needed.coin || have.mana < needed.mana || have.favor < needed.favor) return;
+      const newResServer = { ...state!.resources } as Record<string, number>;
+      newResServer.coin = Math.max(0, newResServer.coin - needed.coin);
+      newResServer.mana = Math.max(0, newResServer.mana - needed.mana);
+      newResServer.favor = Math.max(0, newResServer.favor - needed.favor);
+      setState(prev => prev ? { ...prev, resources: newResServer } : prev);
+      await saveState({ resources: newResServer });
+      setUnlockedSkillIds(prev => [...prev, n.id]);
+      try {
+        const prev = JSON.parse(localStorage.getItem('ad_skills_unlocked') || '{}');
+        prev[n.id] = true; localStorage.setItem('ad_skills_unlocked', JSON.stringify(prev));
+      } catch {}
+    };
+    window.addEventListener('ad_unlock_skill', onUnlock as any);
+    return () => window.removeEventListener('ad_unlock_skill', onUnlock as any);
+  }, [state, unlockedSkillIds]);
   const [selectedTile, setSelectedTile] = useState<{ x: number; y: number; tileType?: string } | null>(null);
   const [selectedLeyline, setSelectedLeyline] = useState<Leyline | null>(null);
   const [isDrawingMode, _setIsDrawingMode] = useState(false);
@@ -381,8 +463,15 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
       mana: state.resources.mana || 0,
       favor: state.resources.favor || 0,
       workers: (state.workers || 0) - assigned,
+      wood: (state.resources as any).wood || 0,
+      planks: (state.resources as any).planks || 0,
     });
   }, [state]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try { localStorage.setItem('ad_onboarding_step', String(onboardingStep)); } catch {}
+  }, [onboardingStep]);
 
   const fetchState = useCallback(async () => {
     logger.debug('Fetching state from /api/state');
@@ -450,6 +539,8 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
         mana: serverState.resources.mana || 0,
         favor: serverState.resources.favor || 0,
         workers: (serverState.workers || 0) - assigned,
+        wood: (serverState.resources as any).wood || 0,
+        planks: (serverState.resources as any).planks || 0,
       };
       setSimResources(simRes);
       setPlacedBuildings(serverState.buildings);
@@ -577,6 +668,8 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
             coin: next.resources.coin || 0,
             mana: next.resources.mana || 0,
             favor: next.resources.favor || 0,
+            wood: next.resources.wood || 0,
+            planks: next.resources.planks || 0,
             workers: (next.workers || 0) - assigned,
           });
         }
@@ -603,8 +696,8 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   }, [acceptedNotice]);
 
   // The remaining UI is identical to the original PlayPage component.
-  // For brevity, we import and reuse the JSX from the existing file to avoid duplication.
-  // We will render a minimal shell here and rely on the original file content compiled in this component.
+  // For brevity, we import && reuse the JSX from the existing file to avoid duplication.
+  // We will render a minimal shell here && rely on the original file content compiled in this component.
 
   // To keep the patch concise, we delegate the JSX rendering to the existing file via a dynamic import
   // pattern would be overkill here. Instead, we mirror the original conditional gates:
@@ -637,6 +730,8 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     coin: state.resources.coin || 0,
     mana: state.resources.mana || 0,
     favor: state.resources.favor || 0,
+    wood: (simResources?.wood ?? 0),
+    planks: (simResources?.planks ?? 0),
     unrest: state.resources.unrest || 0,
     threat: state.resources.threat || 0
   };
@@ -677,18 +772,31 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
 
   const resourceChanges = useMemo(() => {
     if (!simResources) {
-      return { grain: 0, coin: 0, mana: 0, favor: 0, unrest: 0, threat: 0 };
+      return { grain: 0, wood: 0, planks: 0, coin: 0, mana: 0, favor: 0, unrest: 0, threat: 0 } as any;
     }
-    const { updated } = projectCycleDeltas(simResources, placedBuildings, routes, SIM_BUILDINGS, { totalWorkers: totalWorkers, edicts });
+    const tree = generateSkillTree(12345);
+    const unlocked = tree.nodes.filter(n => unlockedSkillIds.includes(n.id));
+    const acc = accumulateEffects(unlocked);
+    const { updated } = projectCycleDeltas(simResources, placedBuildings, routes, SIM_BUILDINGS, {
+      totalWorkers: totalWorkers,
+      edicts,
+      modifiers: {
+        resourceOutputMultiplier: acc.resMul as any,
+        buildingOutputMultiplier: acc.bldMul,
+        upkeepGrainPerWorkerDelta: acc.upkeepDelta,
+      }
+    });
     return {
       grain: updated.grain - simResources.grain,
+      wood: updated.wood - simResources.wood,
+      planks: updated.planks - simResources.planks,
       coin: updated.coin - simResources.coin,
       mana: updated.mana - simResources.mana,
       favor: updated.favor - simResources.favor,
       unrest: 0,
       threat: 0,
-    };
-  }, [simResources, placedBuildings, routes, totalWorkers, edicts]);
+    } as any;
+  }, [simResources, placedBuildings, routes, totalWorkers, edicts, unlockedSkillIds]);
 
   // Shared PIXI context for Game + HUD (so HUD panels can access viewport)
   const [pixiApp, setPixiApp] = useState<PIXI.Application | null>(null);
@@ -701,7 +809,16 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
         <GoalBanner />
         <div className="flex-1 relative min-h-0">
           <GameProvider app={pixiApp} viewport={pixiViewport} setApp={setPixiApp} setViewport={setPixiViewport}>
-          <GameRenderer useExternalProvider gridSize={20} tileTypes={tileTypes} onTileHover={(x,y,t)=>{ setSelectedTile({x,y,tileType:t}); }} onTileClick={(x,y,t)=>{ setSelectedTile({x,y,tileType:t}); }}>
+          <GameRenderer
+            useExternalProvider
+            gridSize={20}
+            tileTypes={tileTypes}
+            onTileHover={(x,y,t)=>{ setSelectedTile({x,y,tileType:t}); }}
+            onTileClick={(x,y,t)=>{
+              setSelectedTile({x,y,tileType:t});
+              try { window.dispatchEvent(new CustomEvent('ad_select_tile', { detail: { gridX: x, gridY: y, tileWidth: 64, tileHeight: 32 } })); } catch {}
+            }}
+          >
             <DistrictSprites districts={districts} tileTypes={tileTypes} onDistrictHover={()=>{}} />
             <LeylineSystem leylines={leylines} onLeylineCreate={()=>{}} onLeylineSelect={setSelectedLeyline} selectedLeyline={selectedLeyline} isDrawingMode={false} />
             <HeatLayer gridSize={20} tileWidth={64} tileHeight={32} unrest={resources.unrest} threat={resources.threat} />
@@ -713,6 +830,26 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
             <MarkersLayer markers={markers.map(m => ({ id: m.id, gridX: m.x, gridY: m.y, label: m.label }))} />
           </GameRenderer>
 
+          {/* Early Quest Tracker */}
+          <QuestTracker
+            completed={{
+              farm: placedBuildings.some(b => b.typeId === 'farm'),
+              house: placedBuildings.some(b => b.typeId === 'house'),
+              assign: placedBuildings.some(b => (b.workers || 0) > 0),
+              council: placedBuildings.some(b => b.typeId === 'council_hall'),
+              proposals: proposals.length > 0,
+              advance: state.cycle > 1,
+            }}
+          />
+
+          {/* Onboarding overlay */}
+          {onboardingOpen && (
+            <OnboardingGuide
+              step={onboardingStep}
+              onClose={() => { setOnboardingOpen(false); try { localStorage.setItem('ad_onboarding_dismissed','1'); } catch {} }}
+            />
+          )}
+
           {/* Integrated HUD now shares the same GameProvider */}
           <IntegratedHUDSystem
             defaultPreset="default"
@@ -723,7 +860,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
               time: { ...gameTime, isPaused }
             }}
             onGameAction={(action) => {
-              if (action === 'advance-cycle') tick();
+              if (action === 'advance-cycle') { tick(); if (onboardingStep < 6) setOnboardingStep(6); }
               if (action === 'pause') setIsPaused(true);
               if (action === 'resume') setIsPaused(false);
               if (action === 'open-council') setIsCouncilOpen(true);
@@ -756,19 +893,21 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
                 // Enforce Council Hall prerequisite for advanced builds
                 const hasCouncil = placedBuildings.some(b => b.typeId === 'council_hall');
                 if ((typeId === 'trade_post' || typeId === 'automation_workshop') && !hasCouncil) return;
-                // Affordability check
-                if (!canAfford(def.cost, simResources)) return;
+                // Affordability check (allow tutorial freebies)
+                const hasFree = (tutorialFree[typeId as BuildTypeId] || 0) > 0;
+                if (!hasFree && !canAfford(def.cost, simResources)) return;
                 // Compute simple adjacency traits for bonuses (cardinal neighbors)
                 const dirs = [
                   [1, 0], [-1, 0], [0, 1], [0, -1]
                 ];
-                let waterAdj = 0, mountainAdj = 0;
+                let waterAdj = 0, mountainAdj = 0, forestAdj = 0;
                 for (const [dx, dy] of dirs) {
                   const nx = gx + dx, ny = gy + dy;
                   if (ny >= 0 && ny < tileTypes.length && nx >= 0 && nx < (tileTypes[ny]?.length || 0)) {
                     const nt = tileTypes[ny][nx];
                     if (nt === 'water') waterAdj++;
                     if (nt === 'mountain') mountainAdj++;
+                    if (nt === 'forest') forestAdj++;
                   }
                 }
 
@@ -779,21 +918,28 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
                   y: gy,
                   level: 1,
                   workers: 0,
-                  traits: { waterAdj, mountainAdj },
+                  traits: { waterAdj, mountainAdj, forestAdj },
                 };
                 const newBuildings = [newBuilding, ...placedBuildings];
-                const newResSim = applyCost(simResources, def.cost);
+                const newResSim = hasFree ? simResources : applyCost(simResources, def.cost);
                 // Update server state resources as well
                 const newResServer = { ...state!.resources } as Record<string, number>;
-                for (const [k, v] of Object.entries(def.cost)) {
-                  const key = k as keyof typeof newResServer;
-                  newResServer[key] = Math.max(0, (newResServer[key] || 0) - (v || 0));
+                if (!hasFree) {
+                  for (const [k, v] of Object.entries(def.cost)) {
+                    const key = k as keyof typeof newResServer;
+                    newResServer[key] = Math.max(0, (newResServer[key] || 0) - (v || 0));
+                  }
                 }
                 setPlacedBuildings(newBuildings);
                 setSimResources(newResSim);
                 setState(prev => prev ? { ...prev, resources: newResServer, buildings: newBuildings } : prev);
                 await saveState({ resources: newResServer, buildings: newBuildings });
                 setMarkers(prev => [{ id: `m-${generateId()}`, x: gx, y: gy, label: SIM_BUILDINGS[typeId].name }, ...prev]);
+                // Tutorial progress + consume freebies
+                if (hasFree) setTutorialFree(prev => ({ ...prev, [typeId as BuildTypeId]: Math.max(0, (prev[typeId as BuildTypeId] || 0) - 1) }));
+                if (onboardingStep === 1 && typeId === 'farm') setOnboardingStep(2);
+                if (onboardingStep === 2 && typeId === 'house') setOnboardingStep(3);
+                if (onboardingStep === 4 && typeId === 'council_hall') setOnboardingStep(5);
               }}
               onUpgrade={async (buildingId) => {
                 if (!simResources) return;
@@ -891,9 +1037,13 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
                 await saveState({ resources: newResServer, routes: newRoutes });
                 setRouteDraftFrom(null);
                 setMarkers(prev => [{ id: `m-${generateId()}`, x: b.x, y: b.y, label: 'Route' }, ...prev]);
+                await checkMilestones();
               }}
               onCancelRoute={() => setRouteDraftFrom(null)}
-              onOpenCouncil={() => setIsCouncilOpen(true)}
+              onOpenCouncil={() => { setIsCouncilOpen(true); if (onboardingStep === 4) setOnboardingStep(5); }}
+              tutorialFree={tutorialFree}
+              onConsumeTutorialFree={(typeId) => setTutorialFree(prev => ({ ...prev, [typeId]: Math.max(0, (prev[typeId] || 0) - 1) }))}
+              onTutorialProgress={(evt) => { if (evt.type === 'openedCouncil' && onboardingStep === 4) setOnboardingStep(5); }}
             />
           )}
 
@@ -913,6 +1063,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
               setPlacedBuildings(updated);
               setSimResources(prev => prev ? { ...prev, workers: Math.max(0, prev.workers - 1) } : prev);
               await saveState({ buildings: updated });
+              if (onboardingStep === 3) setOnboardingStep(4);
             }}
             onUnassign={async (id) => {
               const idx = placedBuildings.findIndex(b => b.id === id);
@@ -924,6 +1075,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
               setPlacedBuildings(updated);
               setSimResources(prev => prev ? { ...prev, workers: prev.workers + 1 } : prev);
               await saveState({ buildings: updated });
+              await checkMilestones();
             }}
           />
 
@@ -970,7 +1122,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
         onAcceptProposal={(id) => decide(id, 'accept')}
         onRejectProposal={(id) => decide(id, 'reject')}
         onScryProposal={scry}
-        onGenerateProposals={generate}
+        onGenerateProposals={async () => { await generate(); if (onboardingStep === 5) setOnboardingStep(6); }}
         canGenerateProposals={true}
       />
     </div>

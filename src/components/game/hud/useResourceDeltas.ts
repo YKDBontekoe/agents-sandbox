@@ -5,6 +5,8 @@ export function useResourceDeltas(resources: GameResources, significantThreshold
   const prevRef = useRef<GameResources>(resources);
   const [changes, setChanges] = useState<Record<keyof GameResources, number | null>>({
     grain: null,
+    wood: null,
+    planks: null,
     coin: null,
     mana: null,
     favor: null,

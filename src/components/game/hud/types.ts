@@ -3,6 +3,8 @@ export interface GameResources {
   coin: number;
   mana: number;
   favor: number;
+  wood: number;
+  planks: number;
   unrest: number;
   threat: number;
 }

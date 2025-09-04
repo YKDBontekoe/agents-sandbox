@@ -30,7 +30,7 @@ describe('applyProduction', () => {
   };
 
   it('produces outputs when inputs are available', () => {
-    const res: SimResources = { grain: 5, coin: 0, mana: 0, favor: 0, workers: 0 };
+    const res: SimResources = { grain: 5, coin: 0, mana: 0, favor: 0, workers: 0, wood: 0, planks: 0 };
     const { updated, shortages } = applyProduction(res, [{ typeId: 'mill', workers: 1 }], catalog);
     expect(updated.grain).toBe(3);
     expect(updated.coin).toBe(1);
@@ -38,7 +38,7 @@ describe('applyProduction', () => {
   });
 
   it('records shortages when inputs are missing', () => {
-    const res: SimResources = { grain: 1, coin: 0, mana: 0, favor: 0, workers: 0 };
+    const res: SimResources = { grain: 1, coin: 0, mana: 0, favor: 0, workers: 0, wood: 0, planks: 0 };
     const { updated, shortages } = applyProduction(res, [{ typeId: 'mill', workers: 1 }], catalog);
     expect(updated.grain).toBe(1);
     expect(updated.coin).toBe(0);
@@ -47,7 +47,7 @@ describe('applyProduction', () => {
 });
 
 describe('canAfford and applyCost', () => {
-  const base: SimResources = { grain: 5, coin: 5, mana: 5, favor: 5, workers: 0 };
+  const base: SimResources = { grain: 5, coin: 5, mana: 5, favor: 5, workers: 0, wood: 0, planks: 0 };
 
   it('determines affordability correctly', () => {
     expect(canAfford({ grain: 3, coin: 2 }, base)).toBe(true);

@@ -138,6 +138,16 @@ const resourceIcons = {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
     </svg>
   ),
+  wood: (
+    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 19l4-2 4 2 4-2 4 2V7l-4-2-4 2-4-2-4 2v12z" />
+    </svg>
+  ),
+  planks: (
+    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7h18M3 12h18M3 17h18" />
+    </svg>
+  ),
   unrest: (
     <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -207,6 +217,22 @@ export function ModularResourcePanel({
           delta={changes.grain} 
           danger={!!shortages?.grain}
           icon={resourceIcons.grain}
+          variant={variant}
+        />
+        <ResourceItem 
+          label="Wood" 
+          value={resources.wood} 
+          delta={changes.wood} 
+          danger={!!shortages?.wood}
+          icon={resourceIcons.wood}
+          variant={variant}
+        />
+        <ResourceItem 
+          label="Planks" 
+          value={resources.planks} 
+          delta={changes.planks} 
+          danger={!!shortages?.planks}
+          icon={resourceIcons.planks}
           variant={variant}
         />
         <ResourceItem 

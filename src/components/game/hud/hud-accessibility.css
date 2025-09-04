@@ -349,3 +349,18 @@ button[aria-disabled="true"] {
   border: 2px solid var(--hud-success);
   color: var(--hud-success);
 }
+/* Thin scrollbar for sidebar */
+[data-hud-zone="sidebar-right"] {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(100,116,139,0.6) transparent;
+}
+[data-hud-zone="sidebar-right"]::-webkit-scrollbar {
+  width: 8px;
+}
+[data-hud-zone="sidebar-right"]::-webkit-scrollbar-track {
+  background: transparent;
+}
+[data-hud-zone="sidebar-right"]::-webkit-scrollbar-thumb {
+  background-color: rgba(100,116,139,0.6);
+  border-radius: 6px;
+}
