@@ -13,6 +13,8 @@ export interface GameTime {
   cycle: number;
   season: string;
   timeRemaining: number; // seconds until next cycle
+  isPaused?: boolean;
+  intervalMs?: number;
 }
 
 export interface WorkforceInfo {

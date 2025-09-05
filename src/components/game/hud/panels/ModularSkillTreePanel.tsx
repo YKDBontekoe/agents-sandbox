@@ -40,7 +40,35 @@ export function ModularSkillTreePanel({ seed = 12345, onUnlock, variant = 'compa
     try { localStorage.setItem('ad_skills_unlocked', JSON.stringify(unlocked)); } catch {}
   }, [unlocked]);
 
-  const canUnlock = (n: SkillNode) => (n.requires || []).every(r => unlocked[r]);
+  const canUnlock = (n: SkillNode) => {
+    // prerequisites
+    if ((n.requires || []).some(r => !unlocked[r])) return false;
+    // exclusivity
+    if (n.exclusiveGroup) {
+      const taken = tree.nodes.find(x => x.exclusiveGroup === n.exclusiveGroup && x.id !== n.id && unlocked[x.id]);
+      if (taken) return false;
+    }
+    // extra conditions
+    if (n.unlockConditions && n.unlockConditions.length) {
+      const unlockedIds = Object.keys(unlocked).filter(k => unlocked[k]);
+      const byCat: Record<SkillNode['category'], number> = { economic:0,military:0,mystical:0,infrastructure:0,diplomatic:0,social:0 } as any;
+      unlockedIds.forEach(id => {
+        const node = tree.nodes.find(nn => nn.id === id);
+        if (node) byCat[node.category] = (byCat[node.category] || 0) + 1;
+      });
+      const highestTier = unlockedIds.reduce((m, id) => {
+        const node = tree.nodes.find(nn => nn.id === id);
+        return node && typeof node.tier === 'number' ? Math.max(m, node.tier) : m;
+      }, -1);
+      for (const cond of n.unlockConditions) {
+        if (cond.type === 'min_unlocked' && unlockedIds.length < cond.value) return false;
+        if (cond.type === 'category_unlocked_at_least' && (byCat[cond.category] || 0) < cond.value) return false;
+        if (cond.type === 'max_unlocked_in_category' && (byCat[cond.category] || 0) > cond.value) return false;
+        if (cond.type === 'tier_before_required' && highestTier < cond.tier) return false;
+      }
+    }
+    return true;
+  };
 
   const handleUnlock = (n: SkillNode) => {
     if (!canUnlock(n)) return;
@@ -48,7 +76,7 @@ export function ModularSkillTreePanel({ seed = 12345, onUnlock, variant = 'compa
     setUnlocked(prev => ({ ...prev, [n.id]: true }));
   };
 
-  const available = useMemo(() => tree.nodes.filter(n => (n.requires || []).every(r => unlocked[r]) && !unlocked[n.id]), [tree, unlocked]);
+  const available = useMemo(() => tree.nodes.filter(n => canUnlock(n) && !unlocked[n.id]), [tree, unlocked]);
   const unlockedCount = useMemo(() => Object.values(unlocked).filter(Boolean).length, [unlocked]);
   const filtered = useMemo(() => {
     const base = available.filter(n => categoryFilter[n.category]);

@@ -9,6 +9,8 @@ interface ModularTimePanelProps {
   onPause?: () => void;
   onResume?: () => void;
   onAdvanceCycle?: () => void;
+  intervalMs?: number;
+  onChangeIntervalMs?: (ms: number) => void;
   variant?: 'default' | 'compact' | 'minimal';
   collapsible?: boolean;
 }
@@ -126,6 +128,8 @@ export function ModularTimePanel({
   onPause, 
   onResume, 
   onAdvanceCycle, 
+  intervalMs,
+  onChangeIntervalMs,
   variant = 'default',
   collapsible = true 
 }: ModularTimePanelProps) {
@@ -218,6 +222,61 @@ export function ModularTimePanel({
           variant={variant}
         />
       </div>
+
+      {variant !== 'minimal' && (
+        <div className="mt-3 border-t border-slate-200 pt-3">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs text-slate-600">Simulation Speed</span>
+            <span className="text-xs tabular-nums text-slate-700">
+              {(() => {
+                const ms = typeof intervalMs === 'number' ? intervalMs : (typeof time.intervalMs === 'number' ? time.intervalMs! : 60000);
+                const x = Math.round((60000 / Math.max(1, ms)) * 100) / 100;
+                return `${x}x`;
+              })()}
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            <input
+              type="range"
+              min={0.25}
+              max={4}
+              step={0.25}
+              value={(() => {
+                const ms = typeof intervalMs === 'number' ? intervalMs : (typeof time.intervalMs === 'number' ? time.intervalMs! : 60000);
+                return Math.round((60000 / Math.max(1, ms)) * 100) / 100;
+              })()}
+              onChange={(e) => {
+                const x = Number(e.target.value);
+                const ms = Math.round(60000 / Math.min(4, Math.max(0.25, x)));
+                onChangeIntervalMs?.(ms);
+              }}
+              className="flex-1 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer"
+              aria-label="Simulation speed"
+            />
+            <span className="text-[10px] text-slate-500">1x=60s</span>
+          </div>
+          <div className="mt-2 grid grid-cols-4 gap-2">
+            {[
+              { label: '0.5x', ms: 120000 },
+              { label: '1x', ms: 60000 },
+              { label: '2x', ms: 30000 },
+              { label: '4x', ms: 15000 },
+            ].map(opt => {
+              const ms = typeof intervalMs === 'number' ? intervalMs : (typeof time.intervalMs === 'number' ? time.intervalMs! : 60000);
+              const active = Math.abs(ms - opt.ms) < 1;
+              return (
+                <button
+                  key={opt.label}
+                  onClick={() => onChangeIntervalMs?.(opt.ms)}
+                  className={`px-2 py-1 rounded border text-xs transition-colors ${active ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-300 hover:bg-slate-50'}`}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </ResponsivePanel>
   );
 }

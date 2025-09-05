@@ -34,6 +34,9 @@ export interface SkillNode {
   isRevealed?: boolean; // Whether this node is visible to the player
   specialAbility?: SpecialAbility;
   statMultiplier?: number; // Quality-based stat scaling
+  // New: optional exclusivity path grouping and additional unlock conditions
+  exclusiveGroup?: string; // if set, only one node within the same group can be unlocked
+  unlockConditions?: UnlockCondition[]; // extra conditions beyond requires
 }
 
 export interface SkillTree {
@@ -77,6 +80,13 @@ export interface QualityChallenge {
   completed?: boolean;
   active?: boolean;
 }
+
+// Additional unlock conditions for added challenge without relying on external game state
+export type UnlockCondition =
+  | { type: 'min_unlocked'; value: number }
+  | { type: 'category_unlocked_at_least'; category: SkillNode['category']; value: number }
+  | { type: 'max_unlocked_in_category'; category: SkillNode['category']; value: number } // encourages branching
+  | { type: 'tier_before_required'; tier: number }; // cannot unlock before reaching tier
 
 // Simple seeded RNG (mulberry32)
 function mulberry32(a: number) {
@@ -267,6 +277,26 @@ export function generateSkillTree(seed = 42): SkillTree {
       const { cost, baseCost } = makeCost(rarity, nodes.length);
       const specialAbility = createSpecialAbility(quality, cat);
       
+      // Occasionally create mutually exclusive paths within a tier/category
+      let exclusiveGroup: string | undefined = undefined;
+      if (t >= 2 && rng() < 0.25) {
+        exclusiveGroup = `tier${t}_${cat}_path_${Math.floor(rng()*3)}`;
+      }
+
+      // Add extra unlock conditions to make choices more meaningful
+      const unlockConditions: UnlockCondition[] = [];
+      if (t > 0 && rng() < 0.35) {
+        unlockConditions.push({ type: 'min_unlocked', value: 2 + Math.floor(t * rng()) });
+      }
+      if (t >= 3 && rng() < 0.3) {
+        // Encourage specializing or delaying over-investment in one category
+        if (rng() < 0.5) unlockConditions.push({ type: 'category_unlocked_at_least', category: cat, value: 2 });
+        else unlockConditions.push({ type: 'max_unlocked_in_category', category: cat, value: 6 });
+      }
+      if (t >= 4 && rng() < 0.2) {
+        unlockConditions.push({ type: 'tier_before_required', tier: t - 1 });
+      }
+
       const node: SkillNode = {
         id: id(nodes.length),
         title: pick(rng, titlesByCat[cat]),
@@ -285,6 +315,8 @@ export function generateSkillTree(seed = 42): SkillTree {
         isRevealed: t === 0, // Only first tier is initially revealed
         specialAbility,
         statMultiplier: qualityMultiplier,
+        exclusiveGroup,
+        unlockConditions: unlockConditions.length ? unlockConditions : undefined,
       };
       
       nodes.push(node);
@@ -496,5 +528,36 @@ export function accumulateEffects(unlocked: SkillNode[]): { resMul: Record<strin
       }
     });
   });
+
+  // Lightweight, conservative set-bonus synergies to make builds more fun
+  // Category synergies
+  const byCat: Record<SkillNode['category'], number> = {
+    economic: 0, military: 0, mystical: 0, infrastructure: 0, diplomatic: 0, social: 0
+  };
+  unlocked.forEach(n => { byCat[n.category] = (byCat[n.category] || 0) + 1; });
+
+  // Econ + Infra synergy: small boost to trade and processing
+  const econInfra = (byCat.economic > 0 && byCat.infrastructure > 0) ? (byCat.economic + byCat.infrastructure) : 0;
+  if (econInfra >= 4) {
+    ['trade_post', 'sawmill'].forEach(t => { bldMul[t] = (bldMul[t] ?? 1) * 1.05; });
+  }
+
+  // Mystical + Infra synergy: storage and mana alignment
+  const mystInfra = (byCat.mystical > 0 && byCat.infrastructure > 0) ? (byCat.mystical + byCat.infrastructure) : 0;
+  if (mystInfra >= 4) {
+    resMul['mana'] = (resMul['mana'] ?? 1) * 1.05;
+    bldMul['storehouse'] = (bldMul['storehouse'] ?? 1) * 1.05;
+  }
+
+  // Military + Social synergy: slight upkeep reduction via discipline & morale
+  const milSoc = (byCat.military > 0 && byCat.social > 0) ? (byCat.military + byCat.social) : 0;
+  if (milSoc >= 3) {
+    upkeepDelta += -0.05; // very modest reduction
+  }
+
+  // Quality set bonus: any legendary unlocked grants a tiny coin tilt
+  if (unlocked.some(n => n.quality === 'legendary')) {
+    resMul['coin'] = (resMul['coin'] ?? 1) * 1.02;
+  }
   return { resMul, bldMul, upkeepDelta };
 }

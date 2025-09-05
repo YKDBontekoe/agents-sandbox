@@ -71,6 +71,8 @@ src/
         route.ts           # GET /api/state
       state/tick/
         route.ts           # POST /api/state/tick
+      state/heartbeat/
+        route.ts           # POST /api/state/heartbeat (auto-advance due ticks)
       proposals/
         route.ts           # GET /api/proposals
         generate/
@@ -96,6 +98,7 @@ supabase/
 - Apply-once: `accepted` proposals get applied in the next tick and then marked `applied`
 - Non-negative: resources are clamped to >= 0 after each tick
 - Time-bounded: AI calls use strict timeouts and limited retries
+- Real-time clock: server heartbeat advances cycles based on `last_tick_at` and `tick_interval_ms`; pauses on crisis
 
 ## Failure Modes & Responses
 

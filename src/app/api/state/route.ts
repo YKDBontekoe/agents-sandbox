@@ -15,14 +15,24 @@ export async function GET() {
     if (!state) {
       state = await uow.gameStates.create({
         skill_tree_seed: Math.floor(Math.random() * 1e9),
+        auto_ticking: true,
+        tick_interval_ms: 60000,
+        last_tick_at: new Date().toISOString(),
       })
       return NextResponse.json(state)
     }
 
-    if (!state.skill_tree_seed) {
-      const patched = await uow.gameStates.update(state.id, {
-        skill_tree_seed: Math.floor(Math.random() * 1e9),
-      })
+    const needsSeed = !state.skill_tree_seed
+    const needsClockDefaults = typeof (state as any).tick_interval_ms !== 'number' || typeof (state as any).auto_ticking !== 'boolean' || !(state as any).last_tick_at
+    if (needsSeed || needsClockDefaults) {
+      const patch: Partial<GameState & { auto_ticking: boolean; tick_interval_ms: number; last_tick_at: string }> = {}
+      if (needsSeed) patch.skill_tree_seed = Math.floor(Math.random() * 1e9)
+      if (needsClockDefaults) {
+        if (typeof (state as any).auto_ticking !== 'boolean') (patch as any).auto_ticking = true
+        if (typeof (state as any).tick_interval_ms !== 'number') (patch as any).tick_interval_ms = 60000
+        if (!(state as any).last_tick_at) (patch as any).last_tick_at = new Date().toISOString()
+      }
+      const patched = await uow.gameStates.update(state.id, patch as Partial<GameState>)
       return NextResponse.json(patched)
     }
 
@@ -48,6 +58,9 @@ const UpdateSchema = z.object({
   edicts: z.record(z.string(), z.number()).optional(),
   skills: z.array(z.string()).optional(),
   skill_tree_seed: z.number().int().optional(),
+  auto_ticking: z.boolean().optional(),
+  tick_interval_ms: z.number().int().positive().optional(),
+  last_tick_at: z.string().optional(),
 })
 
 export async function PATCH(req: NextRequest) {
@@ -57,8 +70,8 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.message }, { status: 400 })
   }
 
-  const { id, resources, workers, buildings, routes, roads, citizens_seed, citizens_count, edicts, skills, skill_tree_seed } = parsed.data
-  const updates: Partial<{ resources: Record<string, number>; workers: number; buildings: unknown[]; routes: unknown[]; roads: Array<{x:number;y:number}>; citizens_seed: number; citizens_count: number; edicts: Record<string, number>; skills: string[]; skill_tree_seed: number; updated_at: string }> = { updated_at: new Date().toISOString() }
+  const { id, resources, workers, buildings, routes, roads, citizens_seed, citizens_count, edicts, skills, skill_tree_seed, auto_ticking, tick_interval_ms, last_tick_at } = parsed.data
+  const updates: Partial<{ resources: Record<string, number>; workers: number; buildings: unknown[]; routes: unknown[]; roads: Array<{x:number;y:number}>; citizens_seed: number; citizens_count: number; edicts: Record<string, number>; skills: string[]; skill_tree_seed: number; updated_at: string; auto_ticking: boolean; tick_interval_ms: number; last_tick_at: string }> = { updated_at: new Date().toISOString() }
   if (resources) updates.resources = resources
   if (typeof workers === 'number') updates.workers = workers
   if (buildings) updates.buildings = buildings
@@ -69,6 +82,9 @@ export async function PATCH(req: NextRequest) {
   if (edicts) updates.edicts = edicts
   if (skills) updates.skills = skills
   if (typeof skill_tree_seed === 'number') updates.skill_tree_seed = skill_tree_seed
+  if (typeof auto_ticking === 'boolean') (updates as any).auto_ticking = auto_ticking
+  if (typeof tick_interval_ms === 'number') (updates as any).tick_interval_ms = tick_interval_ms
+  if (typeof last_tick_at === 'string') (updates as any).last_tick_at = last_tick_at
 
   const supabase = createSupabaseServerClient()
   const uow = new SupabaseUnitOfWork(supabase)

@@ -46,11 +46,22 @@ export interface SettingsPanelProps {
   onChangeCitizensCount?: (value: number) => void;
   citizensSeed?: number;
   onChangeCitizensSeed?: (value: number) => void;
+  // Workers
+  autoAssignWorkers?: boolean;
+  onToggleAutoAssignWorkers?: (value: boolean) => void;
   // Inbox
   notifications?: Array<{ id: string; title: string; message: string; type: string; timestamp: number; read?: boolean }>;
   onDismissNotification?: (id: string) => void;
   onMarkNotificationRead?: (id: string) => void;
   onClearNotifications?: () => void;
+  // Game speed (server tick interval)
+  simTickIntervalMs?: number;
+  onChangeSimTickInterval?: (ms: number) => void;
+  // Time control
+  isAutoTicking?: boolean;
+  timeRemainingSec?: number;
+  onToggleAutoTicking?: (auto: boolean) => void;
+  onTickNow?: () => void;
 }
 
 // Settings categories for better organization
@@ -320,10 +331,18 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
   onChangeCitizensCount,
   citizensSeed,
   onChangeCitizensSeed,
+  autoAssignWorkers,
+  onToggleAutoAssignWorkers,
   notifications = [],
   onDismissNotification,
   onMarkNotificationRead,
   onClearNotifications,
+  simTickIntervalMs,
+  onChangeSimTickInterval,
+  isAutoTicking,
+  timeRemainingSec,
+  onToggleAutoTicking,
+  onTickNow,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(['display', 'gameplay']));
@@ -360,6 +379,14 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
           type: 'toggle',
           value: Boolean(showCitizens),
           onChange: (v: SettingValue) => { onToggleCitizens?.(Boolean(v)); setHasChanges(true); }
+        },
+        {
+          id: 'auto-assign-workers',
+          name: 'Auto-Assign Workers',
+          description: 'Automatically assign idle workers to best available jobs',
+          type: 'toggle',
+          value: Boolean(autoAssignWorkers),
+          onChange: (v: SettingValue) => { onToggleAutoAssignWorkers?.(Boolean(v)); setHasChanges(true); }
         },
         {
           id: 'confirm-roads',
@@ -485,17 +512,6 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
             { value: 'hard', label: 'Hard' },
             { value: 'expert', label: 'Expert' }
           ],
-          onChange: (value: SettingValue) => setHasChanges(true)
-        },
-        {
-          id: 'game-speed',
-          name: 'Game Speed',
-          description: 'Base game simulation speed',
-          type: 'range',
-          value: 1,
-          min: 0.5,
-          max: 3,
-          step: 0.1,
           onChange: (value: SettingValue) => setHasChanges(true)
         }
       ]

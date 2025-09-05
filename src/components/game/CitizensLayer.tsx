@@ -5,7 +5,7 @@ import * as PIXI from "pixi.js";
 import { useGameContext } from "./GameContext";
 import { gridToWorld } from "@/lib/isometric";
 
-interface BuildingRef { id: string; typeId: string; x: number; y: number }
+interface BuildingRef { id: string; typeId: string; x: number; y: number; workers?: number }
 interface RoadTile { x: number; y: number }
 
 interface CitizensLayerProps {
@@ -42,6 +42,15 @@ export default function CitizensLayer({ buildings, roads, tileTypes, onProposeRo
   const houses = useMemo(() => buildings.filter(b => b.typeId === 'house'), [JSON.stringify(buildings)]);
   const storehouses = useMemo(() => buildings.filter(b => b.typeId === 'storehouse'), [JSON.stringify(buildings)]);
   const producers = useMemo(() => buildings.filter(b => ['farm','lumber_camp','sawmill','trade_post','automation_workshop','shrine'].includes(b.typeId)), [JSON.stringify(buildings)]);
+  const producerWeights = useMemo(() => {
+    const map = new Map<string, number>();
+    producers.forEach(p => {
+      // Weight by assigned workers + small base so idle sites still get visits
+      const w = 0.5 + Math.max(0, (p as any).workers || 0);
+      map.set(p.id, w);
+    });
+    return map;
+  }, [JSON.stringify(producers)]);
 
   const inBounds = (x:number,y:number) => y>=0 && y<tileTypes.length && x>=0 && x<(tileTypes[y]?.length||0);
 
@@ -127,7 +136,16 @@ export default function CitizensLayer({ buildings, roads, tileTypes, onProposeRo
     const chooseTask = (c: Citizen) => {
       // target a producer then a storehouse, alternate
       if (!c.carrying) {
-        const target = producers[Math.floor(Math.random() * Math.max(1, producers.length))] || home;
+        // weighted choice favoring staffed producers
+        let target = home;
+        if (producers.length > 0) {
+          const total = producers.reduce((s,p)=> s + (producerWeights.get(p.id) || 1), 0);
+          let r = Math.random() * (total || 1);
+          for (const p of producers) {
+            r -= (producerWeights.get(p.id) || 1);
+            if (r <= 0) { target = p; break; }
+          }
+        }
         c.tx = target.x; c.ty = target.y;
         c.path = pathfind(c.x, c.y, c.tx, c.ty);
       } else {

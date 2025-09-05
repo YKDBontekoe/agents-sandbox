@@ -61,6 +61,10 @@ export interface GameState {
   edicts?: Record<string, number>;
   max_cycle?: number;
   updated_at?: string;
+  // Real-time clock
+  auto_ticking?: boolean;
+  last_tick_at?: string; // ISO timestamp
+  tick_interval_ms?: number;
 }
 
 export interface TickCrisis {

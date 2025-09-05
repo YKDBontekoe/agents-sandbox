@@ -34,6 +34,15 @@ Example proposal shape:
 }
 ```
 
+## Skill Tree Tweaks
+
+- Procedural skills now support optional exclusivity groups and unlock conditions to increase challenge.
+- Exclusivity: set `exclusiveGroup` on nodes; only one node per group can be unlocked.
+- Unlock conditions: array of small constraints such as `min_unlocked`, `category_unlocked_at_least`, `max_unlocked_in_category`, `tier_before_required`.
+- Synergy: conservative set-bonus multipliers emerge from category combos (e.g., economic+infrastructure) and high-quality unlocks.
+
+These mechanics are client-only and keep JSON-first agents unaffected; agents still see aggregate effects via `accumulateEffects` when forecasting.
+
 ## Migration Strategy
 
 - Write idempotent migrations; backfill defaults for new fields

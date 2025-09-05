@@ -33,6 +33,7 @@ import BuildingsLayer from '@/components/game/BuildingsLayer';
 import RoutesLayer from '@/components/game/RoutesLayer';
 import RoadsLayer from '@/components/game/RoadsLayer';
 import CitizensLayer from '@/components/game/CitizensLayer';
+import AssignmentLinesLayer, { type AssignLine } from '@/components/game/AssignmentLinesLayer';
 import type { CrisisData } from '@/components/game/CrisisModal';
 import GoalBanner from '@/components/game/GoalBanner';
 import OnboardingGuide from '@/components/game/OnboardingGuide';
@@ -338,7 +339,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   const [guild, _setGuild] = useState("Wardens");
   const [error, setError] = useState<string | null>(null);
   const [isPaused, setIsPaused] = useState(true);
-  const [timeRemaining, setTimeRemaining] = useState(120);
+  const [timeRemaining, setTimeRemaining] = useState(60);
   const [, setCrisis] = useState<CrisisData | null>(null);
   const [isCouncilOpen, setIsCouncilOpen] = useState(false);
   const [onboardingStep, setOnboardingStep] = useState<number>(() => {
@@ -371,6 +372,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   const [showRoads, setShowRoads] = useState(true);
   const [showCitizens, setShowCitizens] = useState(true);
   const [requireRoadConfirm, setRequireRoadConfirm] = useState(true);
+  const [autoAssignWorkers, setAutoAssignWorkers] = useState<boolean>(true);
   const [pendingRoad, setPendingRoad] = useState<{ tiles: {x:number;y:number}[] } | null>(null);
   const [citizensCount, setCitizensCount] = useState<number>(8);
   const [citizensSeed, setCitizensSeed] = useState<number>(() => Math.floor(Math.random()*1e6));
@@ -466,6 +468,8 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   const [selectedLeyline, setSelectedLeyline] = useState<Leyline | null>(null);
   const [isDrawingMode, _setIsDrawingMode] = useState(false);
   const hasAutoOpenedCouncilRef = useRef(false);
+  const [routeHoverToId, setRouteHoverToId] = useState<string | null>(null);
+  const [assignLines, setAssignLines] = useState<AssignLine[]>([]);
 
   // HUD layout presets omitted for stability
 
@@ -505,6 +509,60 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   const [omenReadings, _setOmenReadings] = useState<OmenReading[]>([]);
 
   useEffect(() => {
+    const onStartRoute = (e: any) => {
+      const id = e?.detail?.buildingId as string | undefined;
+      if (!id) return;
+      setRouteDraftFrom(id);
+      setIsSettingsOpen(false);
+      setIsCouncilOpen(false);
+    };
+    const onHoverBuilding = (e: any) => {
+      const id = e?.detail?.buildingId as string | undefined;
+      if (!routeDraftFrom) return;
+      setRouteHoverToId(id || null);
+    };
+    window.addEventListener('ad_start_route', onStartRoute as any);
+    window.addEventListener('ad_hover_building', onHoverBuilding as any);
+    return () => {
+      window.removeEventListener('ad_start_route', onStartRoute as any);
+      window.removeEventListener('ad_hover_building', onHoverBuilding as any);
+    };
+  }, [routeDraftFrom]);
+
+  useEffect(() => {
+    const onKey = async (e: KeyboardEvent) => {
+      if (!selectedTile) return;
+      const b = placedBuildings.find(bb => bb.x === selectedTile.x && bb.y === selectedTile.y);
+      if (!b) return;
+      const cap = SIM_BUILDINGS[b.typeId].workCapacity ?? 0;
+      const level = Math.max(1, Number(b.level ?? 1));
+      const maxCap = Math.round(cap * (1 + 0.25 * (level - 1)));
+      if (e.key === '+' || e.key === '=' ) {
+        if ((simResources?.workers ?? 0) <= 0 || b.workers >= maxCap) return;
+        const updated = placedBuildings.map(x => x.id === b.id ? { ...x, workers: x.workers + 1 } : x);
+        setPlacedBuildings(updated);
+        setSimResources(prev => prev ? { ...prev, workers: Math.max(0, prev.workers - 1) } : prev);
+        await saveState({ buildings: updated });
+        // visual line from closest house/storehouse
+        try {
+          const targets = placedBuildings.filter(x => x.typeId === 'house' || x.typeId === 'storehouse');
+          let src = targets[0]; let best = Number.POSITIVE_INFINITY;
+          for (const t of targets) { const d = Math.hypot((t.x - b.x), (t.y - b.y)); if (d < best) { best = d; src = t; } }
+          if (src) setAssignLines(prev => [{ id: `al-${Date.now()}`, from: { x: src!.x, y: src!.y }, to: { x: b.x, y: b.y }, createdAt: performance.now(), ttl: 800 }, ...prev].slice(0, 8));
+        } catch {}
+      } else if (e.key === '-' || e.key === '_') {
+        if (b.workers <= 0) return;
+        const updated = placedBuildings.map(x => x.id === b.id ? { ...x, workers: x.workers - 1 } : x);
+        setPlacedBuildings(updated);
+        setSimResources(prev => prev ? { ...prev, workers: prev.workers + 1 } : prev);
+        await saveState({ buildings: updated });
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selectedTile, placedBuildings, simResources]);
+
+  useEffect(() => {
     try {
       const done = typeof window !== 'undefined' ? localStorage.getItem('ad_onboarding_done') : null;
       const mode = (typeof window !== 'undefined' ? localStorage.getItem('ad_game_mode') : null) as 'casual' | 'advanced' | null;
@@ -539,6 +597,104 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     });
   }, [state]);
 
+  // Greedy auto-assign idle workers to best buildings by marginal yield
+  useEffect(() => {
+    if (!autoAssignWorkers) return;
+    if (!simResources) return;
+    let idle = simResources.workers || 0;
+    if (idle <= 0) return;
+    // Work on local copies; batch a single save at end
+    const updatedBuildings = [...placedBuildings];
+    let safety = 100; // guard against infinite loop
+    // Base weights per resource value
+    const scoreWeights: Record<string, number> = {
+      grain: 3,
+      wood: 2,
+      planks: 2,
+      coin: 1,
+      favor: 0.4,
+      mana: 0,
+    };
+    const routesArr = routes || [];
+    const edictsApplied = edicts;
+    const season = ((state?.cycle ?? 0) % 4 === 0 ? 'spring' : ((state?.cycle ?? 0) % 4 === 1 ? 'summer' : ((state?.cycle ?? 0) % 4 === 2 ? 'autumn' : 'winter')));
+
+    // Adjust priorities by season and policy
+    // Grain is more critical in winter; wood a bit higher in autumn; coin more valuable with high tariffs
+    const tariffs = Math.max(0, Math.min(100, Number(edictsApplied['tariffs'] ?? 50)));
+    const coinBoost = 1 + (tariffs - 50) / 100 * 0.6; // [-0.3, +0.3]
+    if (season === 'winter') scoreWeights.grain += 1.2;
+    if (season === 'autumn') scoreWeights.wood += 0.6;
+    if (season === 'summer') scoreWeights.planks += 0.4;
+    scoreWeights.coin *= coinBoost;
+
+    const marginalScore = (idx: number): number => {
+      const b = updatedBuildings[idx];
+      const def = SIM_BUILDINGS[b.typeId];
+      if (!def) return -Infinity;
+      const capBase = def.workCapacity ?? 0;
+      // account for level scaling similar to projection
+      const level = Math.max(1, Number(b.level ?? 1));
+      const levelCapScale = 1 + 0.25 * (level - 1);
+      const cap = Math.round(capBase * levelCapScale);
+      if (cap <= 0) return -Infinity;
+      if ((b.workers || 0) >= cap) return -Infinity;
+
+      const base = projectCycleDeltas(
+        { ...simResources },
+        updatedBuildings,
+        routesArr,
+        SIM_BUILDINGS,
+        { totalWorkers: (state?.workers || 0), edicts: edictsApplied }
+      ).updated;
+      // simulate +1 worker on this building only
+      const temp = [...updatedBuildings];
+      temp[idx] = { ...temp[idx], workers: (temp[idx].workers || 0) + 1 } as any;
+      const next = projectCycleDeltas(
+        { ...simResources },
+        temp,
+        routesArr,
+        SIM_BUILDINGS,
+        { totalWorkers: (state?.workers || 0), edicts: edictsApplied }
+      ).updated;
+
+      let score = 0;
+      for (const [k, w] of Object.entries(scoreWeights)) {
+        const delta = (next as any)[k] - (base as any)[k];
+        score += (delta || 0) * (w as number);
+      }
+      // bias toward resolving current shortages
+      if ((simResources.grain || 0) < 50 && b.typeId === 'farm') score += 5;
+      if ((simResources.wood || 0) < 30 && b.typeId === 'lumber_camp') score += 3;
+      if ((simResources.planks || 0) < 20 && b.typeId === 'sawmill') score += 2;
+      // Slight policy-aware bonus
+      if (tariffs > 70 && (b.typeId === 'trade_post')) score += 1.5;
+      return score;
+    };
+
+    while (idle > 0 && safety-- > 0) {
+      // find best index
+      let bestIdx = -1;
+      let bestScore = 0;
+      for (let i = 0; i < updatedBuildings.length; i++) {
+        const s = marginalScore(i);
+        if (s > bestScore) { bestScore = s; bestIdx = i; }
+      }
+      if (bestIdx === -1) break;
+      // assign 1 worker
+      updatedBuildings[bestIdx] = { ...updatedBuildings[bestIdx], workers: (updatedBuildings[bestIdx].workers || 0) + 1 } as any;
+      idle -= 1;
+    }
+
+    if (idle !== (simResources.workers || 0)) {
+      // apply local updates and persist
+      setPlacedBuildings(updatedBuildings);
+      setSimResources(prev => prev ? { ...prev, workers: idle } : prev);
+      saveState({ buildings: updatedBuildings }).catch(()=>{});
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoAssignWorkers, JSON.stringify(placedBuildings), simResources?.workers]);
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
     try { localStorage.setItem('ad_onboarding_step', String(onboardingStep)); } catch {}
@@ -566,6 +722,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
       throw new Error(msg);
     }
     setState({ ...json, workers: json.workers ?? 0, buildings: json.buildings ?? [], routes: (json as any).routes ?? [], roads: (json as any).roads ?? [], citizens_seed: (json as any).citizens_seed, citizens_count: (json as any).citizens_count });
+    try { setIsPaused(!(json as any).auto_ticking); } catch {}
     try { setRoads(((json as any).roads as Array<{x:number;y:number}>) ?? []); } catch {}
     try { if ((json as any).citizens_count) setCitizensCount((json as any).citizens_count); } catch {}
     try { if ((json as any).citizens_seed) setCitizensSeed((json as any).citizens_seed); } catch {}
@@ -619,7 +776,9 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
       };
       setSimResources(simRes);
       setPlacedBuildings(serverState.buildings);
-      setTimeRemaining(120);
+      // Reset local countdown based on server interval if present
+      const ms = Number((json.state as any)?.tick_interval_ms ?? 60000)
+      setTimeRemaining(Math.max(1, Math.round(ms / 1000)));
       if (json.crisis) {
         setIsPaused(true);
         setCrisis(json.crisis);
@@ -717,17 +876,37 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Real-time heartbeat: drive countdown and server ticks
   useEffect(() => {
-    let timer: NodeJS.Timeout | null = null;
-    if (!isPaused && timeRemaining > 0) {
-      timer = setTimeout(() => {
-        setTimeRemaining(prev => prev - 1);
-      }, 1000);
-    } else if (timeRemaining === 0) {
-      tick();
-    }
-    return () => { if (timer) clearTimeout(timer); };
-  }, [timeRemaining, isPaused]);
+    let interval: NodeJS.Timeout | null = null;
+    const updateCountdown = () => {
+      if (!state) return;
+      const lastStr = (state as any).last_tick_at as string | undefined;
+      const ms = Number((state as any).tick_interval_ms ?? 60000);
+      const last = lastStr ? Date.parse(lastStr) : Date.now();
+      const diff = (last + ms) - Date.now();
+      const secs = Math.max(0, Math.ceil(diff / 1000));
+      setTimeRemaining(secs);
+    };
+    updateCountdown();
+    interval = setInterval(updateCountdown, 1000);
+    return () => { if (interval) clearInterval(interval); };
+  }, [state]);
+
+  useEffect(() => {
+    let hb: NodeJS.Timeout | null = null;
+    const ping = async () => {
+      try {
+        if (!isPaused) {
+          await fetch('/api/state/heartbeat', { method: 'POST' });
+        }
+      } catch {}
+    };
+    // Kick once immediately to avoid drift, then every second
+    ping();
+    hb = setInterval(ping, 1000);
+    return () => { if (hb) clearInterval(hb); };
+  }, [isPaused]);
 
   useEffect(() => {
     if (config.nextPublicDisableRealtime || config.nodeEnv === 'development') {
@@ -748,6 +927,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
         const next = payload?.new as GameState | undefined;
         if (next && typeof next === 'object') {
           setState(next);
+          try { setIsPaused(!(next as any).auto_ticking); } catch {}
           const assigned = (next.buildings || []).reduce((sum, b) => sum + (b.workers || 0), 0);
           setPlacedBuildings(next.buildings || []);
           setSimResources({
@@ -948,12 +1128,18 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
             <DistrictSprites districts={districts} tileTypes={tileTypes} onDistrictHover={()=>{}} />
             <LeylineSystem leylines={leylines} onLeylineCreate={()=>{}} onLeylineSelect={setSelectedLeyline} selectedLeyline={selectedLeyline} isDrawingMode={false} />
             <HeatLayer gridSize={20} tileWidth={64} tileHeight={32} unrest={resources.unrest} threat={resources.threat} />
-            <BuildingsLayer buildings={placedBuildings.map(b => ({ id: b.id, typeId: b.typeId, x: b.x, y: b.y }))} />
-            <RoutesLayer routes={(routes || []).map(r => ({ id: r.id, fromId: r.fromId, toId: r.toId }))} buildings={placedBuildings.map(b => ({ id: b.id, x: b.x, y: b.y }))} />
+            <BuildingsLayer buildings={placedBuildings.map(b => ({ id: b.id, typeId: b.typeId, x: b.x, y: b.y, workers: b.workers, level: b.level }))} />
+            <RoutesLayer
+              routes={(routes || []).map(r => ({ id: r.id, fromId: r.fromId, toId: r.toId }))}
+              buildings={placedBuildings.map(b => ({ id: b.id, x: b.x, y: b.y }))}
+              draftFromId={routeDraftFrom}
+              draftToId={routeHoverToId}
+            />
+            <AssignmentLinesLayer lines={assignLines} />
             {showRoads && <RoadsLayer roads={roads} />}
             {showCitizens && (
             <CitizensLayer
-              buildings={placedBuildings.map(b => ({ id: b.id, typeId: b.typeId, x: b.x, y: b.y }))}
+              buildings={placedBuildings.map(b => ({ id: b.id, typeId: b.typeId, x: b.x, y: b.y, workers: b.workers }))}
               roads={roads}
               tileTypes={tileTypes}
               onProposeRoads={(tiles)=>{
@@ -1039,12 +1225,24 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
               resources,
               resourceChanges,
               workforce: { total: totalWorkers, idle: idleWorkers, needed: neededWorkers },
-              time: { ...gameTime, isPaused }
+              time: { ...gameTime, isPaused, intervalMs: Number((state as any)?.tick_interval_ms ?? 60000) }
             }}
-            onGameAction={(action) => {
+            onGameAction={(action, payload) => {
               if (action === 'advance-cycle') { tick(); if (onboardingStep < 6) setOnboardingStep(6); }
-              if (action === 'pause') setIsPaused(true);
-              if (action === 'resume') setIsPaused(false);
+              if (action === 'pause') { 
+                setIsPaused(true);
+                if (state) { void fetch('/api/state', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: state.id, auto_ticking: false }) }); }
+              }
+              if (action === 'resume') {
+                setIsPaused(false);
+                if (state) { void fetch('/api/state', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: state.id, auto_ticking: true, last_tick_at: new Date().toISOString() }) }); }
+              }
+              if (action === 'set-speed') {
+                if (!state) return;
+                const ms = Number(payload?.ms ?? 60000);
+                void fetch('/api/state', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: state.id, tick_interval_ms: ms }) });
+                setState(prev => prev ? { ...prev, tick_interval_ms: ms } as any : prev);
+              }
               if (action === 'open-council') setIsCouncilOpen(true);
               if (action === 'open-edicts') setIsEdictsOpen(true);
               if (action === 'open-omens') setIsOmensOpen(true);
@@ -1053,8 +1251,11 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
             className="absolute inset-0"
           >
             <ModularWorkerPanel
-              buildings={placedBuildings.map(b => ({ id: b.id, typeId: b.typeId as keyof typeof SIM_BUILDINGS, workers: b.workers }))}
+              buildings={placedBuildings.map(b => ({ id: b.id, typeId: b.typeId as keyof typeof SIM_BUILDINGS, workers: b.workers, level: b.level }))}
               idleWorkers={idleWorkers}
+              unrest={resources.unrest}
+              totalWorkers={totalWorkers}
+              grain={resources.grain}
               onAssign={async (id) => {
                 const idx = placedBuildings.findIndex(b => b.id === id);
                 if (idx === -1) return;
@@ -1066,6 +1267,19 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
                 setPlacedBuildings(updated);
                 setSimResources(prev => prev ? { ...prev, workers: Math.max(0, prev.workers - 1) } : prev);
                 await saveState({ buildings: updated });
+                // Add assignment visual line from nearest house/storehouse
+                try {
+                  const targets = placedBuildings.filter(x => x.typeId === 'house' || x.typeId === 'storehouse');
+                  let src = targets[0];
+                  let best = Number.POSITIVE_INFINITY;
+                  for (const t of targets) {
+                    const d = Math.hypot((t.x - b.x), (t.y - b.y));
+                    if (d < best) { best = d; src = t; }
+                  }
+                  if (src) {
+                    setAssignLines(prev => [{ id: `al-${Date.now()}`, from: { x: src!.x, y: src!.y }, to: { x: b.x, y: b.y }, createdAt: performance.now(), ttl: 800 }, ...prev].slice(0, 8));
+                  }
+                } catch {}
                 if (onboardingStep === 3) setOnboardingStep(4);
               }}
               onUnassign={async (id) => {
@@ -1339,10 +1553,32 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
         onToggleCitizens={(v)=> setShowCitizens(v)}
         requireRoadConfirm={requireRoadConfirm}
         onToggleRoadConfirm={(v)=> setRequireRoadConfirm(v)}
+        autoAssignWorkers={autoAssignWorkers}
+        onToggleAutoAssignWorkers={(v)=> setAutoAssignWorkers(v)}
         citizensCount={citizensCount}
         onChangeCitizensCount={(v)=> { setCitizensCount(v); saveState({ citizens_count: v } as any).catch(()=>{}); }}
         citizensSeed={citizensSeed}
         onChangeCitizensSeed={(v)=> { setCitizensSeed(v); saveState({ citizens_seed: v } as any).catch(()=>{}); }}
+        simTickIntervalMs={Number((state as any)?.tick_interval_ms ?? 60000)}
+        onChangeSimTickInterval={async (ms) => {
+          if (!state) return;
+          try {
+            await fetch('/api/state', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: state.id, tick_interval_ms: ms }) });
+            setState(prev => prev ? { ...prev, tick_interval_ms: ms } as any : prev);
+          } catch {}
+        }}
+        isAutoTicking={!(isPaused)}
+        timeRemainingSec={timeRemaining}
+        onToggleAutoTicking={async (auto) => {
+          if (!state) return;
+          setIsPaused(!auto);
+          try {
+            const body: any = { id: state.id, auto_ticking: auto };
+            if (auto) body.last_tick_at = new Date().toISOString();
+            await fetch('/api/state', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+          } catch {}
+        }}
+        onTickNow={() => { void tick(); }}
       />
     </div>
   );

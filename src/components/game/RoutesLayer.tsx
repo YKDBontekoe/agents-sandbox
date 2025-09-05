@@ -22,9 +22,11 @@ interface RoutesLayerProps {
   buildings: RouteBuildingRef[];
   tileWidth?: number;
   tileHeight?: number;
+  draftFromId?: string | null;
+  draftToId?: string | null;
 }
 
-export default function RoutesLayer({ routes, buildings, tileWidth = 64, tileHeight = 32 }: RoutesLayerProps) {
+export default function RoutesLayer({ routes, buildings, tileWidth = 64, tileHeight = 32, draftFromId, draftToId }: RoutesLayerProps) {
   const { viewport } = useGameContext();
   const containerRef = useRef<PIXI.Container | null>(null);
   const caravansRef = useRef<Array<{ sprite: PIXI.Graphics; ax: number; ay: number; bx: number; by: number; speed: number; phase: number }>>([]);
@@ -74,16 +76,18 @@ export default function RoutesLayer({ routes, buildings, tileWidth = 64, tileHei
       // Outline then inner line for readability
       const base = new PIXI.Graphics();
       base.zIndex = 295;
-      base.lineStyle(4, 0x334155, 0.35);
+      base.setStrokeStyle({ width: 4, color: 0x334155, alpha: 0.35 });
       base.moveTo(aw.worldX, aw.worldY);
       base.lineTo(bw.worldX, bw.worldY);
+      base.stroke();
       container.addChild(base);
 
       const g = new PIXI.Graphics();
       g.zIndex = 300;
-      g.lineStyle(2, 0x1d4ed8, 0.85);
+      g.setStrokeStyle({ width: 2, color: 0x1d4ed8, alpha: 0.85 });
       g.moveTo(aw.worldX, aw.worldY);
       g.lineTo(bw.worldX, bw.worldY);
+      g.stroke();
       container.addChild(g);
 
       // Caravan dot
@@ -94,6 +98,44 @@ export default function RoutesLayer({ routes, buildings, tileWidth = 64, tileHei
       container.addChild(c);
       caravansRef.current.push({ sprite: c, ax: aw.worldX, ay: aw.worldY, bx: bw.worldX, by: bw.worldY, speed: 0.004 + Math.random() * 0.004, phase: Math.random() });
     });
+
+    // Draft preview (dashed line + cost label)
+    if (draftFromId && draftToId) {
+      const a = byId.get(draftFromId);
+      const b = byId.get(draftToId);
+      if (a && b) {
+        const aw = gridToWorld(a.x, a.y, tileWidth, tileHeight);
+        const bw = gridToWorld(b.x, b.y, tileWidth, tileHeight);
+        const dashed = new PIXI.Graphics();
+        dashed.zIndex = 310;
+        dashed.setStrokeStyle({ width: 2, color: 0x0891b2, alpha: 0.8 });
+        // simple dashed approximation
+        const segs = 14;
+        for (let i=0;i<segs;i++) {
+          const t0 = i / segs;
+          const t1 = (i+0.5) / segs;
+          const x0 = aw.worldX + (bw.worldX - aw.worldX) * t0;
+          const y0 = aw.worldY + (bw.worldY - aw.worldY) * t0;
+          const x1 = aw.worldX + (bw.worldX - aw.worldX) * t1;
+          const y1 = aw.worldY + (bw.worldY - aw.worldY) * t1;
+          dashed.moveTo(x0, y0);
+          dashed.lineTo(x1, y1);
+        }
+        dashed.stroke();
+        container.addChild(dashed);
+
+        // cost label
+        const length = Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+        const cost = 5 + 2 * length;
+        const midX = (aw.worldX + bw.worldX) / 2;
+        const midY = (aw.worldY + bw.worldY) / 2;
+        const txt = new PIXI.Text({ text: `cost: ${cost}c`, style: new PIXI.TextStyle({ fontSize: 11, fill: 0x0f172a, fontFamily: 'ui-sans-serif, system-ui', stroke: { color: 0xffffff, width: 3 } }) });
+        txt.anchor.set(0.5, 0.5);
+        txt.position.set(midX, midY - 8);
+        txt.zIndex = 315;
+        container.addChild(txt);
+      }
+    }
   }, [JSON.stringify(routes), JSON.stringify(buildings), tileWidth, tileHeight]);
 
   return null;

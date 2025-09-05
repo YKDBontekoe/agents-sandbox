@@ -7,6 +7,8 @@ interface ModularActionPanelProps {
   onOpenEdicts?: () => void;
   onOpenOmens?: () => void;
   onOpenSettings?: () => void;
+  intervalMs?: number;
+  onChangeIntervalMs?: (ms: number) => void;
   variant?: 'default' | 'compact' | 'minimal';
   collapsible?: boolean;
 }
@@ -108,6 +110,8 @@ export function ModularActionPanel({
   onOpenEdicts, 
   onOpenOmens, 
   onOpenSettings, 
+  intervalMs,
+  onChangeIntervalMs,
   variant = 'default',
   collapsible = true 
 }: ModularActionPanelProps) {
@@ -175,6 +179,31 @@ export function ModularActionPanel({
       priority="medium"
       className="min-w-0"
     >
+      {/* Compact speed indicator (cycles presets on click) */}
+      {variant !== 'minimal' && (
+        <div className="flex items-center justify-end mb-2">
+          <button
+            type="button"
+            onClick={() => {
+              const presets = [120000, 60000, 30000, 15000];
+              const cur = typeof intervalMs === 'number' ? intervalMs : 60000;
+              let idx = presets.findIndex(p => Math.abs(p - cur) < 1);
+              if (idx === -1) idx = 1; // default to 1x
+              const next = presets[(idx + 1) % presets.length];
+              onChangeIntervalMs?.(next);
+            }}
+            className="px-2 py-0.5 rounded-full border border-slate-300 bg-white text-[10px] text-slate-700 hover:bg-slate-50"
+            aria-label="Cycle simulation speed"
+            title="Click to cycle speed"
+          >
+            {(() => {
+              const ms = typeof intervalMs === 'number' ? intervalMs : 60000;
+              const x = Math.round((60000 / Math.max(1, ms)) * 100) / 100;
+              return `Speed ${x}x`;
+            })()}
+          </button>
+        </div>
+      )}
       <ResponsiveStack 
         direction={{
           mobile: variant === 'minimal' ? 'horizontal' : 'vertical',

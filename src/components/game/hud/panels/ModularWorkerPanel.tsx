@@ -2,11 +2,13 @@ import React, { useRef, useState, useEffect } from 'react';
 import { ResponsivePanel, ResponsiveText } from '../ResponsiveHUDPanels';
 import { useHUDPanel } from '../HUDPanelRegistry';
 import { SIM_BUILDINGS } from '@/components/game/simCatalog';
+import type { SimResources } from '@/components/game/resourceUtils';
 
 type WorkerBuilding = {
   id: string;
   typeId: keyof typeof SIM_BUILDINGS;
   workers: number;
+  level?: number;
 };
 
 interface ModularWorkerPanelProps {
@@ -14,11 +16,14 @@ interface ModularWorkerPanelProps {
   idleWorkers: number;
   onAssign: (id: string) => void;
   onUnassign: (id: string) => void;
+  unrest?: number;
+  totalWorkers?: number;
+  grain?: number;
   variant?: 'default' | 'compact' | 'minimal';
   collapsible?: boolean;
 }
 
-export default function ModularWorkerPanel({ buildings, idleWorkers, onAssign, onUnassign, variant = 'default', collapsible = true }: ModularWorkerPanelProps) {
+export default function ModularWorkerPanel({ buildings, idleWorkers, onAssign, onUnassign, unrest = 0, totalWorkers = 0, grain = 0, variant = 'default', collapsible = true }: ModularWorkerPanelProps) {
   // Start collapsed by default to keep sidebar tidy; user can expand
   const [isCollapsed, setIsCollapsed] = useState(true);
   const prevIdleRef = useRef(idleWorkers);
@@ -70,6 +75,24 @@ export default function ModularWorkerPanel({ buildings, idleWorkers, onAssign, o
     scheduleCollapse();
   };
 
+  const predictPrimaryOutput = (b: WorkerBuilding & { level?: number }): { key: string; value: number } | null => {
+    const def = SIM_BUILDINGS[b.typeId];
+    if (!def) return null;
+    const outputs = def.outputs || {} as Partial<SimResources>;
+    const entries = Object.entries(outputs).filter(([_, v]) => (v ?? 0) > 0) as [keyof SimResources, number][];
+    if (entries.length === 0) return null;
+    // choose the largest base output key
+    entries.sort((a,b)=> (b[1]||0) - (a[1]||0));
+    const [key, base] = entries[0];
+    const baseCap = def.workCapacity ?? 0;
+    const level = Math.max(1, Number(b.level ?? 1));
+    const cap = Math.round(baseCap * (1 + 0.25 * (level - 1)));
+    const ratio = cap > 0 ? Math.min(1, (b.workers || 0) / cap) : 1;
+    const levelOutScale = 1 + 0.5 * (level - 1);
+    const value = Math.max(0, Math.round((base || 0) * ratio * levelOutScale));
+    return { key: String(key), value };
+  };
+
   useHUDPanel({
     config: {
       id: 'workers-panel',
@@ -107,20 +130,48 @@ export default function ModularWorkerPanel({ buildings, idleWorkers, onAssign, o
       ref={panelRef as any}
     >
       <div className="flex items-center justify-between text-xs mb-2">
-        <span className="text-slate-600">Idle</span>
-        <span className="font-mono text-slate-800">{idleWorkers}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-slate-600">Idle</span>
+          <span className="font-mono text-slate-800">{idleWorkers}</span>
+        </div>
+        {(() => {
+          const moraleScore = Math.max(0, 100 - unrest * 7 - Math.max(0, (totalWorkers * 0.2) - Math.max(0, grain)) * 1);
+          const status = moraleScore >= 70 ? 'Stable' : moraleScore >= 40 ? 'Concerned' : 'Restless';
+          const cls = status === 'Stable' ? 'bg-emerald-100 text-emerald-800 border-emerald-200' : status === 'Concerned' ? 'bg-amber-100 text-amber-800 border-amber-200' : 'bg-rose-100 text-rose-800 border-rose-200';
+          return (
+            <span className={`px-2 py-0.5 rounded-full border ${cls}`} title={`Unrest ${unrest}`}>Morale: {status}</span>
+          );
+        })()}
       </div>
+      <div className="text-[10px] text-slate-500 mb-2">Upkeep ~{Math.round((totalWorkers || 0) * 0.2)} grain / cycle</div>
       <div className="space-y-2">
         {buildings.length === 0 && (
           <ResponsiveText size={{ mobile: 'xs', tablet: 'xs', desktop: 'sm', wide: 'sm' }} color="muted">No buildings</ResponsiveText>
         )}
         {buildings.map(b => {
           const def = SIM_BUILDINGS[b.typeId];
-          const cap = def.workCapacity ?? 0;
+          const baseCap = def.workCapacity ?? 0;
+          const level = Math.max(1, Number(b.level ?? 1));
+          const cap = Math.round(baseCap * (1 + 0.25 * (level - 1)));
+          const ratio = cap > 0 ? Math.min(1, (b.workers || 0) / cap) : 0;
+          const pred = predictPrimaryOutput(b);
           return (
             <div key={b.id} className="flex items-center justify-between text-xs">
-              <span className="text-slate-800 truncate mr-2">{def.name}</span>
-              <div className="flex items-center gap-1">
+              <div className="flex-1 min-w-0 mr-2" title={`Workers ${b.workers}/${cap} (Lv.${level})`}>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-800 truncate mr-2">{def.name}</span>
+                  <span className="font-mono text-[10px] text-slate-600">Lv.{level}</span>
+                </div>
+                {cap > 0 && (
+                  <div className="mt-1 h-1.5 bg-slate-200 rounded" aria-label="Efficiency">
+                    <div className="h-1.5 rounded" style={{ width: `${ratio * 100}%`, background: ratio >= 1 ? '#059669' : '#10b981' }} />
+                  </div>
+                )}
+                <div className="mt-1 text-[10px] text-slate-500">
+                  {pred ? (<span>≈ +{pred.value} {pred.key}</span>) : (<span className="opacity-60">—</span>)}
+                </div>
+              </div>
+              <div className="flex items-center gap-1 ml-2">
                 <button
                   onClick={() => { onUnassign(b.id); scheduleCollapse(); }}
                   disabled={b.workers <= 0}

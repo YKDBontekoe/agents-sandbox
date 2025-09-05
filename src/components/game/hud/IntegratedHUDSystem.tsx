@@ -48,6 +48,7 @@ interface IntegratedHUDSystemProps {
       season: string;
       timeRemaining: number;
       isPaused: boolean;
+      intervalMs?: number;
     };
   };
   onGameAction: (action: string, data?: any) => void;
@@ -113,6 +114,8 @@ function HUDSystemCore({
               onPause={() => onGameAction('pause')}
               onResume={() => onGameAction('resume')}
               onAdvanceCycle={() => onGameAction('advance-cycle')}
+              intervalMs={gameData.time.intervalMs}
+              onChangeIntervalMs={(ms) => onGameAction('set-speed', { ms })}
               variant={currentPreset.panelVariants['time-panel'] || 'default'}
             />
             <div className="mt-2" />
@@ -123,6 +126,8 @@ function HUDSystemCore({
               onOpenEdicts={() => onGameAction('open-edicts')}
               onOpenOmens={() => onGameAction('open-omens')}
               onOpenSettings={() => onGameAction('open-settings')}
+              intervalMs={gameData.time.intervalMs}
+              onChangeIntervalMs={(ms) => onGameAction('set-speed', { ms })}
               variant={currentPreset.panelVariants['action-panel'] || 'default'}
             />
             <div className="mt-2" />

@@ -27,6 +27,7 @@ export async function POST() {
       routes: nextState.routes ?? [],
       edicts: nextState.edicts ?? undefined,
       updated_at: new Date().toISOString(),
+      last_tick_at: new Date().toISOString() as any,
     })
   } catch (upErr: unknown) {
     const message = upErr instanceof Error ? upErr.message : String(upErr)
@@ -40,5 +41,8 @@ export async function POST() {
     )
   }
 
+  if (crisis) {
+    try { updated = await uow.gameStates.update(state.id, { auto_ticking: false } as any) } catch {}
+  }
   return NextResponse.json({ state: updated, crisis })
 }
