@@ -1,28 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { SIM_BUILDINGS } from '@/lib/buildingCatalog'
 
-// Minimal server-side catalog for building production. Mirrors client SIM_BUILDINGS where relevant.
 type ResKey = 'grain' | 'wood' | 'planks' | 'coin' | 'mana' | 'favor' | 'unrest' | 'threat';
-type MaybeWorkers = ResKey | 'workers';
-interface ServerBuildingDef {
-  inputs: Partial<Record<MaybeWorkers, number>>;
-  outputs: Partial<Record<MaybeWorkers, number>>;
-  workCapacity?: number;
-}
-
-const SERVER_BUILDINGS: Record<string, ServerBuildingDef> = {
-  // New base + economy buildings
-  council_hall: { inputs: {}, outputs: { favor: 1 }, workCapacity: 0 },
-  trade_post: { inputs: { grain: 2 }, outputs: { coin: 8 }, workCapacity: 0 },
-  automation_workshop: { inputs: { mana: 1 }, outputs: { coin: 6 }, workCapacity: 0 },
-  // Existing sample buildings (subset; ignore workers on server)
-  farm: { inputs: { coin: 1 }, outputs: { grain: 10 }, workCapacity: 5 },
-  house: { inputs: { grain: 1 }, outputs: { /* workers: 5 */ }, workCapacity: 0 },
-  shrine: { inputs: { mana: 1 }, outputs: { favor: 2 }, workCapacity: 2 },
-  lumber_camp: { inputs: {}, outputs: { wood: 8 }, workCapacity: 4 },
-  sawmill: { inputs: { wood: 3, coin: 1 }, outputs: { planks: 6 }, workCapacity: 4 },
-  storehouse: { inputs: {}, outputs: {}, workCapacity: 0 },
-};
 
 // Advance one cycle: apply accepted proposals to resources with simple rules and clear applied
 export async function POST() {
@@ -81,7 +61,7 @@ export async function POST() {
 
   for (const b of buildings) {
     const typeId = String(b.typeId || '')
-    const def = SERVER_BUILDINGS[typeId]
+    const def = SIM_BUILDINGS[typeId]
     if (!def) continue
     const level = Math.max(1, Number((b as any).level ?? 1))
     const levelOutScale = 1 + 0.5 * (level - 1)
