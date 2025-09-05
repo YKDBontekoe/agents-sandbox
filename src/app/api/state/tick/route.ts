@@ -1,12 +1,18 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { SIM_BUILDINGS } from '@/lib/buildingCatalog'
+import { SupabaseEventStore } from '@/infrastructure/eventStore'
+import { TickService } from '@/services/tickService'
+import { ProposalAccepted, BuildingProduced } from '@/domain/events'
 
 type ResKey = 'grain' | 'wood' | 'planks' | 'coin' | 'mana' | 'favor' | 'unrest' | 'threat';
 
 // Advance one cycle: apply accepted proposals to resources with simple rules and clear applied
 export async function POST() {
   const supabase = createSupabaseServerClient()
+  const store = new SupabaseEventStore()
+  const ticker = new TickService(store)
+  const eventTimestamp = new Date().toISOString()
 
   // Get latest state
   const { data: state, error: stateErr } = await supabase
@@ -25,6 +31,15 @@ export async function POST() {
     .eq('state_id', state.id)
     .eq('status', 'accepted')
   if (propErr) return NextResponse.json({ error: propErr.message }, { status: 500 })
+
+  const proposalEvents: ProposalAccepted[] = (accepted ?? []).map(p => ({
+    type: 'ProposalAccepted',
+    cycle: Number(state.cycle) + 1,
+    timestamp: eventTimestamp,
+    proposalId: String(p.id),
+    delta: p.predicted_delta || {},
+  }))
+  const buildingEvents: BuildingProduced[] = []
 
   // Apply predicted deltas
   const resources = { ...state.resources }
@@ -70,6 +85,7 @@ export async function POST() {
     const assigned = Math.min(typeof b.workers === 'number' ? b.workers : 0, capacity)
     const ratio = capacity > 0 ? assigned / capacity : 1
     const traits = (b as any).traits || {}
+    const produced: Record<string, number> = {}
     // Check inputs
     let canProduce = true
     for (const [k, v] of Object.entries(def.inputs)) {
@@ -124,7 +140,17 @@ export async function POST() {
       } else {
         const key = k as ResKey
         resources[key] = Math.max(0, Number(resources[key] ?? 0) + out)
+        produced[key] = (produced[key] || 0) + out
       }
+    }
+    if (Object.keys(produced).length > 0) {
+      buildingEvents.push({
+        type: 'BuildingProduced',
+        cycle: Number(state.cycle) + 1,
+        timestamp: eventTimestamp,
+        buildingId: String((b as any).id ?? ''),
+        output: produced,
+      })
     }
   }
 
@@ -189,7 +215,7 @@ export async function POST() {
   // Increment cycle and persist max_cycle
   const newCycle = Number(state.cycle) + 1
   const newMax = Math.max(Number(state.max_cycle ?? 0), newCycle)
-  const { data: updated, error: upErr } = await supabase
+  const { error: upErr } = await supabase
     .from('game_state')
     .update({
       cycle: newCycle,
@@ -201,15 +227,23 @@ export async function POST() {
       updated_at: new Date().toISOString(),
     })
     .eq('id', state.id)
-    .select('*')
-    .single()
   if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 })
 
   // Mark proposals as applied
   if ((accepted?.length ?? 0) > 0) {
     await supabase.from('proposals').update({ status: 'applied' }).in('id', accepted!.map(p => p.id))
   }
+  for (const e of proposalEvents) await ticker.emit(e)
+  for (const e of buildingEvents) await ticker.emit(e)
+  await ticker.emit({
+    type: 'ResourcesUpdated',
+    cycle: newCycle,
+    timestamp: eventTimestamp,
+    resources,
+  })
+  await ticker.snapshot({ cycle: newCycle, resources })
+  const rebuilt = await ticker.rebuild()
 
-  return NextResponse.json({ state: updated, crisis })
+  return NextResponse.json({ state: rebuilt, crisis })
 }
 
