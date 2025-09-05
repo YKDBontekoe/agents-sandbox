@@ -21,7 +21,7 @@ const ProposalSchema = z.object({
 const AIResponseSchema = z.array(ProposalSchema)
 
 export async function POST(req: NextRequest) {
-  const ip = req.ip ?? req.headers.get('x-forwarded-for')?.split(',')[0] ?? 'unknown'
+  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown'
   const limit = Number(process.env.PROPOSAL_RATE_LIMIT ?? '5')
   if (!rateLimit(ip, { limit })) {
     return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 })
