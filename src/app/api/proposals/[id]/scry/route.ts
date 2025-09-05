@@ -58,6 +58,9 @@ export async function POST(req: NextRequest, context: RouteContext) {
 
   const proposal = await uow.proposals.getById(id)
   if (!proposal) return NextResponse.json({ error: 'Proposal not found' }, { status: 404 })
+  if (!proposal.state_id) {
+    return NextResponse.json({ error: 'Proposal missing state reference' }, { status: 400 })
+  }
   const gameState = await uow.gameStates.getById(proposal.state_id)
 
   const hasOpenAI = !!config.openAiApiKey &&
