@@ -173,6 +173,17 @@ export default function BuildingsLayer({ buildings, tileWidth = 64, tileHeight =
         shadow.drawEllipse(0, 0, tileWidth * 0.22, tileHeight * 0.18);
         shadow.endFill();
 
+        // low-zoom friendly diamond outline
+        const frame = new PIXI.Graphics();
+        frame.position.set(worldX, worldY);
+        frame.zIndex = 518;
+        frame.lineStyle(1.5, 0x475569, 0.9);
+        frame.moveTo(0, -tileHeight/2);
+        frame.lineTo(tileWidth/2, 0);
+        frame.lineTo(0, tileHeight/2);
+        frame.lineTo(-tileWidth/2, 0);
+        frame.lineTo(0, -tileHeight/2);
+
         const spr = PIXI.Sprite.from(url);
         spr.anchor.set(0.5);
         spr.position.set(worldX, worldY - tileHeight * 0.06);
@@ -196,6 +207,7 @@ export default function BuildingsLayer({ buildings, tileWidth = 64, tileHeight =
           applyScale();
         }
         container.addChild(shadow);
+        container.addChild(frame);
         container.addChild(spr);
       } else {
         const g = new PIXI.Graphics();

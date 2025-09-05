@@ -13,6 +13,7 @@ interface WorkerPanelProps {
   idleWorkers: number;
   onAssign: (id: string) => void;
   onUnassign: (id: string) => void;
+  anchor?: 'left' | 'right';
 }
 
 const WorkerPanel: React.FC<WorkerPanelProps> = ({
@@ -20,10 +21,12 @@ const WorkerPanel: React.FC<WorkerPanelProps> = ({
   catalog,
   idleWorkers,
   onAssign,
-  onUnassign
+  onUnassign,
+  anchor = 'right'
 }) => {
+  const sideClass = anchor === 'right' ? 'right-2' : 'left-2';
   return (
-    <div className="absolute left-2 bottom-24 bg-panel backdrop-blur-md border border-border p-3 rounded-lg shadow-lg pointer-events-auto"
+    <div className={`absolute ${sideClass} bottom-24 bg-panel backdrop-blur-md border border-border p-3 rounded-lg shadow-lg pointer-events-auto z-40`}
       style={{ width: '14rem' }}
     >
       <h3 className="text-xs font-semibold mb-2 text-foreground">

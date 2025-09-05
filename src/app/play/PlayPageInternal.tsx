@@ -26,6 +26,7 @@ import PreviewLayer from '@/components/game/PreviewLayer';
 import AmbientLayer from '@/components/game/AmbientLayer';
 import SeasonalLayer from '@/components/game/SeasonalLayer';
 import TileTooltip from '@/components/game/TileTooltip';
+import SettingsPanel from '@/components/game/SettingsPanel';
 import HeatLayer from '@/components/game/HeatLayer';
 import MarkersLayer from '@/components/game/MarkersLayer';
 import BuildingsLayer from '@/components/game/BuildingsLayer';
@@ -35,7 +36,8 @@ import CitizensLayer from '@/components/game/CitizensLayer';
 import type { CrisisData } from '@/components/game/CrisisModal';
 import GoalBanner from '@/components/game/GoalBanner';
 import OnboardingGuide from '@/components/game/OnboardingGuide';
-import QuestTracker from '@/components/game/QuestTracker';
+import ModularWorkerPanel from '@/components/game/hud/panels/ModularWorkerPanel';
+import ModularQuestPanel from '@/components/game/hud/panels/ModularQuestPanel';
 import { NotificationCenter } from '@/components/game/hud/NotificationCenter';
 import type { Notification } from '@/components/game/hud/types';
 import { useIdGenerator } from '@/hooks/useIdGenerator';
@@ -349,7 +351,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   const [tutorialFree, setTutorialFree] = useState<Partial<Record<BuildTypeId, number>>>({ farm: 1, house: 1, council_hall: 1 });
   const [isEdictsOpen, setIsEdictsOpen] = useState(false);
   const [, setIsOmensOpen] = useState(false);
-  const [, setIsSettingsOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [dismissedGuide, setDismissedGuide] = useState(false);
   const [acceptedNotice, setAcceptedNotice] = useState<{ title: string; delta: Record<string, number> } | null>(null);
   const acceptedNoticeKeyRef = useRef<string | null>(null);
@@ -367,6 +369,12 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   const [placedBuildings, setPlacedBuildings] = useState<StoredBuilding[]>([]);
   const [routes, setRoutes] = useState<TradeRoute[]>([]);
   const [roads, setRoads] = useState<Array<{x:number;y:number}>>([]);
+  const [showRoads, setShowRoads] = useState(true);
+  const [showCitizens, setShowCitizens] = useState(true);
+  const [requireRoadConfirm, setRequireRoadConfirm] = useState(true);
+  const [pendingRoad, setPendingRoad] = useState<{ tiles: {x:number;y:number}[] } | null>(null);
+  const [citizensCount, setCitizensCount] = useState<number>(8);
+  const [citizensSeed, setCitizensSeed] = useState<number>(() => Math.floor(Math.random()*1e6));
   // simplified: direct tile builds; no separate build selection UI here
   const [districts, _setDistricts] = useState<District[]>([]);
   const [leylines, setLeylines] = useState<Leyline[]>([]);
@@ -558,7 +566,10 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
       }
       throw new Error(msg);
     }
-    setState({ ...json, workers: json.workers ?? 0, buildings: json.buildings ?? [], routes: (json as any).routes ?? [] });
+    setState({ ...json, workers: json.workers ?? 0, buildings: json.buildings ?? [], routes: (json as any).routes ?? [], roads: (json as any).roads ?? [], citizens_seed: (json as any).citizens_seed, citizens_count: (json as any).citizens_count });
+    try { setRoads(((json as any).roads as Array<{x:number;y:number}>) ?? []); } catch {}
+    try { if ((json as any).citizens_count) setCitizensCount((json as any).citizens_count); } catch {}
+    try { if ((json as any).citizens_seed) setCitizensSeed((json as any).citizens_seed); } catch {}
   }, []);
 
   const fetchProposals = useCallback(async () => {
@@ -568,14 +579,15 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     setProposals(json.proposals || []);
   }, []);
 
-  const saveState = useCallback(async (partial: { resources?: Record<string, number>; workers?: number; buildings?: StoredBuilding[]; routes?: TradeRoute[]; edicts?: Record<string, number> }) => {
+  const saveState = useCallback(async (partial: { resources?: Record<string, number>; workers?: number; buildings?: StoredBuilding[]; routes?: TradeRoute[]; roads?: Array<{x:number;y:number}>; edicts?: Record<string, number> }) => {
     if (!state) return;
     try {
-      const body: { id: string; resources?: Record<string, number>; workers?: number; buildings?: StoredBuilding[]; routes?: TradeRoute[]; edicts?: Record<string, number> } = { id: state.id };
+      const body: { id: string; resources?: Record<string, number>; workers?: number; buildings?: StoredBuilding[]; routes?: TradeRoute[]; roads?: Array<{x:number;y:number}>; edicts?: Record<string, number> } = { id: state.id };
       if (partial.resources) body.resources = partial.resources;
       if (typeof partial.workers === 'number') body.workers = partial.workers;
       if (partial.buildings) body.buildings = partial.buildings;
       if (partial.routes) body.routes = partial.routes;
+      if (partial.roads) body.roads = partial.roads;
       if (partial.edicts) body.edicts = partial.edicts;
       await fetch('/api/state', {
         method: 'PATCH',
@@ -748,6 +760,9 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
             planks: next.resources.planks || 0,
             workers: (next.workers || 0) - assigned,
           });
+          try { setRoads(((next as any).roads as Array<{x:number;y:number}>) ?? []); } catch {}
+          try { if ((next as any).citizens_count) setCitizensCount((next as any).citizens_count as any); } catch {}
+          try { if ((next as any).citizens_seed) setCitizensSeed((next as any).citizens_seed as any); } catch {}
         }
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'proposals' }, () => {
@@ -878,6 +893,33 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   const [pixiApp, setPixiApp] = useState<PIXI.Application | null>(null);
   const [pixiViewport, setPixiViewport] = useState<Viewport | null>(null);
 
+  const applyRoads = (tiles: Array<{x:number;y:number}>) => {
+    setRoads(prev => {
+      const seen = new Set(prev.map(t=>`${t.x},${t.y}`));
+      const cost = { coin: 1, planks: 1 } as Record<string, number>;
+      const resources = { ...(state?.resources || {}) } as Record<string, number>;
+      const affordable: Array<{x:number;y:number}> = [];
+      const tryPay = () => {
+        for (const [k,v] of Object.entries(cost)) {
+          const have = Number(resources[k] || 0);
+          if (have < v) return false;
+        }
+        for (const [k,v] of Object.entries(cost)) resources[k] = Math.max(0, Number(resources[k]||0) - v);
+        return true;
+      };
+      for (const t of tiles) {
+        const k = `${t.x},${t.y}`;
+        if (seen.has(k)) continue;
+        if (tryPay()) { affordable.push(t); seen.add(k); }
+        else break;
+      }
+      const merged = [...prev, ...affordable];
+      saveState({ resources, roads: merged }).catch(()=>{});
+      setState(prev => prev ? { ...prev, resources } as any : prev);
+      return merged;
+    });
+  };
+
   // Minimal inline scene to ensure we render beyond the spinner for validation
   return (
     <div className="h-dvh w-full bg-neutral-50 overflow-hidden relative">
@@ -909,21 +951,23 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
             <HeatLayer gridSize={20} tileWidth={64} tileHeight={32} unrest={resources.unrest} threat={resources.threat} />
             <BuildingsLayer buildings={placedBuildings.map(b => ({ id: b.id, typeId: b.typeId, x: b.x, y: b.y }))} />
             <RoutesLayer routes={(routes || []).map(r => ({ id: r.id, fromId: r.fromId, toId: r.toId }))} buildings={placedBuildings.map(b => ({ id: b.id, x: b.x, y: b.y }))} />
-            <RoadsLayer roads={roads} />
+            {showRoads && <RoadsLayer roads={roads} />}
+            {showCitizens && (
             <CitizensLayer
               buildings={placedBuildings.map(b => ({ id: b.id, typeId: b.typeId, x: b.x, y: b.y }))}
               roads={roads}
               tileTypes={tileTypes}
-              onBuildRoads={(tiles)=>{
-                // merge new road tiles, avoid duplicates
-                setRoads(prev => {
-                  const seen = new Set(prev.map(t=>`${t.x},${t.y}`));
-                  const merged = [...prev];
-                  tiles.forEach(t=>{ const k=`${t.x},${t.y}`; if (!seen.has(k)) { merged.push(t); seen.add(k); } });
-                  return merged;
-                });
+              onProposeRoads={(tiles)=>{
+                if (requireRoadConfirm) { setPendingRoad({ tiles }); return; }
+                try {
+                  const unique = Array.from(new Set(tiles.map(t=>`${t.x},${t.y}`))).length;
+                  pushToast({ type: 'info', title: 'Road Proposal', message: `Auto-approved: ${unique} tiles` });
+                } catch {}
+                applyRoads(tiles);
               }}
-            />
+              citizensCount={citizensCount}
+              seed={citizensSeed}
+            />)}
             {acceptedNotice && (
               <EffectsLayer trigger={{ eventKey: acceptedNoticeKeyRef.current || 'accept', deltas: acceptedNotice.delta || {}, gridX: selectedTile?.x ?? 10, gridY: selectedTile?.y ?? 10 }} />
             )}
@@ -934,6 +978,38 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
             <SeasonalLayer season={((state.cycle ?? 0) % 4 === 0 ? 'spring' : (state.cycle % 4 === 1 ? 'summer' : (state.cycle % 4 === 2 ? 'autumn' : 'winter')))} />
             <MarkersLayer markers={markers.map(m => ({ id: m.id, gridX: m.x, gridY: m.y, label: m.label }))} />
           </GameRenderer>
+
+          {/* Minimal surface UI; world toggles moved to Settings to reduce clutter */}
+
+          {/* Road confirmation modal */}
+          {pendingRoad && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-[9999]">
+              <div className="bg-white rounded shadow-lg border border-slate-200 p-4 w-[360px]">
+                <div className="font-semibold mb-2">Approve Road Construction</div>
+                {(() => {
+                  const tiles = pendingRoad.tiles;
+                  const unique = Array.from(new Set(tiles.map(t=>`${t.x},${t.y}`))).length;
+                  const costCoin = unique * 1;
+                  const costPlanks = unique * 1;
+                  const haveCoin = state?.resources.coin ?? 0;
+                  const havePlanks = (state?.resources as any).planks ?? 0;
+                  return (
+                    <div className="text-sm text-slate-700">
+                      <div className="mb-1">Tiles: {unique}</div>
+                      <div className="mb-3">Cost: coin {costCoin}, planks {costPlanks}</div>
+                      <div className={haveCoin>=costCoin && havePlanks>=costPlanks ? 'text-emerald-700' : 'text-red-600'}>
+                        {haveCoin>=costCoin && havePlanks>=costPlanks ? 'Affordable' : 'Insufficient resources' }
+                      </div>
+                    </div>
+                  );
+                })()}
+                <div className="mt-4 flex justify-end gap-2">
+                  <button className="px-3 py-1.5 rounded border border-slate-300" onClick={()=>setPendingRoad(null)}>Cancel</button>
+                  <button className="px-3 py-1.5 rounded bg-emerald-600 text-white" onClick={()=>{ applyRoads(pendingRoad.tiles); setPendingRoad(null); }}>Build</button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* DOM tooltip overlay, lockable on tile click */}
           <TileTooltip
@@ -946,17 +1022,8 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
             onUnlock={() => setTooltipLocked(false)}
           />
 
-          {/* Early Quest Tracker */}
-          <QuestTracker
-            completed={{
-              farm: placedBuildings.some(b => b.typeId === 'farm'),
-              house: placedBuildings.some(b => b.typeId === 'house'),
-              assign: placedBuildings.some(b => (b.workers || 0) > 0),
-              council: placedBuildings.some(b => b.typeId === 'council_hall'),
-              proposals: proposals.length > 0,
-              advance: state.cycle > 1,
-            }}
-          />
+          {/* Register modular panels in the right sidebar */}
+          {/* Modular HUD panels are rendered as children of IntegratedHUDSystem */}
 
           {/* Onboarding overlay */}
           {onboardingOpen && (
@@ -985,7 +1052,47 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
               if (action === 'open-settings') setIsSettingsOpen(true);
             }}
             className="absolute inset-0"
-          />
+          >
+            <ModularWorkerPanel
+              buildings={placedBuildings.map(b => ({ id: b.id, typeId: b.typeId as keyof typeof SIM_BUILDINGS, workers: b.workers }))}
+              idleWorkers={idleWorkers}
+              onAssign={async (id) => {
+                const idx = placedBuildings.findIndex(b => b.id === id);
+                if (idx === -1) return;
+                const b = placedBuildings[idx];
+                const cap = SIM_BUILDINGS[b.typeId].workCapacity ?? 0;
+                if ((simResources?.workers ?? 0) <= 0 || b.workers >= cap) return;
+                const updated = [...placedBuildings];
+                updated[idx] = { ...b, workers: b.workers + 1 };
+                setPlacedBuildings(updated);
+                setSimResources(prev => prev ? { ...prev, workers: Math.max(0, prev.workers - 1) } : prev);
+                await saveState({ buildings: updated });
+                if (onboardingStep === 3) setOnboardingStep(4);
+              }}
+              onUnassign={async (id) => {
+                const idx = placedBuildings.findIndex(b => b.id === id);
+                if (idx === -1) return;
+                const b = placedBuildings[idx];
+                if (b.workers <= 0) return;
+                const updated = [...placedBuildings];
+                updated[idx] = { ...b, workers: b.workers - 1 };
+                setPlacedBuildings(updated);
+                setSimResources(prev => prev ? { ...prev, workers: prev.workers + 1 } : prev);
+                await saveState({ buildings: updated });
+                await checkMilestones();
+              }}
+            />
+            <ModularQuestPanel
+              completed={{
+                farm: placedBuildings.some(b => b.typeId === 'farm'),
+                house: placedBuildings.some(b => b.typeId === 'house'),
+                assign: placedBuildings.some(b => (b.workers || 0) > 0),
+                council: placedBuildings.some(b => b.typeId === 'council_hall'),
+                proposals: proposals.length > 0,
+                advance: state.cycle > 1,
+              }}
+            />
+          </IntegratedHUDSystem>
           </GameProvider>
 
           {selectedTile && (
@@ -1174,38 +1281,6 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
             />
           )}
 
-          {/* Worker assignment overlay */}
-          <WorkerPanel
-            buildings={placedBuildings.map(b => ({ id: b.id, typeId: b.typeId as keyof typeof SIM_BUILDINGS, workers: b.workers }))}
-            catalog={SIM_BUILDINGS}
-            idleWorkers={idleWorkers}
-            onAssign={async (id) => {
-              const idx = placedBuildings.findIndex(b => b.id === id);
-              if (idx === -1) return;
-              const b = placedBuildings[idx];
-              const cap = SIM_BUILDINGS[b.typeId].workCapacity ?? 0;
-              if ((simResources?.workers ?? 0) <= 0 || b.workers >= cap) return;
-              const updated = [...placedBuildings];
-              updated[idx] = { ...b, workers: b.workers + 1 };
-              setPlacedBuildings(updated);
-              setSimResources(prev => prev ? { ...prev, workers: Math.max(0, prev.workers - 1) } : prev);
-              await saveState({ buildings: updated });
-              if (onboardingStep === 3) setOnboardingStep(4);
-            }}
-            onUnassign={async (id) => {
-              const idx = placedBuildings.findIndex(b => b.id === id);
-              if (idx === -1) return;
-              const b = placedBuildings[idx];
-              if (b.workers <= 0) return;
-              const updated = [...placedBuildings];
-              updated[idx] = { ...b, workers: b.workers - 1 };
-              setPlacedBuildings(updated);
-              setSimResources(prev => prev ? { ...prev, workers: prev.workers + 1 } : prev);
-              await saveState({ buildings: updated });
-              await checkMilestones();
-            }}
-          />
-
           {/* Worker upkeep notice */}
           <div className="absolute left-2 bottom-2 bg-white/90 border border-slate-200 rounded px-2 py-1 text-xs text-slate-700 pointer-events-none">
             Upkeep: {Math.round(totalWorkers * 0.2)} grain/turn {resources.grain < Math.round(totalWorkers * 0.2) ? '• Insufficient!' : ''}
@@ -1251,6 +1326,23 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
         onScryProposal={scry}
         onGenerateProposals={async () => { await generate(); if (onboardingStep === 5) setOnboardingStep(6); }}
         canGenerateProposals={true}
+      />
+      <SettingsPanel
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        layoutPresets={[{ id: 'default', name: 'Default', description: 'Standard HUD' }]}
+        currentPreset={'default'}
+        onPresetChange={() => {}}
+        showRoads={showRoads}
+        onToggleRoads={(v)=> setShowRoads(v)}
+        showCitizens={showCitizens}
+        onToggleCitizens={(v)=> setShowCitizens(v)}
+        requireRoadConfirm={requireRoadConfirm}
+        onToggleRoadConfirm={(v)=> setRequireRoadConfirm(v)}
+        citizensCount={citizensCount}
+        onChangeCitizensCount={(v)=> { setCitizensCount(v); saveState({ citizens_count: v } as any).catch(()=>{}); }}
+        citizensSeed={citizensSeed}
+        onChangeCitizensSeed={(v)=> { setCitizensSeed(v); saveState({ citizens_seed: v } as any).catch(()=>{}); }}
       />
     </div>
   );

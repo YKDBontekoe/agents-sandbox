@@ -12,7 +12,9 @@ interface CitizensLayerProps {
   buildings: BuildingRef[];
   roads: RoadTile[];
   tileTypes: string[][];
-  onBuildRoads: (tiles: RoadTile[]) => void;
+  onProposeRoads: (tiles: RoadTile[]) => void;
+  citizensCount?: number;
+  seed?: number;
   tileWidth?: number;
   tileHeight?: number;
 }
@@ -24,9 +26,11 @@ type Citizen = {
   carrying: string | null; // resource name or null
   sprite: PIXI.Graphics;
   speed: number;
+  name: string;
+  role: 'Hauler' | 'Builder';
 }
 
-export default function CitizensLayer({ buildings, roads, tileTypes, onBuildRoads, tileWidth = 64, tileHeight = 32 }: CitizensLayerProps) {
+export default function CitizensLayer({ buildings, roads, tileTypes, onProposeRoads, citizensCount, seed, tileWidth = 64, tileHeight = 32 }: CitizensLayerProps) {
   const { app, viewport } = useGameContext();
   const containerRef = useRef<PIXI.Container | null>(null);
   const citizensRef = useRef<Citizen[]>([]);
@@ -100,8 +104,12 @@ export default function CitizensLayer({ buildings, roads, tileTypes, onBuildRoad
     containerRef.current = container;
 
     // spawn a small citizen pool based on houses (cap at 12)
-    const count = Math.min(12, Math.max(2, houses.length * 2));
+    const rngSeed = Math.abs(Number(seed ?? 1337)) % 2147483647 || 1337;
+    let rng = rngSeed;
+    const rand = () => (rng = (rng * 48271) % 2147483647) / 2147483647;
+    const count = Math.min(20, Math.max(2, Math.floor(citizensCount ?? (houses.length * 2 || 6))));
     const home = houses[0] || storehouses[0] || producers[0];
+    const names = ['Ava','Bran','Caro','Dane','Eira','Finn','Gale','Hale','Iris','Joss','Kade','Lena','Milo','Nora','Oren','Pia','Quin','Rhea','Seth','Tara'];
     for (let i=0;i<count;i++) {
       const start = home || { x: 10, y: 10 } as any;
       const s = new PIXI.Graphics();
@@ -110,9 +118,10 @@ export default function CitizensLayer({ buildings, roads, tileTypes, onBuildRoad
       s.drawCircle(0, 0, 2.2);
       s.endFill();
       const { worldX, worldY } = toWorld(start.x, start.y);
-      s.position.set(worldX, worldY - 4);
+      s.position.set(worldX + (rand()-0.5)*2, worldY - 4 + (rand()-0.5)*2);
       container.addChild(s);
-      citizensRef.current.push({ x: start.x, y: start.y, tx: start.x, ty: start.y, path: [], carrying: null, sprite: s, speed: 0.015 + Math.random()*0.01 });
+      const name = names[Math.floor(rand()*names.length)] + '-' + Math.floor(10+rand()*89);
+      citizensRef.current.push({ x: start.x, y: start.y, tx: start.x, ty: start.y, path: [], carrying: null, sprite: s, speed: 0.014 + rand()*0.012, name, role: 'Hauler' });
     }
 
     const chooseTask = (c: Citizen) => {
@@ -173,6 +182,9 @@ export default function CitizensLayer({ buildings, roads, tileTypes, onBuildRoad
     const tick = (ticker: PIXI.Ticker) => {
       const dt = ticker.deltaMS / 16.6667; // normalize to ~60fps steps
       citizensRef.current.forEach(c => {
+        // visual hint when carrying
+        const g = c.sprite as any;
+        if (c.carrying === 'grain') g.tint = 0x22c55e; else if (c.carrying === 'wood') g.tint = 0xb45309; else if (c.carrying === 'planks') g.tint = 0xf59e0b; else g.tint = 0xffffff;
         if (!c.path.length) {
           // assign task if idle
           const st = storehouses[0] || home;
@@ -181,6 +193,9 @@ export default function CitizensLayer({ buildings, roads, tileTypes, onBuildRoad
           c.tx = firstTarget.x; c.ty = firstTarget.y;
           c.path = pathfind(c.x, c.y, c.tx, c.ty);
         }
+        // slight bobbing for life-like motion
+        const off = Math.sin(performance.now()/240 + c.x*7 + c.y*11) * 0.2;
+        c.sprite.y += off;
         stepAlong(c, dt);
       });
 
@@ -194,7 +209,7 @@ export default function CitizensLayer({ buildings, roads, tileTypes, onBuildRoad
           if (tiles.length) {
             // choose a thinned set to avoid overdraw: every other tile
             const newRoads = tiles.filter((_,i)=> i%2===0).map(t=>({x:t.x,y:t.y}));
-            onBuildRoads(newRoads);
+            onProposeRoads(newRoads);
             carriedRef.current = { wood: 0, planks: 0, grain: 0 };
           }
         }

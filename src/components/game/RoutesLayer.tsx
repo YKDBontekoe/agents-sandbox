@@ -71,9 +71,17 @@ export default function RoutesLayer({ routes, buildings, tileWidth = 64, tileHei
       const aw = gridToWorld(a.x, a.y, tileWidth, tileHeight);
       const bw = gridToWorld(b.x, b.y, tileWidth, tileHeight);
 
+      // Outline then inner line for readability
+      const base = new PIXI.Graphics();
+      base.zIndex = 295;
+      base.lineStyle(4, 0x334155, 0.35);
+      base.moveTo(aw.worldX, aw.worldY);
+      base.lineTo(bw.worldX, bw.worldY);
+      container.addChild(base);
+
       const g = new PIXI.Graphics();
       g.zIndex = 300;
-      g.lineStyle(2, 0x1d4ed8, 0.8);
+      g.lineStyle(2, 0x1d4ed8, 0.85);
       g.moveTo(aw.worldX, aw.worldY);
       g.lineTo(bw.worldX, bw.worldY);
       container.addChild(g);
@@ -81,7 +89,7 @@ export default function RoutesLayer({ routes, buildings, tileWidth = 64, tileHei
       // Caravan dot
       const c = new PIXI.Graphics();
       c.zIndex = 350;
-      c.fill({ color: 0xf59e0b, alpha: 0.9 });
+      c.fill({ color: 0xf59e0b, alpha: 0.95 });
       c.drawCircle(0, 0, 3);
       container.addChild(c);
       caravansRef.current.push({ sprite: c, ax: aw.worldX, ay: aw.worldY, bx: bw.worldX, by: bw.worldY, speed: 0.004 + Math.random() * 0.004, phase: Math.random() });
@@ -92,4 +100,3 @@ export default function RoutesLayer({ routes, buildings, tileWidth = 64, tileHei
 }
 
 export type { RoutesLayerProps };
-

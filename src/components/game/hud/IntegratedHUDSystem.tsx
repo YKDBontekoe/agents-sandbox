@@ -95,11 +95,8 @@ function HUDSystemCore({
             <div className="relative">
               <div className="pointer-events-none absolute left-0 top-0 h-full w-2 bg-gradient-to-l from-black/10 to-transparent" />
             </div>
-            {/* Sticky header with density toggle */}
-            <div className="sticky top-0 z-10 -mx-3 md:-mx-4 -mt-3 md:-mt-4 px-3 md:px-4 py-2 bg-white/70 dark:bg-slate-900/60 backdrop-blur-md border-b border-black/10">
-              <HUDDensityToggle />
-            </div>
-            <div className="mt-2" />
+            {/* Smart, uncluttered sidebar: no manual density buttons; panels self-adapt */}
+            <div className="mt-1" />
             <ModularResourcePanel
               resources={gameData.resources}
               changes={gameData.resourceChanges}
@@ -127,10 +124,13 @@ function HUDSystemCore({
             />
             <div className="mt-2" />
             <ModularSkillTreePanel />
+
+            {/* Inject additional right-sidebar children (e.g., Worker/Quest panels) */}
+            <div className="mt-2" />
+            {children}
           </HUDZone>
 
-          {/* Additional content */}
-          {children}
+          {/* Additional content outside the sidebar can be added via zones if needed */}
         </HUDContainer>
       </HUDPanelRegistryProvider>
     </HUDLayoutProvider>
@@ -261,45 +261,6 @@ export function useIntegratedHUD() {
   };
 }
 
-// Lightweight density toggle component
-function HUDDensityToggle() {
-  const { currentPreset, customizePreset } = useHUDLayoutPresets();
-
-  const setDensity = (density: 'minimal' | 'compact' | 'default') => {
-    const variants = {
-      minimal: { 'resources': 'minimal', 'time-panel': 'minimal', 'action-panel': 'minimal' },
-      compact: { 'resources': 'compact', 'time-panel': 'compact', 'action-panel': 'compact' },
-      default: { 'resources': 'default', 'time-panel': 'default', 'action-panel': 'default' },
-    } as const;
-    customizePreset(currentPreset.id, { panelVariants: { ...currentPreset.panelVariants, ...variants[density] } });
-  };
-
-  return (
-    <div className="flex items-center gap-1 mb-2 text-xs">
-      <button
-        onClick={() => setDensity('minimal')}
-        className="px-2 py-1 rounded border border-border bg-panel hover:bg-muted text-foreground"
-        title="Minimal HUD"
-      >
-        Min
-      </button>
-      <button
-        onClick={() => setDensity('compact')}
-        className="px-2 py-1 rounded border border-border bg-panel hover:bg-muted text-foreground"
-        title="Compact HUD"
-      >
-        Compact
-      </button>
-      <button
-        onClick={() => setDensity('default')}
-        className="px-2 py-1 rounded border border-border bg-panel hover:bg-muted text-foreground"
-        title="Default HUD"
-      >
-        Full
-      </button>
-    </div>
-  );
-}
 
 // Example usage component
 export function HUDSystemExample() {

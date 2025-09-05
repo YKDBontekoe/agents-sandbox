@@ -53,6 +53,9 @@ export interface GameState {
   workers?: number;
   buildings?: BuildingData[];
   routes?: RouteData[];
+  roads?: Array<{ x: number; y: number }>;
+  citizens_seed?: number;
+  citizens_count?: number;
   skills?: string[];
   skill_tree_seed?: number;
   edicts?: Record<string, number>;
@@ -226,4 +229,3 @@ export function processTick(state: GameState, proposals: Proposal[], catalog: Re
   const nextState: GameState = { ...afterProps, resources, workers, cycle: newCycle, max_cycle: newMax };
   return { state: nextState, crisis };
 }
-

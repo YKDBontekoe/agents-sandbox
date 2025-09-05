@@ -35,6 +35,17 @@ export interface SettingsPanelProps {
   layoutPresets: LayoutPreset[];
   currentPreset: string;
   onPresetChange: (presetId: string) => void;
+  // World/game toggles (optional, to integrate game UI)
+  showRoads?: boolean;
+  onToggleRoads?: (value: boolean) => void;
+  showCitizens?: boolean;
+  onToggleCitizens?: (value: boolean) => void;
+  requireRoadConfirm?: boolean;
+  onToggleRoadConfirm?: (value: boolean) => void;
+  citizensCount?: number;
+  onChangeCitizensCount?: (value: number) => void;
+  citizensSeed?: number;
+  onChangeCitizensSeed?: (value: number) => void;
 }
 
 // Settings categories for better organization
@@ -52,7 +63,7 @@ interface SettingItem {
   id: string;
   name: string;
   description: string;
-  type: 'toggle' | 'select' | 'range' | 'preset';
+  type: 'toggle' | 'select' | 'range' | 'preset' | 'number';
   value: SettingValue;
   options?: { value: SettingValue; label: string }[];
   min?: number;
@@ -189,6 +200,17 @@ const SettingControl: React.FC<{ setting: SettingItem }> = ({ setting }) => {
             </span>
           </div>
         );
+
+      case 'number':
+        return (
+          <input
+            type="number"
+            value={Number(setting.value)}
+            onChange={(e) => setting.onChange(Number(e.target.value))}
+            className="bg-panel border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-200 w-36"
+            aria-labelledby={`setting-${setting.id}-label`}
+          />
+        );
       
       case 'preset':
         return (
@@ -277,7 +299,17 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
   onClose,
   layoutPresets,
   currentPreset,
-  onPresetChange
+  onPresetChange,
+  showRoads,
+  onToggleRoads,
+  showCitizens,
+  onToggleCitizens,
+  requireRoadConfirm,
+  onToggleRoadConfirm,
+  citizensCount,
+  onChangeCitizensCount,
+  citizensSeed,
+  onChangeCitizensSeed,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(['display', 'gameplay']));
@@ -285,6 +317,58 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
   // Mock settings data - in a real app, this would come from props or context
   const categories: SettingCategory[] = useMemo(() => [
+    // World category (game UI controls)
+    {
+      id: 'world',
+      name: 'World',
+      icon: faGamepad,
+      description: 'Map, citizens, and building preferences',
+      settings: [
+        {
+          id: 'show-roads',
+          name: 'Show Roads',
+          description: 'Toggle road overlays on the map',
+          type: 'toggle',
+          value: Boolean(showRoads),
+          onChange: (v: SettingValue) => { onToggleRoads?.(Boolean(v)); setHasChanges(true); }
+        },
+        {
+          id: 'show-citizens',
+          name: 'Show Citizens',
+          description: 'Toggle citizen activity markers',
+          type: 'toggle',
+          value: Boolean(showCitizens),
+          onChange: (v: SettingValue) => { onToggleCitizens?.(Boolean(v)); setHasChanges(true); }
+        },
+        {
+          id: 'confirm-roads',
+          name: 'Confirm Roads Before Building',
+          description: 'Ask for approval when citizens propose roads',
+          type: 'toggle',
+          value: Boolean(requireRoadConfirm),
+          onChange: (v: SettingValue) => { onToggleRoadConfirm?.(Boolean(v)); setHasChanges(true); }
+        },
+        {
+          id: 'citizens-count',
+          name: 'Citizens Count',
+          description: 'Number of active citizens (applies immediately)',
+          type: 'range',
+          value: Number(citizensCount ?? 8),
+          min: 2,
+          max: 20,
+          step: 1,
+          onChange: (v: SettingValue) => { onChangeCitizensCount?.(Number(v)); setHasChanges(true); }
+        },
+        {
+          id: 'citizens-seed',
+          name: 'Citizens Seed',
+          description: 'Randomization seed for citizens (movement variance)',
+          type: 'number',
+          value: Number(citizensSeed ?? 0),
+          onChange: (v: SettingValue) => { onChangeCitizensSeed?.(Number(v)); setHasChanges(true); }
+        },
+      ]
+    },
     {
       id: 'display',
       name: 'Display & Graphics',

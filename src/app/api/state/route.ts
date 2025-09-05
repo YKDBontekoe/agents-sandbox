@@ -42,6 +42,9 @@ const UpdateSchema = z.object({
   workers: z.number().optional(),
   buildings: z.array(z.unknown()).optional(),
   routes: z.array(z.unknown()).optional(),
+  roads: z.array(z.object({ x: z.number().int().nonnegative(), y: z.number().int().nonnegative() })).optional(),
+  citizens_seed: z.number().int().optional(),
+  citizens_count: z.number().int().optional(),
   edicts: z.record(z.string(), z.number()).optional(),
   skills: z.array(z.string()).optional(),
   skill_tree_seed: z.number().int().optional(),
@@ -54,12 +57,15 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.message }, { status: 400 })
   }
 
-  const { id, resources, workers, buildings, routes, edicts, skills, skill_tree_seed } = parsed.data
-  const updates: Partial<{ resources: Record<string, number>; workers: number; buildings: unknown[]; routes: unknown[]; edicts: Record<string, number>; skills: string[]; skill_tree_seed: number; updated_at: string }> = { updated_at: new Date().toISOString() }
+  const { id, resources, workers, buildings, routes, roads, citizens_seed, citizens_count, edicts, skills, skill_tree_seed } = parsed.data
+  const updates: Partial<{ resources: Record<string, number>; workers: number; buildings: unknown[]; routes: unknown[]; roads: Array<{x:number;y:number}>; citizens_seed: number; citizens_count: number; edicts: Record<string, number>; skills: string[]; skill_tree_seed: number; updated_at: string }> = { updated_at: new Date().toISOString() }
   if (resources) updates.resources = resources
   if (typeof workers === 'number') updates.workers = workers
   if (buildings) updates.buildings = buildings
   if (routes) updates.routes = routes
+  if (roads) updates.roads = roads
+  if (typeof citizens_seed === 'number') updates.citizens_seed = citizens_seed
+  if (typeof citizens_count === 'number') updates.citizens_count = citizens_count
   if (edicts) updates.edicts = edicts
   if (skills) updates.skills = skills
   if (typeof skill_tree_seed === 'number') updates.skill_tree_seed = skill_tree_seed

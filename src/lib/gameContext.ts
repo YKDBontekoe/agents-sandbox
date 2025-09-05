@@ -22,7 +22,7 @@ export interface GameContext {
   }
 }
 
-export function buildGameContext(state: GameState | null | undefined): GameContext {
+export function buildGameContext(state: any): GameContext {
   const buildings: RawBuilding[] = Array.isArray(state?.buildings)
     ? (state!.buildings! as RawBuilding[])
     : []
