@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { config } from '@/infrastructure/config'
 import { generateText } from 'ai'
 import { createOpenAI } from '@ai-sdk/openai'
 import { z } from 'zod'
@@ -15,7 +16,7 @@ interface GameState {
   skill_tree_seed?: number
 }
 
-const openai = createOpenAI({ apiKey: process.env.OPENAI_API_KEY })
+const openai = createOpenAI({ apiKey: config.openAiApiKey })
 
 const BodySchema = z.object({
   guild: z.string().optional(),
@@ -52,9 +53,9 @@ export async function POST(req: NextRequest) {
   const state = stateRow as GameState | null
   if (!state) return NextResponse.json({ error: 'No game state' }, { status: 400 })
 
-  const hasOpenAI = !!process.env.OPENAI_API_KEY &&
-    !process.env.OPENAI_API_KEY.includes('your_openai_api_key_here') &&
-    !process.env.OPENAI_API_KEY.toLowerCase().includes('placeholder')
+  const hasOpenAI = !!config.openAiApiKey &&
+    !config.openAiApiKey.includes('your_openai_api_key_here') &&
+    !config.openAiApiKey.toLowerCase().includes('placeholder')
 
   if (!hasOpenAI) {
     // Deterministic, rule-based fallback when OpenAI is not configured

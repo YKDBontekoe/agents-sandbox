@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server'
+import { config } from '@/infrastructure/config'
 
 export async function GET() {
   const envStatus = {
-    hasSupabaseUrl: !!process.env.SUPABASE_URL && !process.env.SUPABASE_URL.includes('placeholder'),
-    hasSupabaseServiceKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY && !process.env.SUPABASE_SERVICE_ROLE_KEY.includes('placeholder'),
-    hasSupabaseJwtSecret: !!process.env.SUPABASE_JWT_SECRET && !process.env.SUPABASE_JWT_SECRET.includes('placeholder'),
-    hasOpenAiKey: !!process.env.OPENAI_API_KEY && !process.env.OPENAI_API_KEY.includes('placeholder'),
-    environment: process.env.NODE_ENV || 'unknown',
-    vercelEnv: process.env.VERCEL_ENV || 'local'
+    hasSupabaseUrl: !!config.supabaseUrl && !config.supabaseUrl.includes('placeholder'),
+    hasSupabaseServiceKey: !!config.supabaseServiceRoleKey && !config.supabaseServiceRoleKey.includes('placeholder'),
+    hasSupabaseJwtSecret: !!config.supabaseJwtSecret && !config.supabaseJwtSecret.includes('placeholder'),
+    hasOpenAiKey: !!config.openAiApiKey && !config.openAiApiKey.includes('placeholder'),
+    environment: config.nodeEnv || 'unknown',
+    vercelEnv: config.vercelEnv || 'local'
   }
 
   return NextResponse.json(envStatus)

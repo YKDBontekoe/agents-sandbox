@@ -1,9 +1,9 @@
 import log from 'loglevel';
+import { config } from '@/infrastructure/config';
 
 const logger = log.getLogger('arcane-dominion');
 
-const level = (process.env.NEXT_PUBLIC_LOG_LEVEL as log.LogLevelDesc) ||
-  (process.env.NODE_ENV === 'development' ? 'debug' : 'error');
+const level = config.logLevel as log.LogLevelDesc;
 
 logger.setLevel(level);
 

@@ -9,6 +9,7 @@ import { GameProvider } from '@/components/game/GameContext';
 import * as PIXI from 'pixi.js';
 import { Viewport } from 'pixi-viewport';
 import logger from '@/lib/logger';
+import { publicConfig as config } from '@/infrastructure/config';
 
 import { IntegratedHUDSystem } from '@/components/game/hud/IntegratedHUDSystem';
 import { SimResources, canAfford, applyCost, projectCycleDeltas } from '@/components/game/resourceUtils';
@@ -529,7 +530,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     logger.debug('Response JSON:', json);
     if (!res.ok) {
       const msg = json?.error || `Failed to fetch state (${res.status})`;
-      if (process.env.NEXT_PUBLIC_OFFLINE_MODE === '1') {
+      if (config.nextPublicOfflineMode) {
         logger.warn('Offline mode enabled: using local fallback state:', msg);
         setState({
           id: 'local-fallback',
@@ -703,7 +704,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   }, [timeRemaining, isPaused]);
 
   useEffect(() => {
-    if (process.env.NEXT_PUBLIC_DISABLE_REALTIME === '1' || process.env.NODE_ENV === 'development') {
+    if (config.nextPublicDisableRealtime || config.nodeEnv === 'development') {
       logger.debug('Realtime disabled by environment flag');
       return;
     }
