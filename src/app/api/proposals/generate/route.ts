@@ -5,6 +5,17 @@ import { createOpenAI } from '@ai-sdk/openai'
 import { z } from 'zod'
 import { accumulateEffects, generateSkillTree } from '@/components/game/skills/procgen'
 import { rateLimit } from '@/middleware/rateLimit'
+import { buildGameContext } from '@/lib/gameContext'
+
+interface GameState {
+  id: string
+  cycle: number
+  resources: Record<string, number>
+  buildings?: Array<{ typeId?: string; traits?: Record<string, unknown> }>
+  routes?: unknown[]
+  skills?: string[]
+  skill_tree_seed?: number
+}
 
 const openai = createOpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
@@ -38,13 +49,14 @@ export async function POST(req: NextRequest) {
   const { guild = 'Wardens' } = parsedBody.data
 
   // Get latest state
-  const { data: state, error: stateErr } = await supabase
+  const { data: stateRow, error: stateErr } = await supabase
     .from('game_state')
     .select('*')
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()
   if (stateErr) return NextResponse.json({ error: stateErr.message }, { status: 500 })
+  const state = stateRow as GameState | null
   if (!state) return NextResponse.json({ error: 'No game state' }, { status: 400 })
 
   const hasOpenAI = !!process.env.OPENAI_API_KEY &&
@@ -94,47 +106,14 @@ Guilds: Wardens(defense), Alchemists(resources), Scribes(infra), Stewards(policy
 Return JSON array, each item: { title, description, predicted_delta: {resource:number,...} }`
 
   // Build planning context
-  const buildings: Array<{ typeId?: string; traits?: Record<string, any> }> = Array.isArray((state as any).buildings) ? (state as any).buildings as any : []
-  const routes: Array<any> = Array.isArray((state as any).routes) ? (state as any).routes as any : []
-  const byType: Record<string, number> = {}
-  let farmsNearWater = 0, shrinesNearMountains = 0, campsNearForest = 0
-  for (const b of buildings) {
-    const t = String(b.typeId || '')
-    byType[t] = (byType[t] ?? 0) + 1
-    const tr = (b as any).traits || {}
-    if (t === 'farm' && Number(tr.waterAdj || 0) > 0) farmsNearWater++
-    if (t === 'shrine' && Number(tr.mountainAdj || 0) > 0) shrinesNearMountains++
-    if (t === 'lumber_camp' && Number(tr.forestAdj || 0) > 0) campsNearForest++
-  }
-  const storehousePresent = (byType['storehouse'] ?? 0) > 0
-  const routesCount = routes.length
-  const terrainSummary = { farmsNearWater, shrinesNearMountains, campsNearForest }
-  // Compute skill modifiers if state.skills present
-  let skillModifiers: any = { resource_multipliers: {}, building_multipliers: {}, upkeep_grain_per_worker_delta: 0 }
-  const skills: string[] = Array.isArray((state as any).skills) ? (state as any).skills as any : []
-  if (skills.length > 0) {
-    try {
-      const tree = generateSkillTree((state as any).skill_tree_seed ?? 12345)
-      const unlocked = tree.nodes.filter(n => skills.includes(n.id))
-      const acc = accumulateEffects(unlocked)
-      skillModifiers = {
-        resource_multipliers: acc.resMul,
-        building_multipliers: acc.bldMul,
-        upkeep_grain_per_worker_delta: acc.upkeepDelta,
-      }
-    } catch {}
-  }
+  const gameContext = buildGameContext(state)
 
   const context = {
     cycle: state.cycle,
     resources: state.resources,
     guild,
-    skill_tree_seed: (state as any).skill_tree_seed ?? 12345,
-    buildings_by_type: byType,
-    routes_count: routesCount,
-    storehouse_present: storehousePresent,
-    terrain_summary: terrainSummary,
-    skill_modifiers: skillModifiers,
+    skill_tree_seed: state.skill_tree_seed ?? 12345,
+    ...gameContext,
   }
 
   const user = `Context: ${JSON.stringify(context)}\nGenerate 2 proposals rooted in this guild focus and the game's tone. Keep predicted_delta conservative and numeric. JSON only.`
