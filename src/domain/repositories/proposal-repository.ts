@@ -9,6 +9,10 @@ export interface Proposal {
   predicted_delta: Record<string, number>
   status: ProposalStatus
   created_at?: string
+  gen_prompt_version?: string | null
+  gen_model_version?: string | null
+  scry_prompt_version?: string | null
+  scry_model_version?: string | null
 }
 
 export interface ProposalRepository {
