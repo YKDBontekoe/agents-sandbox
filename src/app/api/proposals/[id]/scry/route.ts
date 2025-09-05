@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { SupabaseUnitOfWork } from '@/infrastructure/supabase/unit-of-work'
 import { generateText } from 'ai'
 import { createOpenAI } from '@ai-sdk/openai'
 import { z } from 'zod'
@@ -31,12 +32,12 @@ interface ProposalRow {
   guild?: string
   title?: string
   description?: string
-  game_state?: GameState
 }
 
 export async function POST(req: NextRequest, context: RouteContext) {
   const params = await context.params
   const supabase = createSupabaseServerClient()
+  const uow = new SupabaseUnitOfWork(supabase)
   const { id } = params
   const body = await req.json().catch(() => ({}))
   const bodyResult = BodySchema.safeParse(body)
@@ -47,13 +48,9 @@ export async function POST(req: NextRequest, context: RouteContext) {
     )
   }
 
-  const { data: proposal, error } = await supabase
-    .from('proposals')
-    .select('*, game_state(*)')
-    .eq('id', id)
-    .maybeSingle()
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  const proposal = await uow.proposals.getById(id)
   if (!proposal) return NextResponse.json({ error: 'Proposal not found' }, { status: 404 })
+  const gameState = await uow.gameStates.getById(proposal.state_id)
 
   const hasOpenAI = !!process.env.OPENAI_API_KEY &&
     !process.env.OPENAI_API_KEY.includes('your_openai_api_key_here') &&
@@ -126,7 +123,7 @@ export async function POST(req: NextRequest, context: RouteContext) {
     }
 
     const predicted_delta = inferDelta()
-    await supabase.from('proposals').update({ predicted_delta }).eq('id', id)
+    await uow.proposals.update(id, { predicted_delta })
     return NextResponse.json({
       predicted_delta,
       risk_note: 'Deterministic fallback estimate based on guild heuristics (no OpenAI configured).',
@@ -137,8 +134,8 @@ export async function POST(req: NextRequest, context: RouteContext) {
 Return strict JSON: { predicted_delta: {resource:number,...}, risk_note: string }`
 
   const p = proposal as ProposalRow
-  const stateRes = p.game_state?.resources ?? {}
-  const extraContext = buildGameContext(p.game_state)
+  const stateRes = gameState?.resources ?? {}
+  const extraContext = buildGameContext(gameState)
   const user = `Context: ${JSON.stringify({ resources: stateRes, ...extraContext })}\nProposal: ${String(p.title ?? '')} - ${String(p.description ?? '')}`
   const { text } = await generateText({ model: openai('gpt-4o-mini'), system, prompt: user })
 
@@ -161,6 +158,6 @@ Return strict JSON: { predicted_delta: {resource:number,...}, risk_note: string 
     )
   }
 
-  await supabase.from('proposals').update({ predicted_delta: parsed.data.predicted_delta }).eq('id', id)
+  await uow.proposals.update(id, { predicted_delta: parsed.data.predicted_delta })
   return NextResponse.json(parsed.data)
 }

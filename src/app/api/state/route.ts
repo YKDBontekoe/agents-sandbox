@@ -1,53 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { SupabaseUnitOfWork } from '@/infrastructure/supabase/unit-of-work'
 import logger from '@/lib/logger'
 import { z } from 'zod'
 
 export async function GET() {
   try {
     const supabase = createSupabaseServerClient()
-    
-    const { data: state, error } = await supabase
-      .from('game_state')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
+    const uow = new SupabaseUnitOfWork(supabase)
 
-    if (error) {
-      logger.error('Supabase error:', error.message)
-      return NextResponse.json(
-        { error: `Database error: ${error.message}` },
-        { status: 503 }
-      )
-    }
+    let state = await uow.gameStates.getLatest()
 
-    // If no state, create one
     if (!state) {
-      const { data: created, error: createErr } = await supabase
-        .from('game_state')
-        .insert({ skill_tree_seed: Math.floor(Math.random() * 1e9) })
-        .select('*')
-        .single()
-      if (createErr) {
-        logger.error('Supabase create error:', createErr.message)
-        return NextResponse.json(
-          { error: 'Failed to create game state' },
-          { status: 503 }
-        )
-      }
-      return NextResponse.json(created)
+      state = await uow.gameStates.create({
+        skill_tree_seed: Math.floor(Math.random() * 1e9),
+      })
+      return NextResponse.json(state)
     }
 
     if (!state.skill_tree_seed) {
-      const { data: patched } = await supabase
-        .from('game_state')
-        .update({ skill_tree_seed: Math.floor(Math.random() * 1e9) })
-        .eq('id', state.id)
-        .select('*')
-        .maybeSingle()
-      return NextResponse.json(patched || state)
+      const patched = await uow.gameStates.update(state.id, {
+        skill_tree_seed: Math.floor(Math.random() * 1e9),
+      })
+      return NextResponse.json(patched)
     }
+
     return NextResponse.json(state)
   } catch (error) {
     logger.error('Supabase connection error:', error)
@@ -87,17 +64,12 @@ export async function PATCH(req: NextRequest) {
   if (typeof skill_tree_seed === 'number') updates.skill_tree_seed = skill_tree_seed
 
   const supabase = createSupabaseServerClient()
-  const { data, error } = await supabase
-    .from('game_state')
-    .update(updates)
-    .eq('id', id)
-    .select('*')
-    .single()
-
-  if (error) {
+  const uow = new SupabaseUnitOfWork(supabase)
+  try {
+    const data = await uow.gameStates.update(id, updates)
+    return NextResponse.json(data)
+  } catch (error: any) {
     logger.error('Supabase update error:', error.message)
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
-
-  return NextResponse.json(data)
 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { SupabaseUnitOfWork } from '@/infrastructure/supabase/unit-of-work'
 import { generateText } from 'ai'
 import { createOpenAI } from '@ai-sdk/openai'
 import { z } from 'zod'
@@ -31,6 +32,7 @@ const AIResponseSchema = z.array(ProposalSchema)
 
 export async function POST(req: NextRequest) {
   const supabase = createSupabaseServerClient()
+  const uow = new SupabaseUnitOfWork(supabase)
   const json = await req.json().catch(() => ({}))
   const parsedBody = BodySchema.safeParse(json)
   if (!parsedBody.success) {
@@ -42,14 +44,7 @@ export async function POST(req: NextRequest) {
   const { guild = 'Wardens' } = parsedBody.data
 
   // Get latest state
-  const { data: stateRow, error: stateErr } = await supabase
-    .from('game_state')
-    .select('*')
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-  if (stateErr) return NextResponse.json({ error: stateErr.message }, { status: 500 })
-  const state = stateRow as GameState | null
+  const state = (await uow.gameStates.getLatest()) as GameState | null
   if (!state) return NextResponse.json({ error: 'No game state' }, { status: 400 })
 
   const hasOpenAI = !!process.env.OPENAI_API_KEY &&
@@ -87,9 +82,12 @@ export async function POST(req: NextRequest) {
       status: 'pending' as const,
     }))
 
-    const { data: inserted, error: insErr } = await supabase.from('proposals').insert(rows).select('*')
-    if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 })
-    return NextResponse.json(inserted)
+    try {
+      const inserted = await uow.proposals.create(rows)
+      return NextResponse.json(inserted)
+    } catch (insErr: any) {
+      return NextResponse.json({ error: insErr.message }, { status: 500 })
+    }
   }
 
   // Use AI to draft 1-3 proposals aligned with README fantasy
@@ -146,8 +144,10 @@ Return JSON array, each item: { title, description, predicted_delta: {resource:n
     status: 'pending' as const,
   }))
 
-  const { data: inserted, error: insErr } = await supabase.from('proposals').insert(rows).select('*')
-  if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 })
-
-  return NextResponse.json(inserted)
+  try {
+    const inserted = await uow.proposals.create(rows)
+    return NextResponse.json(inserted)
+  } catch (insErr: any) {
+    return NextResponse.json({ error: insErr.message }, { status: 500 })
+  }
 }

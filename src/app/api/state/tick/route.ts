@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { SupabaseUnitOfWork } from '@/infrastructure/supabase/unit-of-work'
 import { SIM_BUILDINGS } from '@/lib/buildingCatalog'
 
 type ResKey = 'grain' | 'wood' | 'planks' | 'coin' | 'mana' | 'favor' | 'unrest' | 'threat';
@@ -7,24 +8,14 @@ type ResKey = 'grain' | 'wood' | 'planks' | 'coin' | 'mana' | 'favor' | 'unrest'
 // Advance one cycle: apply accepted proposals to resources with simple rules and clear applied
 export async function POST() {
   const supabase = createSupabaseServerClient()
+  const uow = new SupabaseUnitOfWork(supabase)
 
   // Get latest state
-  const { data: state, error: stateErr } = await supabase
-    .from('game_state')
-    .select('*')
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-  if (stateErr) return NextResponse.json({ error: stateErr.message }, { status: 500 })
+  const state = await uow.gameStates.getLatest()
   if (!state) return NextResponse.json({ error: 'No game state' }, { status: 400 })
 
   // Fetch accepted proposals
-  const { data: accepted, error: propErr } = await supabase
-    .from('proposals')
-    .select('*')
-    .eq('state_id', state.id)
-    .eq('status', 'accepted')
-  if (propErr) return NextResponse.json({ error: propErr.message }, { status: 500 })
+  const accepted = await uow.proposals.listByState(state.id, ['accepted'])
 
   // Apply predicted deltas
   const resources = { ...state.resources }
@@ -189,9 +180,9 @@ export async function POST() {
   // Increment cycle and persist max_cycle
   const newCycle = Number(state.cycle) + 1
   const newMax = Math.max(Number(state.max_cycle ?? 0), newCycle)
-  const { data: updated, error: upErr } = await supabase
-    .from('game_state')
-    .update({
+  let updated
+  try {
+    updated = await uow.gameStates.update(state.id, {
       cycle: newCycle,
       max_cycle: newMax,
       resources,
@@ -200,14 +191,16 @@ export async function POST() {
       routes: (state as any).routes ?? [],
       updated_at: new Date().toISOString(),
     })
-    .eq('id', state.id)
-    .select('*')
-    .single()
-  if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 })
+  } catch (upErr: any) {
+    return NextResponse.json({ error: upErr.message }, { status: 500 })
+  }
 
   // Mark proposals as applied
   if ((accepted?.length ?? 0) > 0) {
-    await supabase.from('proposals').update({ status: 'applied' }).in('id', accepted!.map(p => p.id))
+    await uow.proposals.updateMany(
+      accepted!.map(p => p.id),
+      { status: 'applied' },
+    )
   }
 
   return NextResponse.json({ state: updated, crisis })
