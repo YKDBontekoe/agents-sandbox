@@ -147,7 +147,7 @@ Return strict JSON: { predicted_delta: {resource:number,...}, risk_note: string 
   const skills: string[] = Array.isArray((proposal as any).game_state?.skills) ? (proposal as any).game_state.skills as any : []
   if (skills.length > 0) {
     try {
-      const tree = generateSkillTree(12345)
+      const tree = generateSkillTree(((proposal as any).game_state?.skill_tree_seed as number) ?? 12345)
       const unlocked = tree.nodes.filter(n => skills.includes(n.id))
       const acc = accumulateEffects(unlocked)
       skillModifiers = {

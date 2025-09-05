@@ -1,13 +1,17 @@
 export type SkillEffect =
   | { kind: 'resource_multiplier'; resource: 'grain' | 'coin' | 'mana' | 'favor' | 'wood' | 'planks'; factor: number }
   | { kind: 'building_multiplier'; typeId: string; factor: number }
-  | { kind: 'upkeep_delta'; grainPerWorkerDelta: number };
+  | { kind: 'upkeep_delta'; grainPerWorkerDelta: number }
+  | { kind: 'route_bonus'; percent: number }
+  | { kind: 'logistics_bonus'; percent: number };
 
 export interface SkillNode {
   id: string;
   title: string;
   description: string;
   category: 'economic' | 'military' | 'mystical' | 'infrastructure' | 'diplomatic' | 'social';
+  rarity: 'common' | 'uncommon' | 'rare' | 'legendary';
+  tags: string[];
   cost: { coin?: number; mana?: number; favor?: number };
   effects: SkillEffect[];
   requires?: string[];
@@ -48,50 +52,78 @@ export function generateSkillTree(seed = 42): SkillTree {
     social: ['Festivals', 'Guild Mediation', 'Bread & Circus', 'Public Works'],
   };
 
-  // Helper to build effects per category
+  // Helper to build effects per category (procedural variety)
   const makeEffects = (cat: SkillNode['category']): SkillEffect[] => {
     switch (cat) {
       case 'economic':
-        return [{ kind: 'resource_multiplier', resource: 'coin', factor: 1.06 + rng() * 0.05 }];
+        return rng() < 0.5
+          ? [{ kind: 'resource_multiplier', resource: 'coin', factor: 1.06 + rng() * 0.08 }]
+          : [{ kind: 'route_bonus', percent: 5 + Math.floor(rng() * 10) }];
       case 'military':
-        return [{ kind: 'upkeep_delta', grainPerWorkerDelta: -0.02 - rng() * 0.03 }];
+        return [{ kind: 'upkeep_delta', grainPerWorkerDelta: -0.02 - rng() * 0.04 }];
       case 'mystical':
-        return [{ kind: 'resource_multiplier', resource: 'mana', factor: 1.08 + rng() * 0.06 }];
+        return [{ kind: 'resource_multiplier', resource: 'mana', factor: 1.08 + rng() * 0.10 }];
       case 'infrastructure':
-        return [{ kind: 'building_multiplier', typeId: pick(rng, ['farm', 'lumber_camp', 'sawmill', 'trade_post']), factor: 1.10 + rng() * 0.08 }];
+        return rng() < 0.5
+          ? [{ kind: 'building_multiplier', typeId: pick(rng, ['farm', 'lumber_camp', 'sawmill', 'trade_post', 'storehouse']), factor: 1.10 + rng() * 0.12 }]
+          : [{ kind: 'logistics_bonus', percent: 5 + Math.floor(rng() * 10) }];
       case 'diplomatic':
-        return [{ kind: 'resource_multiplier', resource: 'favor', factor: 1.10 + rng() * 0.08 }];
+        return [{ kind: 'resource_multiplier', resource: 'favor', factor: 1.10 + rng() * 0.12 }];
       case 'social':
-        return [{ kind: 'resource_multiplier', resource: 'grain', factor: 1.05 + rng() * 0.05 }];
+        return [{ kind: 'resource_multiplier', resource: 'grain', factor: 1.05 + rng() * 0.08 }];
     }
   };
 
-  const makeCost = (): SkillNode['cost'] => ({
-    coin: Math.round(20 + rng() * 40),
-    mana: Math.round(5 + rng() * 10),
-    favor: Math.round(3 + rng() * 6),
-  });
+  const makeCost = (rarity: SkillNode['rarity']): SkillNode['cost'] => {
+    const base = rarity === 'common' ? 1 : rarity === 'uncommon' ? 1.5 : rarity === 'rare' ? 2 : 3;
+    return {
+      coin: Math.round((15 + rng() * 35) * base),
+      mana: Math.round((3 + rng() * 8) * base),
+      favor: Math.round((2 + rng() * 6) * base),
+    };
+  };
+
+  const pickRarity = (): SkillNode['rarity'] => {
+    const r = rng();
+    if (r < 0.55) return 'common';
+    if (r < 0.85) return 'uncommon';
+    if (r < 0.97) return 'rare';
+    return 'legendary';
+  };
 
   // Generate tiers (like a tree)
-  const tiers = 6; // larger tree
+  const tiers = 8; // larger tree
   let prevTier: string[] = [];
   for (let t = 0; t < tiers; t++) {
-    const count = 4 + Math.floor(rng() * 3);
+    const count = 6 + Math.floor(rng() * 5); // more nodes per tier
     const current: string[] = [];
     for (let i = 0; i < count; i++) {
       const cat = pick(rng, categories);
+      const rarity = pickRarity();
+      const tags = [cat, rarity, rng() < 0.5 ? 'economy' : 'growth'];
       const node: SkillNode = {
         id: id(nodes.length),
         title: pick(rng, titlesByCat[cat]),
-        description: `Benefit aligned to ${cat}.`,
+        description: `Benefit aligned to ${cat}. Procedurally tailored.`,
         category: cat,
-        cost: makeCost(),
+        rarity,
+        tags,
+        cost: makeCost(rarity),
         effects: makeEffects(cat),
-        requires: t > 0 && prevTier.length ? [pick(rng, prevTier)] : [],
+        requires: t > 0 && prevTier.length ? Array.from(new Set([pick(rng, prevTier)])).slice(0, 1) : [],
       };
       nodes.push(node);
       current.push(node.id);
       if (node.requires && node.requires.length) edges.push({ from: node.requires[0], to: node.id });
+    }
+    // Add some cross-links for web-like branches
+    if (t > 0) {
+      const links = 2 + Math.floor(rng() * 3);
+      for (let k = 0; k < links; k++) {
+        const from = pick(rng, prevTier);
+        const to = pick(rng, current);
+        if (from !== to) edges.push({ from, to });
+      }
     }
     prevTier = current;
   }
@@ -111,6 +143,14 @@ export function accumulateEffects(unlocked: SkillNode[]): { resMul: Record<strin
         bldMul[e.typeId] = (bldMul[e.typeId] ?? 1) * e.factor;
       } else if (e.kind === 'upkeep_delta') {
         upkeepDelta += e.grainPerWorkerDelta;
+      } else if (e.kind === 'route_bonus') {
+        // treat as coin resource tilt (simplification for agents)
+        resMul['coin'] = (resMul['coin'] ?? 1) * (1 + e.percent / 100);
+      } else if (e.kind === 'logistics_bonus') {
+        // treat as building multipliers for core producers
+        ['farm', 'lumber_camp', 'sawmill', 'storehouse'].forEach(t => {
+          bldMul[t] = (bldMul[t] ?? 1) * (1 + e.percent / 100);
+        })
       }
     });
   });

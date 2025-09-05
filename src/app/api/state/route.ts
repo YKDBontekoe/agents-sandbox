@@ -26,7 +26,7 @@ export async function GET() {
     if (!state) {
       const { data: created, error: createErr } = await supabase
         .from('game_state')
-        .insert({})
+        .insert({ skill_tree_seed: Math.floor(Math.random() * 1e9) })
         .select('*')
         .single()
       if (createErr) {
@@ -39,6 +39,15 @@ export async function GET() {
       return NextResponse.json(created)
     }
 
+    if (!state.skill_tree_seed) {
+      const { data: patched } = await supabase
+        .from('game_state')
+        .update({ skill_tree_seed: Math.floor(Math.random() * 1e9) })
+        .eq('id', state.id)
+        .select('*')
+        .maybeSingle()
+      return NextResponse.json(patched || state)
+    }
     return NextResponse.json(state)
   } catch (error) {
     logger.error('Supabase connection error:', error)
@@ -57,6 +66,7 @@ const UpdateSchema = z.object({
   routes: z.array(z.unknown()).optional(),
   edicts: z.record(z.string(), z.number()).optional(),
   skills: z.array(z.string()).optional(),
+  skill_tree_seed: z.number().int().optional(),
 })
 
 export async function PATCH(req: NextRequest) {
@@ -66,14 +76,15 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.message }, { status: 400 })
   }
 
-  const { id, resources, workers, buildings, routes, edicts, skills } = parsed.data
-  const updates: Partial<{ resources: Record<string, number>; workers: number; buildings: unknown[]; routes: unknown[]; edicts: Record<string, number>; skills: string[]; updated_at: string }> = { updated_at: new Date().toISOString() }
+  const { id, resources, workers, buildings, routes, edicts, skills, skill_tree_seed } = parsed.data
+  const updates: Partial<{ resources: Record<string, number>; workers: number; buildings: unknown[]; routes: unknown[]; edicts: Record<string, number>; skills: string[]; skill_tree_seed: number; updated_at: string }> = { updated_at: new Date().toISOString() }
   if (resources) updates.resources = resources
   if (typeof workers === 'number') updates.workers = workers
   if (buildings) updates.buildings = buildings
   if (routes) updates.routes = routes
   if (edicts) updates.edicts = edicts
   if (skills) updates.skills = skills
+  if (typeof skill_tree_seed === 'number') updates.skill_tree_seed = skill_tree_seed
 
   const supabase = createSupabaseServerClient()
   const { data, error } = await supabase

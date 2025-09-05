@@ -108,7 +108,7 @@ Return JSON array, each item: { title, description, predicted_delta: {resource:n
   const skills: string[] = Array.isArray((state as any).skills) ? (state as any).skills as any : []
   if (skills.length > 0) {
     try {
-      const tree = generateSkillTree(12345)
+      const tree = generateSkillTree((state as any).skill_tree_seed ?? 12345)
       const unlocked = tree.nodes.filter(n => skills.includes(n.id))
       const acc = accumulateEffects(unlocked)
       skillModifiers = {
@@ -123,6 +123,7 @@ Return JSON array, each item: { title, description, predicted_delta: {resource:n
     cycle: state.cycle,
     resources: state.resources,
     guild,
+    skill_tree_seed: (state as any).skill_tree_seed ?? 12345,
     buildings_by_type: byType,
     routes_count: routesCount,
     storehouse_present: storehousePresent,

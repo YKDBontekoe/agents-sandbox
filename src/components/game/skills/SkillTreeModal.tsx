@@ -10,7 +10,7 @@ interface SkillTreeModalProps {
 type LayoutNode = SkillNode & { depth: number; x: number; y: number };
 
 export default function SkillTreeModal({ isOpen, onClose }: SkillTreeModalProps) {
-  const [seed] = useState<number>(12345);
+  const [seed, setSeed] = useState<number>(12345);
   const [scale, setScale] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const draggingRef = useRef(false);
@@ -22,12 +22,12 @@ export default function SkillTreeModal({ isOpen, onClose }: SkillTreeModalProps)
   }, [isOpen]);
 
   // Layout nodes by depth (longest prerequisite chain)
-  const { nodes, edges } = useMemo(() => {
+  const { nodes, edges, bounds } = useMemo(() => {
     const depth: Record<string, number> = {};
     const byId: Record<string, SkillNode> = {};
     tree.nodes.forEach(n => { byId[n.id] = n; depth[n.id] = 0; });
     let changed = true; let guard = 0;
-    while (changed && guard++ < 100) {
+    while (changed && guard++ < 200) {
       changed = false;
       for (const n of tree.nodes) {
         const reqDepth = Math.max(0, ...(n.requires || []).map(r => depth[r] ?? 0));
@@ -37,17 +37,36 @@ export default function SkillTreeModal({ isOpen, onClose }: SkillTreeModalProps)
     }
     const byDepth: Record<number, SkillNode[]> = {};
     tree.nodes.forEach(n => { const d = depth[n.id] || 0; (byDepth[d] = byDepth[d] || []).push(n); });
-    const columnW = 260; const nodeH = 70; const vGap = 24; const hGap = 120;
+    const columnW = 280; const nodeH = 80; const vGap = 28; const hGap = 160;
     const layoutNodes: LayoutNode[] = [];
-    Object.keys(byDepth).map(Number).sort((a,b)=>a-b).forEach(d => {
+    const placed: Record<string, LayoutNode> = {};
+    const depths = Object.keys(byDepth).map(Number).sort((a,b)=>a-b);
+    depths.forEach(d => {
       const col = byDepth[d];
-      col.forEach((n, i) => {
-        layoutNodes.push({ ...n, depth: d, x: d * (columnW + hGap), y: i * (nodeH + vGap) });
-      })
-    })
+      const suggested: Array<{ n: SkillNode; y: number }> = col.map((n, i) => {
+        const parents = (n.requires || []).map(r => placed[r]).filter(Boolean) as LayoutNode[];
+        if (parents.length) {
+          const avg = parents.reduce((s,p)=>s+p.y,0) / parents.length;
+          const jitter = (Math.random() - 0.5) * 20;
+          return { n, y: avg + jitter };
+        }
+        return { n, y: i * (nodeH + vGap) };
+      });
+      suggested.sort((a,b)=>a.y-b.y);
+      let cursor = 0;
+      const items: LayoutNode[] = [];
+      for (const s of suggested) {
+        const y = Math.max(cursor, s.y);
+        items.push({ ...s.n, depth: d, x: d * (columnW + hGap), y });
+        cursor = y + nodeH + vGap;
+      }
+      items.forEach(it => { placed[it.id] = it; layoutNodes.push(it); });
+    });
     const pos = Object.fromEntries(layoutNodes.map(n => [n.id, n]));
     const layoutEdges = tree.edges.map(e => ({ from: pos[e.from], to: pos[e.to] })).filter(e => e.from && e.to);
-    return { nodes: layoutNodes, edges: layoutEdges };
+    const maxX = Math.max(...layoutNodes.map(n => n.x + columnW), 0);
+    const maxY = Math.max(...layoutNodes.map(n => n.y + nodeH), 0);
+    return { nodes: layoutNodes, edges: layoutEdges, bounds: { w: maxX + 200, h: maxY + 200 } };
   }, [tree]);
 
   const colorFor = (cat: SkillNode['category']) => ({
@@ -89,16 +108,37 @@ export default function SkillTreeModal({ isOpen, onClose }: SkillTreeModalProps)
               <div className="font-semibold">Skill Tree</div>
               <div className="flex items-center gap-3">
                 <div className="text-xs opacity-80">Seed {seed}</div>
+                <button onClick={() => setSeed(Math.floor(Math.random() * 1e9))} className="px-2 py-1 text-xs rounded bg-neutral-700 hover:bg-neutral-600">Reroll</button>
                 <div className="text-xs opacity-80">Scale {(scale*100)|0}%</div>
                 <Dialog.Close asChild>
                   <button className="px-2 py-1 rounded bg-neutral-700 hover:bg-neutral-600">Close</button>
                 </Dialog.Close>
               </div>
+              <div className="absolute bottom-4 right-4 bg-neutral-800/80 backdrop-blur border border-neutral-700 rounded p-2">
+                <div className="relative" style={{ width: 200, height: 140 }}>
+                  <svg className="absolute inset-0 w-full h-full">
+                    {edges.map((e, i) => (
+                      <line key={i} x1={(e.from.x+120)/ (bounds.w/200)} y1={(e.from.y+35)/ (bounds.h/140)} x2={(e.to.x)/ (bounds.w/200)} y2={(e.to.y+35)/ (bounds.h/140)} stroke="#94a3b8" strokeOpacity={0.5} strokeWidth={1} />
+                    ))}
+                    {nodes.map((n,i)=>(
+                      <circle key={n.id} cx={(n.x+120)/(bounds.w/200)} cy={(n.y+35)/(bounds.h/140)} r={3} fill="#e2e8f0" />
+                    ))}
+                    <rect
+                      x={-offset.x/scale/(bounds.w/200)}
+                      y={-offset.y/scale/(bounds.h/140)}
+                      width={(window.innerWidth/scale)/(bounds.w/200)}
+                      height={((window.innerHeight-64)/scale)/(bounds.h/140)}
+                      fill="none" stroke="#38bdf8" strokeWidth={1.2}
+                    />
+                  </svg>
+                </div>
+              </div>
             </div>
 
             {/* Canvas */}
             <div className="absolute inset-0 top-8 overflow-hidden">
-              <div style={{ transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})`, transformOrigin: '0 0' }} className="relative w-[2400px] h-[1600px]">
+              <div style={{ transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})`, transformOrigin: '0 0' }} className="relative" aria-label="skill-tree-canvas" role="region">
+                <div style={{ width: bounds.w, height: bounds.h }} />
                 <svg className="absolute inset-0 w-full h-full">
                   {edges.map((e, i) => (
                     <path key={i} d={`M ${e.from.x+120} ${e.from.y+35} C ${e.from.x+200} ${e.from.y+35}, ${e.to.x-80} ${e.to.y+35}, ${e.to.x} ${e.to.y+35}`}
@@ -126,6 +166,25 @@ export default function SkillTreeModal({ isOpen, onClose }: SkillTreeModalProps)
                     </div>
                   );
                 })}
+              </div>
+              <div className="absolute bottom-4 right-4 bg-neutral-800/80 backdrop-blur border border-neutral-700 rounded p-2">
+                <div className="relative" style={{ width: 200, height: 140 }}>
+                  <svg className="absolute inset-0 w-full h-full">
+                    {edges.map((e, i) => (
+                      <line key={i} x1={(e.from.x+120)/ (bounds.w/200)} y1={(e.from.y+35)/ (bounds.h/140)} x2={(e.to.x)/ (bounds.w/200)} y2={(e.to.y+35)/ (bounds.h/140)} stroke="#94a3b8" strokeOpacity={0.5} strokeWidth={1} />
+                    ))}
+                    {nodes.map((n,i)=>(
+                      <circle key={n.id} cx={(n.x+120)/(bounds.w/200)} cy={(n.y+35)/(bounds.h/140)} r={3} fill="#e2e8f0" />
+                    ))}
+                    <rect
+                      x={-offset.x/scale/(bounds.w/200)}
+                      y={-offset.y/scale/(bounds.h/140)}
+                      width={(window.innerWidth/scale)/(bounds.w/200)}
+                      height={((window.innerHeight-64)/scale)/(bounds.h/140)}
+                      fill="none" stroke="#38bdf8" strokeWidth={1.2}
+                    />
+                  </svg>
+                </div>
               </div>
             </div>
           </div>
