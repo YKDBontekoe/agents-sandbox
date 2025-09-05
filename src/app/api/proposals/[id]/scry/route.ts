@@ -18,6 +18,20 @@ const AIResponseSchema = z.object({
   risk_note: z.string(),
 })
 
+const AIResponseJsonSchema = {
+  $schema: 'https://json-schema.org/draft/2020-12/schema',
+  type: 'object',
+  required: ['predicted_delta', 'risk_note'],
+  properties: {
+    predicted_delta: {
+      type: 'object',
+      additionalProperties: { type: 'number' },
+    },
+    risk_note: { type: 'string', minLength: 1, maxLength: 140 },
+  },
+  additionalProperties: false,
+} as const
+
 // Minimal shape for proposals to avoid 'any' usages
 interface ProposalRow {
   guild?: string;
@@ -167,27 +181,30 @@ Return strict JSON: { predicted_delta: {resource:number,...}, risk_note: string 
     skill_modifiers: skillModifiers,
   }
   const user = `Context: ${JSON.stringify(gameContext)}\nProposal: ${String(p.title ?? '')} - ${String(p.description ?? '')}`
-  const { text } = await generateText({ model: openai('gpt-4o-mini'), system, prompt: user })
+  const { text } = await generateText({
+    model: openai('gpt-4o-mini'),
+    system,
+    prompt: user,
+    response_format: { type: 'json_schema', schema: AIResponseJsonSchema },
+  })
 
-  let parsedJson: unknown
+  let parsed
   try {
-    const start = text.indexOf('{')
-    const end = text.lastIndexOf('}') + 1
-    parsedJson = JSON.parse(text.slice(start, end))
-  } catch {
+    const json = JSON.parse(text)
+    parsed = AIResponseSchema.parse(json)
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: 'Schema validation failed', issues: err.issues },
+        { status: 400 },
+      )
+    }
     return NextResponse.json(
-      { error: 'Scry parse failed', raw: text },
-      { status: 400 },
-    )
-  }
-  const parsed = AIResponseSchema.safeParse(parsedJson)
-  if (!parsed.success) {
-    return NextResponse.json(
-      { error: parsed.error.message },
+      { error: 'Invalid JSON from AI', raw: text },
       { status: 400 },
     )
   }
 
-  await supabase.from('proposals').update({ predicted_delta: parsed.data.predicted_delta }).eq('id', id)
-  return NextResponse.json(parsed.data)
+  await supabase.from('proposals').update({ predicted_delta: parsed.predicted_delta }).eq('id', id)
+  return NextResponse.json(parsed)
 }

@@ -19,6 +19,26 @@ const ProposalSchema = z.object({
 
 const AIResponseSchema = z.array(ProposalSchema)
 
+const AIResponseJsonSchema = {
+  $schema: 'https://json-schema.org/draft/2020-12/schema',
+  type: 'array',
+  items: {
+    type: 'object',
+    required: ['title', 'description', 'predicted_delta'],
+    properties: {
+      title: { type: 'string', minLength: 1, maxLength: 120 },
+      description: { type: 'string', minLength: 1, maxLength: 300 },
+      predicted_delta: {
+        type: 'object',
+        additionalProperties: { type: 'number' },
+      },
+    },
+    additionalProperties: false,
+  },
+  minItems: 1,
+  maxItems: 3,
+} as const
+
 export async function POST(req: NextRequest) {
   const supabase = createSupabaseServerClient()
   const json = await req.json().catch(() => ({}))
@@ -137,27 +157,25 @@ Return JSON array, each item: { title, description, predicted_delta: {resource:n
     model: openai('gpt-4o-mini'),
     system,
     prompt: user,
+    response_format: { type: 'json_schema', schema: AIResponseJsonSchema },
   })
 
-  let parsedJson: unknown
+  let proposals
   try {
-    const jsonStart = text.indexOf('[')
-    const jsonEnd = text.lastIndexOf(']') + 1
-    parsedJson = JSON.parse(text.slice(jsonStart, jsonEnd))
-  } catch {
+    const json = JSON.parse(text)
+    proposals = AIResponseSchema.parse(json)
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: 'Schema validation failed', issues: err.issues },
+        { status: 400 },
+      )
+    }
     return NextResponse.json(
-      { error: 'AI response parse failed', raw: text },
+      { error: 'Invalid JSON from AI', raw: text },
       { status: 400 },
     )
   }
-  const proposalsResult = AIResponseSchema.safeParse(parsedJson)
-  if (!proposalsResult.success) {
-    return NextResponse.json(
-      { error: proposalsResult.error.message },
-      { status: 400 },
-    )
-  }
-  const proposals = proposalsResult.data
 
   const rows = proposals.map(p => ({
     state_id: state.id,
