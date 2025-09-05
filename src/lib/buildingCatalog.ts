@@ -1,18 +1,14 @@
-import { type SimResources } from '@/components/game/resourceUtils';
-
 export interface SimBuildingType {
   id: string;
   name: string;
-  cost: Partial<SimResources>;
-  inputs: Partial<SimResources>;
-  outputs: Partial<SimResources>;
-  /** Maximum number of workers this building can employ */
+  cost: Record<string, number>;
+  inputs: Record<string, number>;
+  outputs: Record<string, number>;
   workCapacity?: number;
-  /** Maximum upgrade level (>=1). Default 3. */
   maxLevel?: number;
 }
 
-export const SIM_BUILDINGS: Record<string, SimBuildingType> = {
+export const CORE_BUILDINGS: Record<string, SimBuildingType> = {
   council_hall: {
     id: 'council_hall',
     name: 'Council Hall',
@@ -98,3 +94,5 @@ export const SIM_BUILDINGS: Record<string, SimBuildingType> = {
     maxLevel: 3,
   },
 };
+
+export const SIM_BUILDINGS: Record<string, SimBuildingType> = { ...CORE_BUILDINGS };
