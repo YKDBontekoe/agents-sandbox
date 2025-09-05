@@ -6,14 +6,6 @@ import { createOpenAI } from '@ai-sdk/openai'
 import { z } from 'zod'
 import { buildGameContext } from '@/lib/gameContext'
 
-interface GameState {
-  resources?: Record<string, number>
-  buildings?: Array<{ typeId?: string; traits?: Record<string, unknown> }>
-  routes?: unknown[]
-  skills?: string[]
-  skill_tree_seed?: number
-}
-
 const openai = createOpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
 interface RouteContext {

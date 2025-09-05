@@ -1,15 +1,9 @@
 import { accumulateEffects, generateSkillTree } from '../components/game/skills/procgen'
+import type { GameState } from '@/domain/repositories/game-state-repository'
 
 interface RawBuilding {
   typeId?: string
   traits?: Record<string, unknown>
-}
-
-interface RawState {
-  buildings?: RawBuilding[]
-  routes?: unknown[]
-  skills?: string[]
-  skill_tree_seed?: number
 }
 
 export interface GameContext {
@@ -28,8 +22,10 @@ export interface GameContext {
   }
 }
 
-export function buildGameContext(state: RawState | null | undefined): GameContext {
-  const buildings: RawBuilding[] = Array.isArray(state?.buildings) ? state!.buildings! : []
+export function buildGameContext(state: GameState | null | undefined): GameContext {
+  const buildings: RawBuilding[] = Array.isArray(state?.buildings)
+    ? (state!.buildings! as RawBuilding[])
+    : []
   const routes: unknown[] = Array.isArray(state?.routes) ? state!.routes! : []
 
   const byType: Record<string, number> = {}

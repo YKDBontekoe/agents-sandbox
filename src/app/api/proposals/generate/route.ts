@@ -6,16 +6,6 @@ import { createOpenAI } from '@ai-sdk/openai'
 import { z } from 'zod'
 import { buildGameContext } from '@/lib/gameContext'
 
-interface GameState {
-  id: string
-  cycle: number
-  resources: Record<string, number>
-  buildings?: Array<{ typeId?: string; traits?: Record<string, unknown> }>
-  routes?: unknown[]
-  skills?: string[]
-  skill_tree_seed?: number
-}
-
 const openai = createOpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
 const BodySchema = z.object({
@@ -44,7 +34,7 @@ export async function POST(req: NextRequest) {
   const { guild = 'Wardens' } = parsedBody.data
 
   // Get latest state
-  const state = (await uow.gameStates.getLatest()) as GameState | null
+  const state = await uow.gameStates.getLatest()
   if (!state) return NextResponse.json({ error: 'No game state' }, { status: 400 })
 
   const hasOpenAI = !!process.env.OPENAI_API_KEY &&

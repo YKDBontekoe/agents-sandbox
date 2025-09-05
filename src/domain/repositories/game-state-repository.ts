@@ -8,6 +8,7 @@ export interface GameState {
   edicts?: Record<string, number>
   skills?: string[]
   skill_tree_seed?: number
+  max_cycle?: number
   updated_at: string
 }
 
