@@ -1,18 +1,6 @@
-import { type SimResources } from '@/components/game/resourceUtils';
+import { loadPluginsSync, type SimBuildingType } from '@/domain/plugins';
 
-export interface SimBuildingType {
-  id: string;
-  name: string;
-  cost: Partial<SimResources>;
-  inputs: Partial<SimResources>;
-  outputs: Partial<SimResources>;
-  /** Maximum number of workers this building can employ */
-  workCapacity?: number;
-  /** Maximum upgrade level (>=1). Default 3. */
-  maxLevel?: number;
-}
-
-export const SIM_BUILDINGS: Record<string, SimBuildingType> = {
+export const CORE_BUILDINGS: Record<string, SimBuildingType> = {
   council_hall: {
     id: 'council_hall',
     name: 'Council Hall',
@@ -97,4 +85,15 @@ export const SIM_BUILDINGS: Record<string, SimBuildingType> = {
     workCapacity: 2,
     maxLevel: 3,
   },
+};
+
+const plugins = typeof window === 'undefined' ? loadPluginsSync() : [];
+const modBuildings: Record<string, SimBuildingType> = {};
+for (const p of plugins) {
+  Object.assign(modBuildings, p.buildings);
+}
+
+export const SIM_BUILDINGS: Record<string, SimBuildingType> = {
+  ...CORE_BUILDINGS,
+  ...modBuildings,
 };

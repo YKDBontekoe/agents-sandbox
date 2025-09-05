@@ -1,4 +1,5 @@
-import { SIM_BUILDINGS, type SimBuildingType } from '@/lib/buildingCatalog';
+import { SIM_BUILDINGS } from '@/lib/buildingCatalog';
+import type { SimBuildingType } from '@/domain/plugins';
 export { SIM_BUILDINGS };
 export type { SimBuildingType };
 
