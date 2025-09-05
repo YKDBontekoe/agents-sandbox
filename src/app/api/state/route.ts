@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { SupabaseUnitOfWork } from '@/infrastructure/supabase/unit-of-work'
 import logger from '@/lib/logger'
 import { z } from 'zod'
+import type { GameState } from '@engine'
 
 export async function GET() {
   try {
@@ -66,7 +67,7 @@ export async function PATCH(req: NextRequest) {
   const supabase = createSupabaseServerClient()
   const uow = new SupabaseUnitOfWork(supabase)
   try {
-    const data = await uow.gameStates.update(id, updates)
+    const data = await uow.gameStates.update(id, updates as Partial<GameState>)
     return NextResponse.json(data)
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error)
