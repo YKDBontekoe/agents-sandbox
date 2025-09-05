@@ -1,4 +1,12 @@
-import { type SimResources } from '@/components/game/resourceUtils';
+export interface SimResources {
+  grain: number;
+  coin: number;
+  mana: number;
+  favor: number;
+  workers: number;
+  wood: number;
+  planks: number;
+}
 
 export interface SimBuildingType {
   id: string;
