@@ -39,7 +39,7 @@ export async function POST(req: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: proposalParsed.error.message }, { status: 500 })
   }
   const proposal = proposalParsed.data
-  const gameStateParsed = GameStateSchema.safeParse((proposalRow as any).game_state)
+  const gameStateParsed = GameStateSchema.safeParse(proposalRow.game_state)
   const gameState = gameStateParsed.success ? gameStateParsed.data : undefined
 
   const hasOpenAI = !!process.env.OPENAI_API_KEY &&
@@ -123,25 +123,36 @@ export async function POST(req: NextRequest, context: RouteContext) {
 Return strict JSON: { predicted_delta: {resource:number,...}, risk_note: string }`
 
   const p = proposal
-  const stateRes = gameState?.resources ?? {}
-  // Fetch extra context from state row if present
-  const buildings: Array<{ typeId?: string; traits?: Record<string, any> }> = Array.isArray((gameState as any)?.buildings) ? (gameState as any).buildings as any : []
-  const routes: Array<any> = Array.isArray((gameState as any)?.routes) ? (gameState as any).routes as any : []
+  const {
+    resources: stateRes = {},
+    buildings = [],
+    routes = [],
+    skills = [],
+    skill_tree_seed,
+  } = gameState ?? {}
   const byType: Record<string, number> = {}
   let farmsNearWater = 0, shrinesNearMountains = 0, campsNearForest = 0
   for (const b of buildings) {
     const t = String(b.typeId || '')
     byType[t] = (byType[t] ?? 0) + 1
-    const tr = (b as any).traits || {}
+    const tr = b.traits || {}
     if (t === 'farm' && Number(tr.waterAdj || 0) > 0) farmsNearWater++
     if (t === 'shrine' && Number(tr.mountainAdj || 0) > 0) shrinesNearMountains++
     if (t === 'lumber_camp' && Number(tr.forestAdj || 0) > 0) campsNearForest++
   }
-  let skillModifiers: any = { resource_multipliers: {}, building_multipliers: {}, upkeep_grain_per_worker_delta: 0 }
-  const skills: string[] = Array.isArray((gameState as any)?.skills) ? (gameState as any).skills as any : []
+  type SkillModifiers = {
+    resource_multipliers: Record<string, number>
+    building_multipliers: Record<string, number>
+    upkeep_grain_per_worker_delta: number
+  }
+  let skillModifiers: SkillModifiers = {
+    resource_multipliers: {},
+    building_multipliers: {},
+    upkeep_grain_per_worker_delta: 0,
+  }
   if (skills.length > 0) {
     try {
-      const tree = generateSkillTree(((gameState as any)?.skill_tree_seed as number) ?? 12345)
+      const tree = generateSkillTree(skill_tree_seed ?? 12345)
       const unlocked = tree.nodes.filter(n => skills.includes(n.id))
       const acc = accumulateEffects(unlocked)
       skillModifiers = {

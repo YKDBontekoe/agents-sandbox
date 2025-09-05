@@ -95,14 +95,13 @@ Guilds: Wardens(defense), Alchemists(resources), Scribes(infra), Stewards(policy
 Return JSON array, each item: { title, description, predicted_delta: {resource:number,...} }`
 
   // Build planning context
-  const buildings: Array<{ typeId?: string; traits?: Record<string, any> }> = Array.isArray((gameState as any).buildings) ? (gameState as any).buildings as any : []
-  const routes: Array<any> = Array.isArray((gameState as any).routes) ? (gameState as any).routes as any : []
+  const { buildings, routes, skills, skill_tree_seed } = gameState
   const byType: Record<string, number> = {}
   let farmsNearWater = 0, shrinesNearMountains = 0, campsNearForest = 0
   for (const b of buildings) {
     const t = String(b.typeId || '')
     byType[t] = (byType[t] ?? 0) + 1
-    const tr = (b as any).traits || {}
+    const tr = b.traits || {}
     if (t === 'farm' && Number(tr.waterAdj || 0) > 0) farmsNearWater++
     if (t === 'shrine' && Number(tr.mountainAdj || 0) > 0) shrinesNearMountains++
     if (t === 'lumber_camp' && Number(tr.forestAdj || 0) > 0) campsNearForest++
@@ -111,11 +110,19 @@ Return JSON array, each item: { title, description, predicted_delta: {resource:n
   const routesCount = routes.length
   const terrainSummary = { farmsNearWater, shrinesNearMountains, campsNearForest }
   // Compute skill modifiers if gameState.skills present
-  let skillModifiers: any = { resource_multipliers: {}, building_multipliers: {}, upkeep_grain_per_worker_delta: 0 }
-  const skills: string[] = Array.isArray((gameState as any).skills) ? (gameState as any).skills as any : []
+  type SkillModifiers = {
+    resource_multipliers: Record<string, number>
+    building_multipliers: Record<string, number>
+    upkeep_grain_per_worker_delta: number
+  }
+  let skillModifiers: SkillModifiers = {
+    resource_multipliers: {},
+    building_multipliers: {},
+    upkeep_grain_per_worker_delta: 0,
+  }
   if (skills.length > 0) {
     try {
-      const tree = generateSkillTree((gameState as any).skill_tree_seed ?? 12345)
+      const tree = generateSkillTree(skill_tree_seed ?? 12345)
       const unlocked = tree.nodes.filter(n => skills.includes(n.id))
       const acc = accumulateEffects(unlocked)
       skillModifiers = {
@@ -130,7 +137,7 @@ Return JSON array, each item: { title, description, predicted_delta: {resource:n
     cycle: gameState.cycle,
     resources: gameState.resources,
     guild,
-    skill_tree_seed: (gameState as any).skill_tree_seed ?? 12345,
+    skill_tree_seed: skill_tree_seed ?? 12345,
     buildings_by_type: byType,
     routes_count: routesCount,
     storehouse_present: storehousePresent,

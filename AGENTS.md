@@ -49,6 +49,7 @@ Related docs: docs/agents/ARCHITECTURE.md, docs/agents/PROMPTS.md, docs/agents/S
   - `browser.ts` (anon; read-focused)
 - `docs/agents/` — this guide and deep dives
 - `supabase/migrations/` — schema and idempotent updates for `game_state`, `proposals`
+- `src/lib/schemas.ts` — shared Zod schemas for core data (game state, proposals, AI payloads)
 
 ## Design Canon
 
@@ -124,6 +125,8 @@ Pre/Post Conditions (per route)
 - Proposal: `{ id, state_id, guild, title, description, predicted_delta: Record<string, number>, status }`
 - GameState: `{ id, cycle, resources: { grain, coin, mana, favor, unrest, threat }, updated_at }`
 `predicted_delta` values are numeric and additive; negatives allowed where sensible.
+
+Shared Zod schemas for these shapes live in `src/lib/schemas.ts` with corresponding `z.infer` TypeScript exports.
 
 Recommended bounds (soft): grain ±500, wood ±400, planks ±300, coin ±100, mana ±50, favor ±10, unrest ±10, threat ±10. Outliers should be rare and justified.
 
