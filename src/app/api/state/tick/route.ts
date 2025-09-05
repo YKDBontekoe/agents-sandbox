@@ -4,7 +4,7 @@ import { SupabaseUnitOfWork } from '@/infrastructure/supabase/unit-of-work'
 import { SIM_BUILDINGS } from '@/lib/buildingCatalog'
 import type { GameState } from '@/domain/repositories/game-state-repository'
 
-type ResKey = 'grain' | 'wood' | 'planks' | 'coin' | 'mana' | 'favor' | 'unrest' | 'threat';
+type ResKey = string;
 
 interface BuildingData {
   id?: string
@@ -92,7 +92,7 @@ export async function POST() {
     for (const [k, v] of Object.entries(def.inputs)) {
       if (k === 'workers') continue
       const need = (Number(v ?? 0)) * ratio
-      const cur = Number(resources[k as ResKey] ?? 0)
+      const cur = Number(resources[k] ?? 0)
       if (cur < need) { canProduce = false; break }
     }
     if (!canProduce) continue
@@ -105,8 +105,7 @@ export async function POST() {
       if (k === 'workers') {
         workers = Math.max(0, workers - need)
       } else {
-        const key = k as ResKey
-        resources[key] = Math.max(0, Number(resources[key] ?? 0) - need)
+        resources[k] = Math.max(0, Number(resources[k] ?? 0) - need)
       }
     }
     // Produce outputs
@@ -139,8 +138,7 @@ export async function POST() {
       if (k === 'workers') {
         workers = Math.max(0, workers + out)
       } else {
-        const key = k as ResKey
-        resources[key] = Math.max(0, Number(resources[key] ?? 0) + out)
+        resources[k] = Math.max(0, Number(resources[k] ?? 0) + out)
       }
     }
   }

@@ -8,6 +8,8 @@ import { z } from 'zod'
 import { accumulateEffects, generateSkillTree } from '@/components/game/skills/procgen'
 import { rateLimit } from '@/middleware/rateLimit'
 import { buildGameContext } from '@/lib/gameContext'
+import { RESOURCE_CATALOG } from '@/lib/resources'
+import { GUILD_CATALOG } from '@/lib/guilds'
 
 interface GameState {
   id: string
@@ -100,9 +102,13 @@ export async function POST(req: NextRequest) {
   }
 
   // Use AI to draft 1-3 proposals aligned with README fantasy
+  const resourcesLine = Object.keys(RESOURCE_CATALOG).join(', ')
+  const guildLine = Object.entries(GUILD_CATALOG)
+    .map(([k, v]) => `${k}(${v.description})`)
+    .join(', ')
   const system = `You are an autonomous guild agent in a fantasy realm management game. Propose concise, actionable proposals with predicted resource deltas.
-Resources: grain, coin, mana, favor, unrest, threat.
-Guilds: Wardens(defense), Alchemists(resources), Scribes(infra), Stewards(policy).
+Resources: ${resourcesLine}.
+Guilds: ${guildLine}.
 Return JSON array, each item: { title, description, predicted_delta: {resource:number,...} }`
 
   // Build planning context
