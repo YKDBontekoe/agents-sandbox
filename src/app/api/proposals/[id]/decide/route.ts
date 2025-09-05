@@ -38,8 +38,9 @@ export async function POST(req: NextRequest, context: RouteContext) {
   const status = decision === 'accept' ? 'accepted' : 'rejected'
   try {
     await uow.proposals.update(id, { status })
-  } catch (upErr: any) {
-    return NextResponse.json({ error: upErr.message }, { status: 500 })
+  } catch (upErr: unknown) {
+    const message = upErr instanceof Error ? upErr.message : String(upErr)
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 
   return NextResponse.json({ ok: true })

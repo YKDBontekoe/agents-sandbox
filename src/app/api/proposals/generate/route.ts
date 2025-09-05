@@ -85,8 +85,9 @@ export async function POST(req: NextRequest) {
     try {
       const inserted = await uow.proposals.create(rows)
       return NextResponse.json(inserted)
-    } catch (insErr: any) {
-      return NextResponse.json({ error: insErr.message }, { status: 500 })
+    } catch (insErr: unknown) {
+      const message = insErr instanceof Error ? insErr.message : String(insErr)
+      return NextResponse.json({ error: message }, { status: 500 })
     }
   }
 
@@ -147,7 +148,8 @@ Return JSON array, each item: { title, description, predicted_delta: {resource:n
   try {
     const inserted = await uow.proposals.create(rows)
     return NextResponse.json(inserted)
-  } catch (insErr: any) {
-    return NextResponse.json({ error: insErr.message }, { status: 500 })
+  } catch (insErr: unknown) {
+    const message = insErr instanceof Error ? insErr.message : String(insErr)
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }

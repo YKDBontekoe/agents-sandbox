@@ -68,8 +68,9 @@ export async function PATCH(req: NextRequest) {
   try {
     const data = await uow.gameStates.update(id, updates)
     return NextResponse.json(data)
-  } catch (error: any) {
-    logger.error('Supabase update error:', error.message)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error)
+    logger.error('Supabase update error:', message)
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }
