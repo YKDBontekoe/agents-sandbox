@@ -2,57 +2,17 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import logger from '@/lib/logger'
 import { z } from 'zod'
+import { queryBus } from '@/application/bus'
+import { GetLatestStateQuery } from '@/application/queries/getLatestState'
 
 export async function GET() {
   try {
-    const supabase = createSupabaseServerClient()
-    
-    const { data: state, error } = await supabase
-      .from('game_state')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-
-    if (error) {
-      logger.error('Supabase error:', error.message)
-      return NextResponse.json(
-        { error: `Database error: ${error.message}` },
-        { status: 503 }
-      )
-    }
-
-    // If no state, create one
-    if (!state) {
-      const { data: created, error: createErr } = await supabase
-        .from('game_state')
-        .insert({ skill_tree_seed: Math.floor(Math.random() * 1e9) })
-        .select('*')
-        .single()
-      if (createErr) {
-        logger.error('Supabase create error:', createErr.message)
-        return NextResponse.json(
-          { error: 'Failed to create game state' },
-          { status: 503 }
-        )
-      }
-      return NextResponse.json(created)
-    }
-
-    if (!state.skill_tree_seed) {
-      const { data: patched } = await supabase
-        .from('game_state')
-        .update({ skill_tree_seed: Math.floor(Math.random() * 1e9) })
-        .eq('id', state.id)
-        .select('*')
-        .maybeSingle()
-      return NextResponse.json(patched || state)
-    }
+    const state = await queryBus.execute(new GetLatestStateQuery())
     return NextResponse.json(state)
-  } catch (error) {
-    logger.error('Supabase connection error:', error)
+  } catch (error: any) {
+    logger.error('State fetch error:', error)
     return NextResponse.json(
-      { error: 'Service unavailable - database not configured' },
+      { error: error.message },
       { status: 503 }
     )
   }
