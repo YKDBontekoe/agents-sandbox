@@ -28,6 +28,12 @@ export interface Notification {
   message: string;
   timestamp: number;
   persistent?: boolean;
+  read?: boolean;
+  action?: {
+    kind: 'open-council' | 'open-edicts' | 'open-settings' | 'focus-tile' | 'navigate' | string;
+    label?: string;
+    payload?: any;
+  };
 }
 
 export interface GameHUDProps {

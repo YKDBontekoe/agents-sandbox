@@ -38,7 +38,8 @@ import GoalBanner from '@/components/game/GoalBanner';
 import OnboardingGuide from '@/components/game/OnboardingGuide';
 import ModularWorkerPanel from '@/components/game/hud/panels/ModularWorkerPanel';
 import ModularQuestPanel from '@/components/game/hud/panels/ModularQuestPanel';
-import { NotificationCenter } from '@/components/game/hud/NotificationCenter';
+import NotificationHost from '@/components/game/hud/NotificationHost';
+import { useNotify } from '@/state/useNotify';
 import type { Notification } from '@/components/game/hud/types';
 import { useIdGenerator } from '@/hooks/useIdGenerator';
 // (settings && other panels are currently not rendered on this page)
@@ -356,9 +357,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   const [acceptedNotice, setAcceptedNotice] = useState<{ title: string; delta: Record<string, number> } | null>(null);
   const acceptedNoticeKeyRef = useRef<string | null>(null);
   const [markers, setMarkers] = useState<{ id: string; x: number; y: number; label?: string }[]>([]);
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const pushToast = (n: Omit<Notification, 'id' | 'timestamp'>) => setNotifications((prev) => [{ id: `n-${generateId()}`, timestamp: Date.now(), ...n }, ...prev].slice(0, 5));
-  const dismissToast = (id: string) => setNotifications((prev) => prev.filter(n => n.id !== id));
+  const notify = useNotify();
   // building hover details disabled in stable mode
   const [gameMode, setGameMode] = useState<'casual' | 'advanced'>('casual');
   const [, setShowOnboarding] = useState(false);
@@ -397,7 +396,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     setState(prev => prev ? { ...prev, resources: newRes } : prev);
     await saveState({ resources: newRes });
     const parts = Object.entries(delta).map(([k,v]) => `${k} +${v}`).join('  ')
-    pushToast({ type: 'success', title: 'Milestone Reward', message: parts })
+      notify({ type: 'success', title: 'Milestone Reward', message: parts })
   };
   const checkMilestones = async () => {
     if (!state) return;
@@ -450,7 +449,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
       setState(prev => prev ? { ...prev, resources: newResServer, skills: nextSkills as any } : prev);
       await saveState({ resources: newResServer, buildings: placedBuildings, routes, workers: state?.workers, skills: nextSkills } as any);
       setUnlockedSkillIds(nextSkills);
-      pushToast({ type: 'success', title: 'Skill Unlocked', message: n.title })
+      notify({ type: 'success', title: 'Skill Unlocked', message: n.title })
       try {
         const prev = JSON.parse(localStorage.getItem('ad_skills_unlocked') || '{}');
         prev[n.id] = true; localStorage.setItem('ad_skills_unlocked', JSON.stringify(prev));
@@ -644,7 +643,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Failed to generate proposals');
       await fetchProposals();
-      pushToast({ type: 'success', title: 'Proposals Summoned', message: 'New counsel ideas await review.' })
+      notify({ type: 'success', title: 'Proposals Summoned', message: 'New counsel ideas await review.' })
       setDismissedGuide(true);
       setGuideProgress(prev => ({ ...prev, generated: true }));
     } catch (e: unknown) {
@@ -665,9 +664,9 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
       const p = proposals.find(p => p.id === id);
       if (p?.predicted_delta) {
         const parts = Object.entries(p.predicted_delta).slice(0, 3).map(([k,v]) => `${k} ${v>=0?'+':''}${v}`).join('  ');
-        pushToast({ type: 'info', title: 'Scry Result', message: parts || 'Forecast updated.' })
+        notify({ type: 'info', title: 'Scry Result', message: parts || 'Forecast updated.' })
       } else {
-        pushToast({ type: 'info', title: 'Scry Result', message: 'Forecast updated.' })
+        notify({ type: 'info', title: 'Scry Result', message: 'Forecast updated.' })
       }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
@@ -686,7 +685,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
       if (!res.ok) throw new Error(json.error || 'Failed to decide');
       if (decision === 'accept' && selected) {
         setAcceptedNotice({ title: selected.title, delta: selected.predicted_delta || {} });
-        pushToast({ type: 'success', title: 'Decree Accepted', message: selected.title });
+        notify({ type: 'success', title: 'Decree Accepted', message: selected.title });
         setDismissedGuide(true);
         setGuideProgress(prev => ({ ...prev, accepted: true }));
         if (selectedTile) {
@@ -694,7 +693,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
         }
         setTimeout(() => setAcceptedNotice(null), 4000);
       } else if (decision === 'reject' && selected) {
-        pushToast({ type: 'warning', title: 'Proposal Rejected', message: selected.title });
+        notify({ type: 'warning', title: 'Proposal Rejected', message: selected.title });
       }
       await fetchProposals();
     } catch (e: unknown) {
@@ -961,7 +960,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
                 if (requireRoadConfirm) { setPendingRoad({ tiles }); return; }
                 try {
                   const unique = Array.from(new Set(tiles.map(t=>`${t.x},${t.y}`))).length;
-                  pushToast({ type: 'info', title: 'Road Proposal', message: `Auto-approved: ${unique} tiles` });
+                  notify({ type: 'info', title: 'Road Proposal', message: `Auto-approved: ${unique} tiles` });
                 } catch {}
                 applyRoads(tiles);
               }}
@@ -1093,6 +1092,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
               }}
             />
           </IntegratedHUDSystem>
+          <NotificationHost />
           </GameProvider>
 
           {selectedTile && (
@@ -1276,7 +1276,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
                 (updated[idx] as any).recipe = recipe === 'fine' ? 'fine' : 'basic';
                 setPlacedBuildings(updated);
                 await saveState({ buildings: updated });
-                pushToast({ type: 'info', title: 'Recipe Updated', message: `${SIM_BUILDINGS[updated[idx].typeId].name} → ${recipe === 'fine' ? 'Fine Planks' : 'Planks'}` })
+                notify({ type: 'info', title: 'Recipe Updated', message: `${SIM_BUILDINGS[updated[idx].typeId].name} → ${recipe === 'fine' ? 'Fine Planks' : 'Planks'}` })
               }}
             />
           )}

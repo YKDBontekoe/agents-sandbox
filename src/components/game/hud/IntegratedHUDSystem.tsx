@@ -94,6 +94,9 @@ function HUDSystemCore({
             {/* Subtle left-edge gradient for depth */}
             <div className="relative">
               <div className="pointer-events-none absolute left-0 top-0 h-full w-2 bg-gradient-to-l from-black/10 to-transparent" />
+              {/* Scroll hint shadows (top/bottom) */}
+              <div className="pointer-events-none sticky top-0 h-4 -mt-4 bg-gradient-to-b from-black/10 to-transparent" />
+              <div className="pointer-events-none sticky bottom-0 h-4 -mb-4 bg-gradient-to-t from-black/10 to-transparent" />
             </div>
             {/* Smart, uncluttered sidebar: no manual density buttons; panels self-adapt */}
             <div className="mt-1" />

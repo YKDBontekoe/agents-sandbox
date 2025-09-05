@@ -18,6 +18,10 @@ const QUESTS: Array<{ id: string; text: string }> = [
 ];
 
 export default function ModularQuestPanel({ completed, variant = 'default', collapsible = true }: ModularQuestPanelProps) {
+  // Count remaining to surface a smart title and auto-hide when done
+  const remaining = QUESTS.reduce((n, q) => n + (completed[q.id] ? 0 : 1), 0);
+  const next = QUESTS.find(q => !completed[q.id]);
+  if (remaining === 0) return null; // hide panel entirely when all early quests are done
   // Default to collapsed; users can peek as needed
   const [isCollapsed, setIsCollapsed] = useState(true);
 
@@ -26,7 +30,7 @@ export default function ModularQuestPanel({ completed, variant = 'default', coll
       id: 'quest-panel',
       zone: 'sidebar-right',
       priority: 6,
-      responsive: { hideOnMobile: true },
+      responsive: { hideOnMobile: true, collapseOnMobile: true },
       accessibility: { ariaLabel: 'Quest tracker', role: 'complementary' }
     },
     component: ModularQuestPanel,
@@ -41,13 +45,21 @@ export default function ModularQuestPanel({ completed, variant = 'default', coll
 
   return (
     <ResponsivePanel
-      title={variant !== 'minimal' ? 'Quests' : 'Qst'}
+      title={variant !== 'minimal' ? `Quests` : `Q`}
       icon={titleIcon}
       variant={variant}
       collapsible={collapsible}
       isCollapsed={isCollapsed}
       onToggleCollapse={() => setIsCollapsed(!isCollapsed)}
       priority="low"
+      actions={(
+        <div className="flex items-center gap-1">
+          <span className="px-1.5 py-0.5 rounded-full text-[10px] leading-none bg-indigo-600 text-white tabular-nums">{remaining}</span>
+          {next && (
+            <span className="max-w-[10rem] truncate px-1 py-0.5 rounded bg-slate-100 text-[10px] text-slate-700 hidden md:inline" title={next.text}>{next.text}</span>
+          )}
+        </div>
+      )}
       className="min-w-0"
     >
       <ul className="px-1 py-1 space-y-1 text-xs">

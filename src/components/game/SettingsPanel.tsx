@@ -46,6 +46,11 @@ export interface SettingsPanelProps {
   onChangeCitizensCount?: (value: number) => void;
   citizensSeed?: number;
   onChangeCitizensSeed?: (value: number) => void;
+  // Inbox
+  notifications?: Array<{ id: string; title: string; message: string; type: string; timestamp: number; read?: boolean }>;
+  onDismissNotification?: (id: string) => void;
+  onMarkNotificationRead?: (id: string) => void;
+  onClearNotifications?: () => void;
 }
 
 // Settings categories for better organization
@@ -100,7 +105,8 @@ const CategorySection: React.FC<{
   isExpanded: boolean;
   onToggle: () => void;
   searchTerm: string;
-}> = ({ category, isExpanded, onToggle, searchTerm }) => {
+  renderCustom?: () => React.ReactNode;
+}> = ({ category, isExpanded, onToggle, searchTerm, renderCustom }) => {
   const filteredSettings = useMemo(() => {
     if (!searchTerm) return category.settings;
     return category.settings.filter(setting => 
@@ -134,9 +140,13 @@ const CategorySection: React.FC<{
       
       {isExpanded && (
         <div id={`category-${category.id}`} className="p-4 space-y-4 animate-slide-down">
-          {filteredSettings.map(setting => (
-            <SettingControl key={setting.id} setting={setting} />
-          ))}
+          {category.id === 'inbox' && renderCustom ? (
+            renderCustom()
+          ) : (
+            filteredSettings.map(setting => (
+              <SettingControl key={setting.id} setting={setting} />
+            ))
+          )}
         </div>
       )}
     </div>
@@ -310,6 +320,10 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
   onChangeCitizensCount,
   citizensSeed,
   onChangeCitizensSeed,
+  notifications = [],
+  onDismissNotification,
+  onMarkNotificationRead,
+  onClearNotifications,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(['display', 'gameplay']));
@@ -317,6 +331,13 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
   // Mock settings data - in a real app, this would come from props or context
   const categories: SettingCategory[] = useMemo(() => [
+    {
+      id: 'inbox',
+      name: 'Inbox',
+      icon: faInfoCircle,
+      description: 'Notifications & history',
+      settings: []
+    },
     // World category (game UI controls)
     {
       id: 'world',
@@ -646,6 +667,34 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 isExpanded={expandedCategories.has(category.id)}
                 onToggle={() => toggleCategory(category.id)}
                 searchTerm={searchTerm}
+                renderCustom={category.id === 'inbox' ? () => (
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs text-muted">{notifications.length} messages</span>
+                      <div className="flex items-center gap-2">
+                        <button className="px-2 py-0.5 text-xs rounded border border-slate-300" onClick={() => onClearNotifications?.()}>Clear</button>
+                      </div>
+                    </div>
+                    <div className="divide-y divide-slate-200 rounded-md border border-slate-200 overflow-hidden">
+                      {notifications.length === 0 && (
+                        <div className="p-3 text-xs text-muted">No messages yet.</div>
+                      )}
+                      {notifications.map(n => (
+                        <div key={n.id} className={`p-3 text-sm flex items-start justify-between gap-2 ${n.read ? 'bg-white' : 'bg-indigo-50'}`}>
+                          <div>
+                            <div className="font-medium text-slate-800">{n.title}</div>
+                            <div className="text-slate-600 text-xs">{n.message}</div>
+                            <div className="text-[10px] text-slate-400 mt-0.5">{new Date(n.timestamp).toLocaleString()}</div>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            {!n.read && (<button className="px-2 py-0.5 text-[10px] rounded border border-slate-300" onClick={() => onMarkNotificationRead?.(n.id)}>Mark read</button>)}
+                            <button className="px-2 py-0.5 text-[10px] rounded border border-slate-300" onClick={() => onDismissNotification?.(n.id)}>Dismiss</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : undefined}
               />
             ))}
           </div>
