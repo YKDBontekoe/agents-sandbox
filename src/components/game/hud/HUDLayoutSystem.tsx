@@ -95,6 +95,8 @@ export function useScreenSize(breakpoints: ResponsiveBreakpoints = DEFAULT_BREAK
   const [screenSize, setScreenSize] = useState<ScreenSize>('desktop');
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
     const updateScreenSize = () => {
       const width = window.innerWidth;
       if (width <= breakpoints.mobile) {

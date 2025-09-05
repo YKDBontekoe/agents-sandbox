@@ -29,6 +29,8 @@ import type { CrisisData } from '@/components/game/CrisisModal';
 import GoalBanner from '@/components/game/GoalBanner';
 import OnboardingGuide from '@/components/game/OnboardingGuide';
 import QuestTracker from '@/components/game/QuestTracker';
+import { NotificationCenter } from '@/components/game/hud/NotificationCenter';
+import type { Notification } from '@/components/game/hud/types';
 import { useIdGenerator } from '@/hooks/useIdGenerator';
 // (settings && other panels are currently not rendered on this page)
 // layout preferences not used on this page
@@ -55,6 +57,8 @@ function TileInfoPanel({
   tutorialFree,
   onConsumeTutorialFree,
   onTutorialProgress,
+  allowFineSawmill,
+  onSetRecipe,
 }: {
   selected: { x: number; y: number; tileType?: string };
   resources: GameResources;
@@ -73,6 +77,8 @@ function TileInfoPanel({
   tutorialFree: Partial<Record<BuildTypeId, number>>;
   onConsumeTutorialFree: (typeId: BuildTypeId) => void;
   onTutorialProgress: (evt: { type: 'built' | 'openedCouncil' }) => void;
+  allowFineSawmill: boolean;
+  onSetRecipe: (buildingId: string, recipe: 'basic' | 'fine' | 'premium') => void;
 }) {
   const { x, y, tileType } = selected;
   const occupied = placedBuildings.find(b => b.x === x && b.y === y) || null;
@@ -131,8 +137,43 @@ function TileInfoPanel({
               <button onClick={() => onUpgrade(occupied.id)} className="px-2 py-1 text-xs rounded bg-amber-600 hover:bg-amber-700 text-white">Upgrade</button>
               <button onClick={() => onDismantle(occupied.id)} className="px-2 py-1 text-xs rounded bg-slate-200 hover:bg-slate-300 text-slate-700">Dismantle</button>
             </div>
+            {occupied.typeId === 'sawmill' && (
+              <div className="flex items-center gap-2 pt-1 text-xs">
+                <span className="text-slate-600">Recipe:</span>
+                <button
+                  onClick={() => onSetRecipe(occupied.id, 'basic')}
+                  className={`px-2 py-0.5 rounded border ${((occupied as any).recipe ?? 'basic') === 'basic' ? 'bg-emerald-600 text-white border-emerald-700' : 'bg-slate-100 text-slate-700 border-slate-300'}`}
+                >
+                  Planks
+                </button>
+                <button
+                  onClick={() => allowFineSawmill && onSetRecipe(occupied.id, 'fine')}
+                  disabled={!allowFineSawmill}
+                  className={`px-2 py-0.5 rounded border ${((occupied as any).recipe) === 'fine' ? 'bg-emerald-600 text-white border-emerald-700' : 'bg-slate-100 text-slate-700 border-slate-300'} ${!allowFineSawmill ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  title={allowFineSawmill ? 'Fine Planks (wood 4 → planks 9)' : 'Requires relevant skill'}
+                >
+                  Fine Planks
+                </button>
+              </div>
+            )}
             {occupied.typeId === 'trade_post' && (
               <div className="flex flex-col gap-2 pt-1">
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="text-slate-600">Trade Mode:</span>
+                  <button
+                    onClick={() => onSetRecipe(occupied.id, 'basic')}
+                    className={`px-2 py-0.5 rounded border ${(((occupied as any).recipe ?? 'basic') === 'basic') ? 'bg-emerald-600 text-white border-emerald-700' : 'bg-slate-100 text-slate-700 border-slate-300'}`}
+                  >
+                    Standard
+                  </button>
+                  <button
+                    onClick={() => onSetRecipe(occupied.id, 'premium')}
+                    className={`px-2 py-0.5 rounded border ${(((occupied as any).recipe) === 'premium') ? 'bg-emerald-600 text-white border-emerald-700' : 'bg-slate-100 text-slate-700 border-slate-300'}`}
+                    title={'Premium Goods (grain 3 → coin 12)'}
+                  >
+                    Premium
+                  </button>
+                </div>
                 {routeDraftFrom === null && (
                   <button onClick={() => onStartRoute(occupied.id)} className="px-2 py-1 text-xs rounded bg-blue-600 hover:bg-blue-700 text-white">Create Trade Route</button>
                 )}
@@ -302,6 +343,9 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   const [acceptedNotice, setAcceptedNotice] = useState<{ title: string; delta: Record<string, number> } | null>(null);
   const acceptedNoticeKeyRef = useRef<string | null>(null);
   const [markers, setMarkers] = useState<{ id: string; x: number; y: number; label?: string }[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const pushToast = (n: Omit<Notification, 'id' | 'timestamp'>) => setNotifications((prev) => [{ id: `n-${generateId()}`, timestamp: Date.now(), ...n }, ...prev].slice(0, 5));
+  const dismissToast = (id: string) => setNotifications((prev) => prev.filter(n => n.id !== id));
   // building hover details disabled in stable mode
   const [gameMode, setGameMode] = useState<'casual' | 'advanced'>('casual');
   const [, setShowOnboarding] = useState(false);
@@ -332,6 +376,8 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     (Object.keys(delta) as Array<keyof typeof delta>).forEach(k => { newRes[k as string] = Math.max(0, (newRes[k as string] || 0) + (delta[k] || 0)); });
     setState(prev => prev ? { ...prev, resources: newRes } : prev);
     await saveState({ resources: newRes });
+    const parts = Object.entries(delta).map(([k,v]) => `${k} +${v}`).join('  ')
+    pushToast({ type: 'success', title: 'Milestone Reward', message: parts })
   };
   const checkMilestones = async () => {
     if (!state) return;
@@ -380,9 +426,11 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
       newResServer.coin = Math.max(0, newResServer.coin - needed.coin);
       newResServer.mana = Math.max(0, newResServer.mana - needed.mana);
       newResServer.favor = Math.max(0, newResServer.favor - needed.favor);
-      setState(prev => prev ? { ...prev, resources: newResServer } : prev);
-      await saveState({ resources: newResServer });
-      setUnlockedSkillIds(prev => [...prev, n.id]);
+      const nextSkills = [...unlockedSkillIds, n.id];
+      setState(prev => prev ? { ...prev, resources: newResServer, skills: nextSkills as any } : prev);
+      await saveState({ resources: newResServer, buildings: placedBuildings, routes, workers: state?.workers, skills: nextSkills } as any);
+      setUnlockedSkillIds(nextSkills);
+      pushToast({ type: 'success', title: 'Skill Unlocked', message: n.title })
       try {
         const prev = JSON.parse(localStorage.getItem('ad_skills_unlocked') || '{}');
         prev[n.id] = true; localStorage.setItem('ad_skills_unlocked', JSON.stringify(prev));
@@ -568,6 +616,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Failed to generate proposals');
       await fetchProposals();
+      pushToast({ type: 'success', title: 'Proposals Summoned', message: 'New counsel ideas await review.' })
       setDismissedGuide(true);
       setGuideProgress(prev => ({ ...prev, generated: true }));
     } catch (e: unknown) {
@@ -584,6 +633,14 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Failed to scry');
       await fetchProposals();
+      // Show a brief summary toast of scry (best-effort)
+      const p = proposals.find(p => p.id === id);
+      if (p?.predicted_delta) {
+        const parts = Object.entries(p.predicted_delta).slice(0, 3).map(([k,v]) => `${k} ${v>=0?'+':''}${v}`).join('  ');
+        pushToast({ type: 'info', title: 'Scry Result', message: parts || 'Forecast updated.' })
+      } else {
+        pushToast({ type: 'info', title: 'Scry Result', message: 'Forecast updated.' })
+      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -601,12 +658,15 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
       if (!res.ok) throw new Error(json.error || 'Failed to decide');
       if (decision === 'accept' && selected) {
         setAcceptedNotice({ title: selected.title, delta: selected.predicted_delta || {} });
+        pushToast({ type: 'success', title: 'Decree Accepted', message: selected.title });
         setDismissedGuide(true);
         setGuideProgress(prev => ({ ...prev, accepted: true }));
         if (selectedTile) {
           setMarkers(prev => [{ id: `m-${generateId()}`, x: selectedTile.x, y: selectedTile.y, label: 'Accepted' }, ...prev]);
         }
         setTimeout(() => setAcceptedNotice(null), 4000);
+      } else if (decision === 'reject' && selected) {
+        pushToast({ type: 'warning', title: 'Proposal Rejected', message: selected.title });
       }
       await fetchProposals();
     } catch (e: unknown) {
@@ -1044,6 +1104,16 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
               tutorialFree={tutorialFree}
               onConsumeTutorialFree={(typeId) => setTutorialFree(prev => ({ ...prev, [typeId]: Math.max(0, (prev[typeId] || 0) - 1) }))}
               onTutorialProgress={(evt) => { if (evt.type === 'openedCouncil' && onboardingStep === 4) setOnboardingStep(5); }}
+              allowFineSawmill={(accumulateEffects(generateSkillTree(12345).nodes.filter(n => unlockedSkillIds.includes(n.id))).bldMul['sawmill'] ?? 1) > 1}
+              onSetRecipe={async (buildingId, recipe) => {
+                const idx = placedBuildings.findIndex(b => b.id === buildingId);
+                if (idx === -1) return;
+                const updated = [...placedBuildings];
+                (updated[idx] as any).recipe = recipe === 'fine' ? 'fine' : 'basic';
+                setPlacedBuildings(updated);
+                await saveState({ buildings: updated });
+                pushToast({ type: 'info', title: 'Recipe Updated', message: `${SIM_BUILDINGS[updated[idx].typeId].name} → ${recipe === 'fine' ? 'Fine Planks' : 'Planks'}` })
+              }}
             />
           )}
 

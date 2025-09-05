@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { generateText } from 'ai'
 import { createOpenAI } from '@ai-sdk/openai'
 import { z } from 'zod'
+import { accumulateEffects, generateSkillTree } from '@/components/game/skills/procgen'
 
 const openai = createOpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
@@ -124,11 +125,48 @@ export async function POST(req: NextRequest, context: RouteContext) {
     })
   }
 
-  const system = `You are a scrying oracle. Given a proposal and current resources, forecast likely deltas in a conservative, numeric way.
-Return JSON: { predicted_delta: {resource:number,...}, risk_note: string }`
+  const system = `You are a scrying oracle. Given a proposal and current state context (resources, buildings, routes, terrain, skill modifiers), forecast likely deltas conservatively.
+Return strict JSON: { predicted_delta: {resource:number,...}, risk_note: string }`
 
   const p = proposal as unknown as ProposalRow
-  const user = `Resources: ${JSON.stringify(p.game_state?.resources ?? {})}\nProposal: ${String(p.title ?? '')} - ${String(p.description ?? '')}`
+  const stateRes = p.game_state?.resources ?? {}
+  // Fetch extra context from state row if present
+  const buildings: Array<{ typeId?: string; traits?: Record<string, any> }> = Array.isArray((proposal as any).game_state?.buildings) ? (proposal as any).game_state.buildings as any : []
+  const routes: Array<any> = Array.isArray((proposal as any).game_state?.routes) ? (proposal as any).game_state.routes as any : []
+  const byType: Record<string, number> = {}
+  let farmsNearWater = 0, shrinesNearMountains = 0, campsNearForest = 0
+  for (const b of buildings) {
+    const t = String(b.typeId || '')
+    byType[t] = (byType[t] ?? 0) + 1
+    const tr = (b as any).traits || {}
+    if (t === 'farm' && Number(tr.waterAdj || 0) > 0) farmsNearWater++
+    if (t === 'shrine' && Number(tr.mountainAdj || 0) > 0) shrinesNearMountains++
+    if (t === 'lumber_camp' && Number(tr.forestAdj || 0) > 0) campsNearForest++
+  }
+  let skillModifiers: any = { resource_multipliers: {}, building_multipliers: {}, upkeep_grain_per_worker_delta: 0 }
+  const skills: string[] = Array.isArray((proposal as any).game_state?.skills) ? (proposal as any).game_state.skills as any : []
+  if (skills.length > 0) {
+    try {
+      const tree = generateSkillTree(12345)
+      const unlocked = tree.nodes.filter(n => skills.includes(n.id))
+      const acc = accumulateEffects(unlocked)
+      skillModifiers = {
+        resource_multipliers: acc.resMul,
+        building_multipliers: acc.bldMul,
+        upkeep_grain_per_worker_delta: acc.upkeepDelta,
+      }
+    } catch {}
+  }
+
+  const gameContext = {
+    resources: stateRes,
+    buildings_by_type: byType,
+    routes_count: routes.length,
+    storehouse_present: (byType['storehouse'] ?? 0) > 0,
+    terrain_summary: { farmsNearWater, shrinesNearMountains, campsNearForest },
+    skill_modifiers: skillModifiers,
+  }
+  const user = `Context: ${JSON.stringify(gameContext)}\nProposal: ${String(p.title ?? '')} - ${String(p.description ?? '')}`
   const { text } = await generateText({ model: openai('gpt-4o-mini'), system, prompt: user })
 
   let parsedJson: unknown

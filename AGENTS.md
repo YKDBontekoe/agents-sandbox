@@ -30,6 +30,10 @@ Related docs: docs/agents/ARCHITECTURE.md, docs/agents/PROMPTS.md, docs/agents/S
   - Tick cycle: `POST /api/state/tick` (apply accepted, natural pressures)
 - Supabase helpers: `src/lib/supabase/server.ts` (service role), `src/lib/supabase/browser.ts` (anon)
 - Frontend: `/play` for council loop (observe → propose → scry → decree → execute → progress)
+  - HUD: right-rail stacked panels (Resources, Time, MiniMap, Actions, Skill Tree)
+  - Onboarding: guided first session with free starter builds (Farm, House, Council Hall)
+  - MiniMap: camera-aware with follow-selection option
+  - Skill Tree: procedural, category-aligned; unlocked skills modify production
 
 ## Directory Structure (Agent-Relevant)
 
@@ -49,7 +53,7 @@ Related docs: docs/agents/ARCHITECTURE.md, docs/agents/PROMPTS.md, docs/agents/S
 ## Design Canon
 
 - Guilds: Wardens (defense), Alchemists (resources), Scribes (infrastructure), Stewards (policy)
-- Resources: grain, coin, mana, favor, unrest, threat
+- Resources: grain, coin, mana, favor, wood, planks, unrest, threat
 - Default pressures: mana −5, unrest +1, threat +1 each tick
 - Tone: concise, diegetic, council deliberation — no meta commentary
 
@@ -83,6 +87,13 @@ Delta Semantics
 - Clamp floors at 0 post-application; do not clamp predicted deltas before storage.
 - Prefer small magnitudes; align benefits with corresponding costs (e.g., coin↓ when grain↑).
 
+Production Modifiers (skills/logistics/terrain)
+
+- Skills: unlocked skills apply multipliers to specific resources and/or building types and may adjust grain upkeep per worker.
+- Logistics: producers connected to a `storehouse` via routes gain a modest output bonus.
+- Terrain: adjacency affects output (e.g., farms near water, lumber camps in dense forest, shrines near mountains).
+- Agents should consider these modifiers when proposing and scrying; current modifiers are passed to prompts.
+
 ## Prompting Standards
 
 - Proposal generation system role: “Roleplay the guild. Output JSON array [{ title, description, predicted_delta }]”
@@ -114,7 +125,7 @@ Pre/Post Conditions (per route)
 - GameState: `{ id, cycle, resources: { grain, coin, mana, favor, unrest, threat }, updated_at }`
 `predicted_delta` values are numeric and additive; negatives allowed where sensible.
 
-Recommended bounds (soft): grain ±500, coin ±100, mana ±50, favor ±10, unrest ±10, threat ±10. Outliers should be rare and justified.
+Recommended bounds (soft): grain ±500, wood ±400, planks ±300, coin ±100, mana ±50, favor ±10, unrest ±10, threat ±10. Outliers should be rare and justified.
 
 ## Safety & Security
 
@@ -136,7 +147,7 @@ See docs/agents/OPERATIONS.md for runbooks
 - Unit: validate proposal/scry JSON against zod; clamp out-of-range deltas
 - Simulation: run tick sequences to ensure pressures dominate in absence of decrees
 - UI manual: use `/play` to propose → scry → decide → tick
-Targets: ≥99% JSON validity, <1% parse errors, bounded deltas within recommended ranges. See docs/agents/EVALUATION.md for harness ideas and checklists
+Targets: ≥99% JSON validity, <1% parse errors, bounded deltas within recommended ranges. Include runs with skill modifiers and storehouse logistics. See docs/agents/EVALUATION.md for harness ideas and checklists
 
 ## Extending the Council
 
@@ -158,3 +169,34 @@ See docs/agents/EXTENSIONS.md for patterns and pitfalls
 - Validation: zod schemas pass; clamp resource floors to 0
 - Safety: no secrets client-side; writes via server routes only
 - Ops: timeouts, retries, minimal logs with redaction
+
+
+## Building Catalog (client-visible)
+
+- Farm: grain↑ (terrain: water adjacency boosts output)
+- House: workers↑ (consumes grain)
+- Council Hall: unlocks proposals/decrees
+- Trade Post: converts grain→coin (route/tariff influenced)
+- Automation Workshop: coin↑ (consumes mana)
+- Shrine: favor↑ (terrain: mountain adjacency boosts)
+- Lumber Camp: wood↑ (terrain: forest adjacency boosts)
+- Sawmill: planks↑ (consumes wood)
+- Storehouse: logistics hub; boosts connected producers
+
+## Gameplay Onboarding (client)
+
+- First-time flow grants one free Farm, House, and Council Hall to accelerate ramp.
+- A minimal questlet surfaces immediate goals (Farm → House → Assign → Council → Proposals → Advance).
+- Agents should assume steady-state rules post-onboarding; freebies are handled client-side.
+
+## Agent Context Payloads (expanded)
+
+- Backend includes the following to proposals/scry prompts:
+  - Current resources (including wood, planks when present)
+  - Snapshot of buildings (counts per type), routes, and storehouse presence
+  - Terrain/adjacency summaries where material
+  - Active skill modifiers:
+    - `resource_multipliers: Record<resource, number>`
+    - `building_multipliers: Record<typeId, number>`
+    - `upkeep_grain_per_worker_delta: number`
+  - Agents should treat modifiers as small tilts and keep forecasts conservative.

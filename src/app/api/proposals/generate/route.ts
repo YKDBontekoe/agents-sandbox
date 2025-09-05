@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { generateText } from 'ai'
 import { createOpenAI } from '@ai-sdk/openai'
 import { z } from 'zod'
+import { accumulateEffects, generateSkillTree } from '@/components/game/skills/procgen'
 
 const openai = createOpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
@@ -86,7 +87,50 @@ Resources: grain, coin, mana, favor, unrest, threat.
 Guilds: Wardens(defense), Alchemists(resources), Scribes(infra), Stewards(policy).
 Return JSON array, each item: { title, description, predicted_delta: {resource:number,...} }`
 
-  const user = `Current cycle: ${state.cycle}\nResources: ${JSON.stringify(state.resources)}\nGuild: ${guild}\nGenerate 2 proposals rooted in this guild focus and the game's tone.`
+  // Build planning context
+  const buildings: Array<{ typeId?: string; traits?: Record<string, any> }> = Array.isArray((state as any).buildings) ? (state as any).buildings as any : []
+  const routes: Array<any> = Array.isArray((state as any).routes) ? (state as any).routes as any : []
+  const byType: Record<string, number> = {}
+  let farmsNearWater = 0, shrinesNearMountains = 0, campsNearForest = 0
+  for (const b of buildings) {
+    const t = String(b.typeId || '')
+    byType[t] = (byType[t] ?? 0) + 1
+    const tr = (b as any).traits || {}
+    if (t === 'farm' && Number(tr.waterAdj || 0) > 0) farmsNearWater++
+    if (t === 'shrine' && Number(tr.mountainAdj || 0) > 0) shrinesNearMountains++
+    if (t === 'lumber_camp' && Number(tr.forestAdj || 0) > 0) campsNearForest++
+  }
+  const storehousePresent = (byType['storehouse'] ?? 0) > 0
+  const routesCount = routes.length
+  const terrainSummary = { farmsNearWater, shrinesNearMountains, campsNearForest }
+  // Compute skill modifiers if state.skills present
+  let skillModifiers: any = { resource_multipliers: {}, building_multipliers: {}, upkeep_grain_per_worker_delta: 0 }
+  const skills: string[] = Array.isArray((state as any).skills) ? (state as any).skills as any : []
+  if (skills.length > 0) {
+    try {
+      const tree = generateSkillTree(12345)
+      const unlocked = tree.nodes.filter(n => skills.includes(n.id))
+      const acc = accumulateEffects(unlocked)
+      skillModifiers = {
+        resource_multipliers: acc.resMul,
+        building_multipliers: acc.bldMul,
+        upkeep_grain_per_worker_delta: acc.upkeepDelta,
+      }
+    } catch {}
+  }
+
+  const context = {
+    cycle: state.cycle,
+    resources: state.resources,
+    guild,
+    buildings_by_type: byType,
+    routes_count: routesCount,
+    storehouse_present: storehousePresent,
+    terrain_summary: terrainSummary,
+    skill_modifiers: skillModifiers,
+  }
+
+  const user = `Context: ${JSON.stringify(context)}\nGenerate 2 proposals rooted in this guild focus and the game's tone. Keep predicted_delta conservative and numeric. JSON only.`
 
   const { text } = await generateText({
     model: openai('gpt-4o-mini'),

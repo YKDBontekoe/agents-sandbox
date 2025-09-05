@@ -64,6 +64,8 @@ function HUDSystemCore({
   const { currentPreset } = useHUDLayoutPresets();
   // Expose sidebar width as CSS variable for safe-area aware overlays
   React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
     const updateVar = () => {
       const el = document.querySelector('[data-hud-zone="sidebar-right"]') as HTMLElement | null;
       const w = el ? el.offsetWidth : 0;

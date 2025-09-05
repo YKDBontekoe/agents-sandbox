@@ -41,7 +41,7 @@ export const Tooltip: React.FC<TooltipProps> = ({
   }, []);
 
   const calculatePosition = () => {
-    if (!triggerRef.current || !tooltipRef.current) return;
+    if (!triggerRef.current || !tooltipRef.current || typeof window === 'undefined') return;
 
     const triggerRect = triggerRef.current.getBoundingClientRect();
     const tooltipRect = tooltipRef.current.getBoundingClientRect();
@@ -123,12 +123,10 @@ export const Tooltip: React.FC<TooltipProps> = ({
     </span>
   );
 
-  const tooltipContent = mounted && isVisible ? createPortal(
+  const tooltipContent = mounted && isVisible && !disabled && typeof document !== 'undefined' ? createPortal(
     <div
       ref={tooltipRef}
-      id="tooltip"
-      role="tooltip"
-      className={`fixed z-[9999] px-3 py-2 text-sm font-medium text-white bg-neutral-900 border border-neutral-700 rounded-lg shadow-xl pointer-events-none transition-opacity duration-200 ${className}`}
+      className={`fixed z-[9999] px-3 py-2 text-sm text-white bg-neutral-900 border border-neutral-700 rounded-lg shadow-lg pointer-events-none transition-opacity duration-200 ${className}`}
       style={{
         left: `${tooltipPosition.x}px`,
         top: `${tooltipPosition.y}px`,

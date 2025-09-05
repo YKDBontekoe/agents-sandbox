@@ -73,10 +73,10 @@ export function generateSkillTree(seed = 42): SkillTree {
   });
 
   // Generate tiers (like a tree)
-  const tiers = 4;
+  const tiers = 6; // larger tree
   let prevTier: string[] = [];
   for (let t = 0; t < tiers; t++) {
-    const count = 3 + Math.floor(rng() * 3);
+    const count = 4 + Math.floor(rng() * 3);
     const current: string[] = [];
     for (let i = 0; i < count; i++) {
       const cat = pick(rng, categories);

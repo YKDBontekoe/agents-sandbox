@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 
 // Minimal server-side catalog for building production. Mirrors client SIM_BUILDINGS where relevant.
-type ResKey = 'grain' | 'coin' | 'mana' | 'favor' | 'unrest' | 'threat';
+type ResKey = 'grain' | 'wood' | 'planks' | 'coin' | 'mana' | 'favor' | 'unrest' | 'threat';
 type MaybeWorkers = ResKey | 'workers';
 interface ServerBuildingDef {
   inputs: Partial<Record<MaybeWorkers, number>>;
@@ -19,6 +19,9 @@ const SERVER_BUILDINGS: Record<string, ServerBuildingDef> = {
   farm: { inputs: { coin: 1 }, outputs: { grain: 10 }, workCapacity: 5 },
   house: { inputs: { grain: 1 }, outputs: { /* workers: 5 */ }, workCapacity: 0 },
   shrine: { inputs: { mana: 1 }, outputs: { favor: 2 }, workCapacity: 2 },
+  lumber_camp: { inputs: {}, outputs: { wood: 8 }, workCapacity: 4 },
+  sawmill: { inputs: { wood: 3, coin: 1 }, outputs: { planks: 6 }, workCapacity: 4 },
+  storehouse: { inputs: {}, outputs: {}, workCapacity: 0 },
 };
 
 // Advance one cycle: apply accepted proposals to resources with simple rules and clear applied
@@ -61,6 +64,21 @@ export async function POST() {
   const tariffValue = Math.max(0, Math.min(100, Number(edicts['tariffs'] ?? 50)))
   const routeCoinMultiplier = 0.8 + (tariffValue * 0.006) // 0.8..1.4
   const patrolsEnabled = Number(edicts['patrols'] ?? 0) === 1
+  
+  // Precompute routing graph to detect storehouse connections
+  const routes2: Array<{ id: string; fromId: string; toId: string; length?: number }> = Array.isArray((state as any).routes) ? (state as any).routes as any : []
+  const byId = new Map<string, any>((buildings as any).map((bb: any) => [String(bb.id), bb]))
+  const connectedToStorehouse = new Set<string>()
+  if (routes2.length > 0) {
+    for (const r of routes2) {
+      const a = byId.get(String(r.fromId))
+      const b = byId.get(String(r.toId))
+      if (!a || !b) continue
+      if (String(a.typeId) === 'storehouse' && b?.id) connectedToStorehouse.add(String(b.id))
+      if (String(b.typeId) === 'storehouse' && a?.id) connectedToStorehouse.add(String(a.id))
+    }
+  }
+
   for (const b of buildings) {
     const typeId = String(b.typeId || '')
     const def = SERVER_BUILDINGS[typeId]
@@ -83,7 +101,10 @@ export async function POST() {
     if (!canProduce) continue
     // Consume inputs
     for (const [k, v] of Object.entries(def.inputs)) {
-      const need = Math.max(0, Math.round((Number(v ?? 0)) * ratio))
+      let mult = 1
+      if (typeId === 'sawmill' && k === 'wood' && (b as any).recipe === 'fine') mult = (4/3)
+      if (typeId === 'trade_post' && k === 'grain' && (b as any).recipe === 'premium') mult = (3/2)
+      const need = Math.max(0, Math.round((Number(v ?? 0)) * ratio * mult))
       if (k === 'workers') {
         workers = Math.max(0, workers - need)
       } else {
@@ -98,6 +119,20 @@ export async function POST() {
       if (typeId === 'trade_post' && k === 'coin') {
         const waterAdj = Math.min(2, Number(traits.waterAdj ?? 0))
         out += 2 * waterAdj
+      }
+      if (typeId === 'farm' && k === 'grain') {
+        const waterAdj = Math.min(2, Number(traits.waterAdj ?? 0))
+        out += 3 * waterAdj
+      }
+      if (typeId === 'lumber_camp' && k === 'wood') {
+        const forestAdj = Math.min(3, Number(traits.forestAdj ?? 0))
+        out += 2 * forestAdj
+      }
+      if (typeId === 'sawmill' && k === 'planks' && (b as any).recipe === 'fine') {
+        out = (9) * ratio * levelOutScale
+      }
+      if ((b as any).id && connectedToStorehouse.has(String((b as any).id)) && (k === 'grain' || k === 'wood' || k === 'planks')) {
+        out *= 1.15
       }
       if (typeId === 'shrine' && k === 'favor') {
         const mountainAdj = Math.min(2, Number(traits.mountainAdj ?? 0))
@@ -114,11 +149,10 @@ export async function POST() {
   }
 
   // Trade routes: add coin based on distance; minor unrest pressure
-  const routes: Array<{ id: string; fromId: string; toId: string; length?: number }> = Array.isArray((state as any).routes) ? (state as any).routes as any : []
-  if (routes.length > 0) {
+  if (routes2.length > 0) {
     const byId = new Map<string, any>((buildings as any).map((bb: any) => [String(bb.id), bb]))
     const MAX_ROUTE_LEN = 20
-    for (const r of routes) {
+    for (const r of routes2) {
       const a = byId.get(String(r.fromId))
       const b = byId.get(String(r.toId))
       if (!a || !b) continue
@@ -127,7 +161,7 @@ export async function POST() {
       const coinGain = Math.max(1, Math.round(length * 0.5 * routeCoinMultiplier))
       resources.coin = Math.max(0, Number(resources.coin ?? 0) + coinGain)
     }
-    let unrestBump = Math.floor(routes.length / 2)
+    let unrestBump = Math.floor(routes2.length / 2)
     // Tariffs add some unrest at high values
     if (tariffValue >= 60) unrestBump += 1
     if (patrolsEnabled) unrestBump = Math.max(0, unrestBump - 1)
@@ -198,3 +232,4 @@ export async function POST() {
 
   return NextResponse.json({ state: updated, crisis })
 }
+

@@ -56,6 +56,7 @@ const UpdateSchema = z.object({
   buildings: z.array(z.unknown()).optional(),
   routes: z.array(z.unknown()).optional(),
   edicts: z.record(z.string(), z.number()).optional(),
+  skills: z.array(z.string()).optional(),
 })
 
 export async function PATCH(req: NextRequest) {
@@ -65,13 +66,14 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.message }, { status: 400 })
   }
 
-  const { id, resources, workers, buildings, routes, edicts } = parsed.data
-  const updates: Partial<{ resources: Record<string, number>; workers: number; buildings: unknown[]; routes: unknown[]; edicts: Record<string, number>; updated_at: string }> = { updated_at: new Date().toISOString() }
+  const { id, resources, workers, buildings, routes, edicts, skills } = parsed.data
+  const updates: Partial<{ resources: Record<string, number>; workers: number; buildings: unknown[]; routes: unknown[]; edicts: Record<string, number>; skills: string[]; updated_at: string }> = { updated_at: new Date().toISOString() }
   if (resources) updates.resources = resources
   if (typeof workers === 'number') updates.workers = workers
   if (buildings) updates.buildings = buildings
   if (routes) updates.routes = routes
   if (edicts) updates.edicts = edicts
+  if (skills) updates.skills = skills
 
   const supabase = createSupabaseServerClient()
   const { data, error } = await supabase

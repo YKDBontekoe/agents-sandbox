@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ResponsivePanel, ResponsiveButton } from '../ResponsiveHUDPanels';
 import { useHUDPanel } from '../HUDPanelRegistry';
 import { generateSkillTree, SkillNode } from '../../skills/procgen';
+import SkillTreeModal from '../../skills/SkillTreeModal';
 
 interface ModularSkillTreePanelProps {
   seed?: number;
@@ -10,6 +11,7 @@ interface ModularSkillTreePanelProps {
 }
 
 export function ModularSkillTreePanel({ seed = 12345, onUnlock, variant = 'compact' }: ModularSkillTreePanelProps) {
+  const [open, setOpen] = useState(false);
   useHUDPanel({
     config: { id: 'skill-tree', zone: 'sidebar-right', priority: 5, persistent: true },
     component: ModularSkillTreePanel,
@@ -45,6 +47,9 @@ export function ModularSkillTreePanel({ seed = 12345, onUnlock, variant = 'compa
       collapsible
       className="min-w-0"
     >
+      <div className="mb-2">
+        <button onClick={() => setOpen(true)} className="px-3 py-1 text-xs rounded border border-border bg-panel hover:bg-muted">Open Full Tree</button>
+      </div>
       <div className="space-y-3">
         {Object.entries(groups).map(([cat, nodes]) => (
           <div key={cat}>
@@ -75,6 +80,9 @@ export function ModularSkillTreePanel({ seed = 12345, onUnlock, variant = 'compa
           </div>
         ))}
       </div>
+      {open && (
+        <SkillTreeModal isOpen={open} onClose={() => setOpen(false)} />
+      )}
     </ResponsivePanel>
   );
 }

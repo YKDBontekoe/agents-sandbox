@@ -125,7 +125,19 @@ export function projectCycleDeltas(
     const ratio = capacity > 0 ? (assigned / Math.max(1, capacity)) : 1;
 
     let canProduce = true;
-    for (const [key, amount] of Object.entries(def.inputs) as [keyof SimResources, number | undefined][]) {
+    // Allow per-building recipe overrides (e.g., sawmill 'fine')
+    let inputs = def.inputs as Partial<SimResources>;
+    let outputs = def.outputs as Partial<SimResources>;
+    if (b.typeId === 'sawmill' && (b as any).recipe === 'fine') {
+      inputs = { ...inputs, wood: 4, coin: 1 };
+      outputs = { ...outputs, planks: 9 } as any;
+    }
+    if (b.typeId === 'trade_post' && (b as any).recipe === 'premium') {
+      inputs = { ...inputs, grain: 3 } as any;
+      outputs = { ...outputs, coin: 12 } as any;
+    }
+
+    for (const [key, amount] of Object.entries(inputs) as [keyof SimResources, number | undefined][]) {
       const need = (amount ?? 0) * ratio;
       if ((next as any)[key] < need) {
         canProduce = false;
@@ -134,11 +146,11 @@ export function projectCycleDeltas(
     }
     if (!canProduce) return;
 
-    for (const [key, amount] of Object.entries(def.inputs) as [keyof SimResources, number | undefined][]) {
+    for (const [key, amount] of Object.entries(inputs) as [keyof SimResources, number | undefined][]) {
       const need = Math.max(0, Math.round((amount ?? 0) * ratio));
       next[key] = Math.max(0, (next[key] ?? 0) - need);
     }
-    for (const [key, amount] of Object.entries(def.outputs) as [keyof SimResources, number | undefined][]) {
+    for (const [key, amount] of Object.entries(outputs) as [keyof SimResources, number | undefined][]) {
       let out = (amount ?? 0) * ratio * levelOutScale;
       if (b.typeId === 'trade_post' && key === 'coin') {
         const waterAdj = Math.min(2, Number(b.traits?.waterAdj ?? 0));
