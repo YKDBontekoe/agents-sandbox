@@ -20,6 +20,24 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Configuration
+
+Environment variables are validated and layered in `src/infrastructure/config.ts`. Provide values via `.env.local`.
+
+| Key | Description | Default |
+| --- | --- | --- |
+| `NODE_ENV` | Node environment | `development` |
+| `VERCEL_ENV` | Vercel environment | `local` |
+| `NEXT_PUBLIC_LOG_LEVEL` | Client log level | `debug` in development, `error` otherwise |
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase URL for browser | required |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key | required |
+| `SUPABASE_URL` | Supabase service URL | required |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key | required |
+| `SUPABASE_JWT_SECRET` | Supabase JWT secret | required |
+| `OPENAI_API_KEY` | OpenAI key (optional) | - |
+| `NEXT_PUBLIC_OFFLINE_MODE` | Use local data instead of API | `false` |
+| `NEXT_PUBLIC_DISABLE_REALTIME` | Disable realtime updates | `false` |
+
 ## Design Tokens
 
 Global color tokens are defined in `src/app/globals.css` and surfaced in Tailwind via `theme.extend.colors`.

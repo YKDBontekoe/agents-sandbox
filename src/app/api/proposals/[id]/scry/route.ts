@@ -1,12 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { SupabaseUnitOfWork } from '@/infrastructure/supabase/unit-of-work'
+import { config } from '@/infrastructure/config'
 import { generateText } from 'ai'
 import { createOpenAI } from '@ai-sdk/openai'
 import { z } from 'zod'
+import { accumulateEffects, generateSkillTree } from '@/components/game/skills/procgen'
+import { rateLimit } from '@/middleware/rateLimit'
 import { buildGameContext } from '@/lib/gameContext'
 
-const openai = createOpenAI({ apiKey: process.env.OPENAI_API_KEY })
+interface GameState {
+  resources?: Record<string, number>
+  buildings?: Array<{ typeId?: string; traits?: Record<string, unknown> }>
+  routes?: unknown[]
+  skills?: string[]
+  skill_tree_seed?: number
+}
+
+const openai = createOpenAI({ apiKey: config.openAiApiKey })
 
 interface RouteContext {
   params: Promise<{ id: string }>
@@ -27,6 +38,11 @@ interface ProposalRow {
 }
 
 export async function POST(req: NextRequest, context: RouteContext) {
+  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown'
+  const limit = Number(process.env.PROPOSAL_RATE_LIMIT ?? '5')
+  if (!rateLimit(ip, { limit })) {
+    return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 })
+  }
   const params = await context.params
   const supabase = createSupabaseServerClient()
   const uow = new SupabaseUnitOfWork(supabase)
@@ -44,9 +60,9 @@ export async function POST(req: NextRequest, context: RouteContext) {
   if (!proposal) return NextResponse.json({ error: 'Proposal not found' }, { status: 404 })
   const gameState = await uow.gameStates.getById(proposal.state_id)
 
-  const hasOpenAI = !!process.env.OPENAI_API_KEY &&
-    !process.env.OPENAI_API_KEY.includes('your_openai_api_key_here') &&
-    !process.env.OPENAI_API_KEY.toLowerCase().includes('placeholder')
+  const hasOpenAI = !!config.openAiApiKey &&
+    !config.openAiApiKey.includes('your_openai_api_key_here') &&
+    !config.openAiApiKey.toLowerCase().includes('placeholder')
 
   // Deterministic fallback when OpenAI is not configured
   if (!hasOpenAI) {

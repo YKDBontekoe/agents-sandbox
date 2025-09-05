@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { publicConfig as config } from "@/infrastructure/config"
 
 interface EnvStatus {
   hasSupabaseUrl: boolean
@@ -27,8 +28,8 @@ export default function DebugPage() {
   useEffect(() => {
     // Check client-side environment variables
     const clientEnv = {
-      hasPublicSupabaseUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
-      hasPublicSupabaseAnonKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+      hasPublicSupabaseUrl: !!config.nextPublicSupabaseUrl,
+      hasPublicSupabaseAnonKey: !!config.nextPublicSupabaseAnonKey
     }
 
     // Check API status

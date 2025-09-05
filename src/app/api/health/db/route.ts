@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { config } from '@/infrastructure/config'
 
 export async function GET() {
   // Only expose booleans and sanitized error messages
   const envStatus = {
-    hasUrl: !!process.env.SUPABASE_URL,
-    hasServiceKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+    hasUrl: !!config.supabaseUrl,
+    hasServiceKey: !!config.supabaseServiceRoleKey,
   }
 
   let supabase: SupabaseClient
@@ -62,4 +63,3 @@ export async function GET() {
     healthy: allOk,
   })
 }
-

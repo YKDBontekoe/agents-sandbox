@@ -16,7 +16,17 @@ Related docs: docs/agents/ARCHITECTURE.md, docs/agents/PROMPTS.md, docs/agents/S
 ## Quick Start
 
 - Requirements: Node 18+, Supabase project, OpenAI API key
-- Env (.env.local): `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `OPENAI_API_KEY`
+- Env (.env.local): `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_SECRET`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `OPENAI_API_KEY` (optional), `NEXT_PUBLIC_LOG_LEVEL` (optional), `NEXT_PUBLIC_OFFLINE_MODE` (optional), `NEXT_PUBLIC_DISABLE_REALTIME` (optional), `VERCEL_ENV` (optional)
+- Config keys:
+  - `NODE_ENV` (default `development`)
+  - `VERCEL_ENV` (default `local`)
+  - `NEXT_PUBLIC_LOG_LEVEL` (default `debug` in development, `error` otherwise)
+  - `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` (required)
+  - `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` (required)
+  - `SUPABASE_JWT_SECRET` (required)
+  - `OPENAI_API_KEY` (optional)
+  - `NEXT_PUBLIC_OFFLINE_MODE` (default `false`)
+  - `NEXT_PUBLIC_DISABLE_REALTIME` (default `false`)
 - DB: apply migrations via `supabase link` then `supabase db push --include-all`, or run SQL in `supabase/migrations/` in order
 
 ## Architecture Overview
