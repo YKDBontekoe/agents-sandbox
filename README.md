@@ -20,13 +20,23 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
-## Environment Variables
+## Configuration
 
-The server exposes a basic rate limiter for proposal-related endpoints. Configure the maximum number of requests per minute with:
+Environment variables are validated and layered in `src/infrastructure/config.ts`. Provide values via `.env.local`.
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PROPOSAL_RATE_LIMIT` | `5` | Max proposals or scries per minute per IP |
+| Key | Description | Default |
+| --- | --- | --- |
+| `NODE_ENV` | Node environment | `development` |
+| `VERCEL_ENV` | Vercel environment | `local` |
+| `NEXT_PUBLIC_LOG_LEVEL` | Client log level | `debug` in development, `error` otherwise |
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase URL for browser | required |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key | required |
+| `SUPABASE_URL` | Supabase service URL | required |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key | required |
+| `SUPABASE_JWT_SECRET` | Supabase JWT secret | required |
+| `OPENAI_API_KEY` | OpenAI key (optional) | - |
+| `NEXT_PUBLIC_OFFLINE_MODE` | Use local data instead of API | `false` |
+| `NEXT_PUBLIC_DISABLE_REALTIME` | Disable realtime updates | `false` |
 
 ## Design Tokens
 

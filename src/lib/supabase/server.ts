@@ -1,13 +1,14 @@
 import { createClient } from '@supabase/supabase-js'
 import logger from '@/lib/logger'
+import { config } from '@/infrastructure/config'
 
 // Server-side Supabase client using the service role key (never sent to the browser)
 // Ensure these env vars are set in your environment (e.g., .env.local)
 // SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
 
 export function createSupabaseServerClient() {
-  const url = process.env.SUPABASE_URL
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const url = config.supabaseUrl
+  const serviceKey = config.supabaseServiceRoleKey
 
   if (!url || !serviceKey || url.includes('placeholder') || serviceKey.includes('placeholder')) {
     logger.error('Supabase configuration missing:', {

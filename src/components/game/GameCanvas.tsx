@@ -5,6 +5,7 @@ import * as PIXI from "pixi.js";
 import { Viewport } from "pixi-viewport";
 import { useGameContext } from "./GameContext";
 import logger from "@/lib/logger";
+import { publicConfig as config } from "@/infrastructure/config";
 import { AdaptiveQualityManager } from "@/utils/performance";
 
 interface GameCanvasProps {
@@ -342,7 +343,7 @@ export default function GameCanvas({
   return (
     <div className="relative w-full h-full" style={{ minHeight: '400px' }}>
       {/* Performance indicator */}
-      {process.env.NODE_ENV === 'development' && isInitialized && (
+      {config.nodeEnv === 'development' && isInitialized && (
         <div className="absolute top-2 left-2 bg-black/70 text-white px-2 py-1 rounded text-xs font-mono z-10">
           <div>FPS: {fps}</div>
           <div>Quality: {quality}</div>

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { config } from '@/infrastructure/config'
 import { generateText } from 'ai'
 import { createOpenAI } from '@ai-sdk/openai'
 import { z } from 'zod'
@@ -15,7 +16,7 @@ interface GameState {
   skill_tree_seed?: number
 }
 
-const openai = createOpenAI({ apiKey: process.env.OPENAI_API_KEY })
+const openai = createOpenAI({ apiKey: config.openAiApiKey })
 
 interface RouteContext {
   params: Promise<{ id: string }>
@@ -62,9 +63,9 @@ export async function POST(req: NextRequest, context: RouteContext) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   if (!proposal) return NextResponse.json({ error: 'Proposal not found' }, { status: 404 })
 
-  const hasOpenAI = !!process.env.OPENAI_API_KEY &&
-    !process.env.OPENAI_API_KEY.includes('your_openai_api_key_here') &&
-    !process.env.OPENAI_API_KEY.toLowerCase().includes('placeholder')
+  const hasOpenAI = !!config.openAiApiKey &&
+    !config.openAiApiKey.includes('your_openai_api_key_here') &&
+    !config.openAiApiKey.toLowerCase().includes('placeholder')
 
   // Deterministic fallback when OpenAI is not configured
   if (!hasOpenAI) {
