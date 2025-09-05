@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import logger from '@/lib/logger'
+import { ProposalSchema, GameStateSchema } from '@/lib/schemas'
 
 export async function GET(req: NextRequest) {
   try {
@@ -21,11 +22,15 @@ export async function GET(req: NextRequest) {
       )
     }
     if (!state) return NextResponse.json({ proposals: [] })
+    const stateParsed = GameStateSchema.safeParse(state)
+    if (!stateParsed.success) {
+      return NextResponse.json({ error: stateParsed.error.message }, { status: 500 })
+    }
 
     const { data: proposals, error: propErr } = await supabase
       .from('proposals')
       .select('*')
-      .eq('state_id', state.id)
+      .eq('state_id', stateParsed.data.id)
       .in('status', ['pending', 'accepted', 'rejected'])
       .order('created_at', { ascending: false })
     if (propErr) {
@@ -35,8 +40,12 @@ export async function GET(req: NextRequest) {
         { status: 503 }
       )
     }
+    const parsedProposals = ProposalSchema.array().safeParse(proposals ?? [])
+    if (!parsedProposals.success) {
+      return NextResponse.json({ error: parsedProposals.error.message }, { status: 500 })
+    }
 
-    return NextResponse.json({ proposals })
+    return NextResponse.json({ proposals: parsedProposals.data })
   } catch (error) {
     logger.error('Supabase connection error in proposals route:', error)
     return NextResponse.json(

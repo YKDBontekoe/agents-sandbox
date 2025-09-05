@@ -4,6 +4,7 @@ import { generateText } from 'ai'
 import { createOpenAI } from '@ai-sdk/openai'
 import { z } from 'zod'
 import { accumulateEffects, generateSkillTree } from '@/components/game/skills/procgen'
+import { AIProposalSchema, ProposalSchema, GameStateSchema } from '@/lib/schemas'
 
 const openai = createOpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
@@ -11,13 +12,7 @@ const BodySchema = z.object({
   guild: z.string().optional(),
 })
 
-const ProposalSchema = z.object({
-  title: z.string(),
-  description: z.string(),
-  predicted_delta: z.record(z.string(), z.number()),
-})
-
-const AIResponseSchema = z.array(ProposalSchema)
+const AIResponseSchema = z.array(AIProposalSchema)
 
 export async function POST(req: NextRequest) {
   const supabase = createSupabaseServerClient()
@@ -40,6 +35,11 @@ export async function POST(req: NextRequest) {
     .maybeSingle()
   if (stateErr) return NextResponse.json({ error: stateErr.message }, { status: 500 })
   if (!state) return NextResponse.json({ error: 'No game state' }, { status: 400 })
+  const stateParsed = GameStateSchema.safeParse(state)
+  if (!stateParsed.success) {
+    return NextResponse.json({ error: stateParsed.error.message }, { status: 500 })
+  }
+  const gameState = stateParsed.data
 
   const hasOpenAI = !!process.env.OPENAI_API_KEY &&
     !process.env.OPENAI_API_KEY.includes('your_openai_api_key_here') &&
@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
     const picks = guildMap[guild] ?? guildMap['Wardens']
 
     const rows = picks.slice(0, 2).map(p => ({
-      state_id: state.id,
+      state_id: gameState.id,
       guild,
       title: p.title,
       description: p.desc,
@@ -76,9 +76,16 @@ export async function POST(req: NextRequest) {
       status: 'pending' as const,
     }))
 
-    const { data: inserted, error: insErr } = await supabase.from('proposals').insert(rows).select('*')
+    const { data: inserted, error: insErr } = await supabase
+      .from('proposals')
+      .insert(rows)
+      .select('*')
     if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 })
-    return NextResponse.json(inserted)
+    const parsedInserted = ProposalSchema.array().safeParse(inserted)
+    if (!parsedInserted.success) {
+      return NextResponse.json({ error: parsedInserted.error.message }, { status: 500 })
+    }
+    return NextResponse.json(parsedInserted.data)
   }
 
   // Use AI to draft 1-3 proposals aligned with README fantasy
@@ -88,8 +95,8 @@ Guilds: Wardens(defense), Alchemists(resources), Scribes(infra), Stewards(policy
 Return JSON array, each item: { title, description, predicted_delta: {resource:number,...} }`
 
   // Build planning context
-  const buildings: Array<{ typeId?: string; traits?: Record<string, any> }> = Array.isArray((state as any).buildings) ? (state as any).buildings as any : []
-  const routes: Array<any> = Array.isArray((state as any).routes) ? (state as any).routes as any : []
+  const buildings: Array<{ typeId?: string; traits?: Record<string, any> }> = Array.isArray((gameState as any).buildings) ? (gameState as any).buildings as any : []
+  const routes: Array<any> = Array.isArray((gameState as any).routes) ? (gameState as any).routes as any : []
   const byType: Record<string, number> = {}
   let farmsNearWater = 0, shrinesNearMountains = 0, campsNearForest = 0
   for (const b of buildings) {
@@ -103,12 +110,12 @@ Return JSON array, each item: { title, description, predicted_delta: {resource:n
   const storehousePresent = (byType['storehouse'] ?? 0) > 0
   const routesCount = routes.length
   const terrainSummary = { farmsNearWater, shrinesNearMountains, campsNearForest }
-  // Compute skill modifiers if state.skills present
+  // Compute skill modifiers if gameState.skills present
   let skillModifiers: any = { resource_multipliers: {}, building_multipliers: {}, upkeep_grain_per_worker_delta: 0 }
-  const skills: string[] = Array.isArray((state as any).skills) ? (state as any).skills as any : []
+  const skills: string[] = Array.isArray((gameState as any).skills) ? (gameState as any).skills as any : []
   if (skills.length > 0) {
     try {
-      const tree = generateSkillTree((state as any).skill_tree_seed ?? 12345)
+      const tree = generateSkillTree((gameState as any).skill_tree_seed ?? 12345)
       const unlocked = tree.nodes.filter(n => skills.includes(n.id))
       const acc = accumulateEffects(unlocked)
       skillModifiers = {
@@ -120,10 +127,10 @@ Return JSON array, each item: { title, description, predicted_delta: {resource:n
   }
 
   const context = {
-    cycle: state.cycle,
-    resources: state.resources,
+    cycle: gameState.cycle,
+    resources: gameState.resources,
     guild,
-    skill_tree_seed: (state as any).skill_tree_seed ?? 12345,
+    skill_tree_seed: (gameState as any).skill_tree_seed ?? 12345,
     buildings_by_type: byType,
     routes_count: routesCount,
     storehouse_present: storehousePresent,
@@ -160,7 +167,7 @@ Return JSON array, each item: { title, description, predicted_delta: {resource:n
   const proposals = proposalsResult.data
 
   const rows = proposals.map(p => ({
-    state_id: state.id,
+    state_id: gameState.id,
     guild,
     title: p.title,
     description: p.description,
@@ -168,8 +175,15 @@ Return JSON array, each item: { title, description, predicted_delta: {resource:n
     status: 'pending' as const,
   }))
 
-  const { data: inserted, error: insErr } = await supabase.from('proposals').insert(rows).select('*')
+  const { data: inserted, error: insErr } = await supabase
+    .from('proposals')
+    .insert(rows)
+    .select('*')
   if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 })
+  const parsedInserted = ProposalSchema.array().safeParse(inserted)
+  if (!parsedInserted.success) {
+    return NextResponse.json({ error: parsedInserted.error.message }, { status: 500 })
+  }
 
-  return NextResponse.json(inserted)
+  return NextResponse.json(parsedInserted.data)
 }

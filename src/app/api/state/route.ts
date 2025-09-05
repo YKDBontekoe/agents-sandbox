@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import logger from '@/lib/logger'
 import { z } from 'zod'
+import { GameStateSchema } from '@/lib/schemas'
 
 export async function GET() {
   try {
@@ -36,7 +37,14 @@ export async function GET() {
           { status: 503 }
         )
       }
-      return NextResponse.json(created)
+      const parsed = GameStateSchema.safeParse(created)
+      if (!parsed.success) {
+        return NextResponse.json(
+          { error: parsed.error.message },
+          { status: 500 },
+        )
+      }
+      return NextResponse.json(parsed.data)
     }
 
     if (!state.skill_tree_seed) {
@@ -46,9 +54,24 @@ export async function GET() {
         .eq('id', state.id)
         .select('*')
         .maybeSingle()
-      return NextResponse.json(patched || state)
+      const patchedState = patched || state
+      const parsedPatched = GameStateSchema.safeParse(patchedState)
+      if (!parsedPatched.success) {
+        return NextResponse.json(
+          { error: parsedPatched.error.message },
+          { status: 500 },
+        )
+      }
+      return NextResponse.json(parsedPatched.data)
     }
-    return NextResponse.json(state)
+    const parsedState = GameStateSchema.safeParse(state)
+    if (!parsedState.success) {
+      return NextResponse.json(
+        { error: parsedState.error.message },
+        { status: 500 },
+      )
+    }
+    return NextResponse.json(parsedState.data)
   } catch (error) {
     logger.error('Supabase connection error:', error)
     return NextResponse.json(
@@ -58,16 +81,17 @@ export async function GET() {
   }
 }
 
-const UpdateSchema = z.object({
-  id: z.string().uuid(),
-  resources: z.record(z.string(), z.number()).optional(),
-  workers: z.number().optional(),
-  buildings: z.array(z.unknown()).optional(),
-  routes: z.array(z.unknown()).optional(),
-  edicts: z.record(z.string(), z.number()).optional(),
-  skills: z.array(z.string()).optional(),
-  skill_tree_seed: z.number().int().optional(),
+const UpdateSchema = GameStateSchema.pick({
+  resources: true,
+  workers: true,
+  buildings: true,
+  routes: true,
+  edicts: true,
+  skills: true,
+  skill_tree_seed: true,
 })
+  .partial()
+  .extend({ id: z.string().uuid() })
 
 export async function PATCH(req: NextRequest) {
   const json = await req.json().catch(() => ({}))
@@ -99,5 +123,12 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  return NextResponse.json(data)
+  const parsedData = GameStateSchema.safeParse(data)
+  if (!parsedData.success) {
+    return NextResponse.json(
+      { error: parsedData.error.message },
+      { status: 500 },
+    )
+  }
+  return NextResponse.json(parsedData.data)
 }

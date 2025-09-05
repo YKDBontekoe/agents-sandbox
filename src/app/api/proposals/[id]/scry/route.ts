@@ -4,6 +4,7 @@ import { generateText } from 'ai'
 import { createOpenAI } from '@ai-sdk/openai'
 import { z } from 'zod'
 import { accumulateEffects, generateSkillTree } from '@/components/game/skills/procgen'
+import { AIScrySchema, ProposalSchema, GameStateSchema } from '@/lib/schemas'
 
 const openai = createOpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
@@ -12,19 +13,6 @@ interface RouteContext {
 }
 
 const BodySchema = z.object({})
-
-const AIResponseSchema = z.object({
-  predicted_delta: z.record(z.string(), z.number()),
-  risk_note: z.string(),
-})
-
-// Minimal shape for proposals to avoid 'any' usages
-interface ProposalRow {
-  guild?: string;
-  title?: string;
-  description?: string;
-  game_state?: { resources?: Record<string, number> };
-}
 
 export async function POST(req: NextRequest, context: RouteContext) {
   const params = await context.params
@@ -39,13 +27,20 @@ export async function POST(req: NextRequest, context: RouteContext) {
     )
   }
 
-  const { data: proposal, error } = await supabase
+  const { data: proposalRow, error } = await supabase
     .from('proposals')
     .select('*, game_state(*)')
     .eq('id', id)
     .maybeSingle()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  if (!proposal) return NextResponse.json({ error: 'Proposal not found' }, { status: 404 })
+  if (!proposalRow) return NextResponse.json({ error: 'Proposal not found' }, { status: 404 })
+  const proposalParsed = ProposalSchema.safeParse(proposalRow)
+  if (!proposalParsed.success) {
+    return NextResponse.json({ error: proposalParsed.error.message }, { status: 500 })
+  }
+  const proposal = proposalParsed.data
+  const gameStateParsed = GameStateSchema.safeParse((proposalRow as any).game_state)
+  const gameState = gameStateParsed.success ? gameStateParsed.data : undefined
 
   const hasOpenAI = !!process.env.OPENAI_API_KEY &&
     !process.env.OPENAI_API_KEY.includes('your_openai_api_key_here') &&
@@ -53,10 +48,9 @@ export async function POST(req: NextRequest, context: RouteContext) {
 
   // Deterministic fallback when OpenAI is not configured
   if (!hasOpenAI) {
-    const p = proposal as unknown as ProposalRow
-    const guild = String(p.guild ?? '')
-    const title = String(p.title ?? '')
-    const description = String(p.description ?? '')
+    const guild = proposal.guild
+    const title = proposal.title
+    const description = proposal.description
 
     function inferDelta() {
       const t = `${title} ${description}`.toLowerCase()
@@ -128,11 +122,11 @@ export async function POST(req: NextRequest, context: RouteContext) {
   const system = `You are a scrying oracle. Given a proposal and current state context (resources, buildings, routes, terrain, skill modifiers), forecast likely deltas conservatively.
 Return strict JSON: { predicted_delta: {resource:number,...}, risk_note: string }`
 
-  const p = proposal as unknown as ProposalRow
-  const stateRes = p.game_state?.resources ?? {}
+  const p = proposal
+  const stateRes = gameState?.resources ?? {}
   // Fetch extra context from state row if present
-  const buildings: Array<{ typeId?: string; traits?: Record<string, any> }> = Array.isArray((proposal as any).game_state?.buildings) ? (proposal as any).game_state.buildings as any : []
-  const routes: Array<any> = Array.isArray((proposal as any).game_state?.routes) ? (proposal as any).game_state.routes as any : []
+  const buildings: Array<{ typeId?: string; traits?: Record<string, any> }> = Array.isArray((gameState as any)?.buildings) ? (gameState as any).buildings as any : []
+  const routes: Array<any> = Array.isArray((gameState as any)?.routes) ? (gameState as any).routes as any : []
   const byType: Record<string, number> = {}
   let farmsNearWater = 0, shrinesNearMountains = 0, campsNearForest = 0
   for (const b of buildings) {
@@ -144,10 +138,10 @@ Return strict JSON: { predicted_delta: {resource:number,...}, risk_note: string 
     if (t === 'lumber_camp' && Number(tr.forestAdj || 0) > 0) campsNearForest++
   }
   let skillModifiers: any = { resource_multipliers: {}, building_multipliers: {}, upkeep_grain_per_worker_delta: 0 }
-  const skills: string[] = Array.isArray((proposal as any).game_state?.skills) ? (proposal as any).game_state.skills as any : []
+  const skills: string[] = Array.isArray((gameState as any)?.skills) ? (gameState as any).skills as any : []
   if (skills.length > 0) {
     try {
-      const tree = generateSkillTree(((proposal as any).game_state?.skill_tree_seed as number) ?? 12345)
+      const tree = generateSkillTree(((gameState as any)?.skill_tree_seed as number) ?? 12345)
       const unlocked = tree.nodes.filter(n => skills.includes(n.id))
       const acc = accumulateEffects(unlocked)
       skillModifiers = {
@@ -180,7 +174,7 @@ Return strict JSON: { predicted_delta: {resource:number,...}, risk_note: string 
       { status: 400 },
     )
   }
-  const parsed = AIResponseSchema.safeParse(parsedJson)
+  const parsed = AIScrySchema.safeParse(parsedJson)
   if (!parsed.success) {
     return NextResponse.json(
       { error: parsed.error.message },
