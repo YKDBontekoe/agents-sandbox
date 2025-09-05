@@ -30,6 +30,8 @@ import HeatLayer from '@/components/game/HeatLayer';
 import MarkersLayer from '@/components/game/MarkersLayer';
 import BuildingsLayer from '@/components/game/BuildingsLayer';
 import RoutesLayer from '@/components/game/RoutesLayer';
+import RoadsLayer from '@/components/game/RoadsLayer';
+import CitizensLayer from '@/components/game/CitizensLayer';
 import type { CrisisData } from '@/components/game/CrisisModal';
 import GoalBanner from '@/components/game/GoalBanner';
 import OnboardingGuide from '@/components/game/OnboardingGuide';
@@ -364,6 +366,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   const [simResources, setSimResources] = useState<SimResources | null>(null);
   const [placedBuildings, setPlacedBuildings] = useState<StoredBuilding[]>([]);
   const [routes, setRoutes] = useState<TradeRoute[]>([]);
+  const [roads, setRoads] = useState<Array<{x:number;y:number}>>([]);
   // simplified: direct tile builds; no separate build selection UI here
   const [districts, _setDistricts] = useState<District[]>([]);
   const [leylines, setLeylines] = useState<Leyline[]>([]);
@@ -906,6 +909,21 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
             <HeatLayer gridSize={20} tileWidth={64} tileHeight={32} unrest={resources.unrest} threat={resources.threat} />
             <BuildingsLayer buildings={placedBuildings.map(b => ({ id: b.id, typeId: b.typeId, x: b.x, y: b.y }))} />
             <RoutesLayer routes={(routes || []).map(r => ({ id: r.id, fromId: r.fromId, toId: r.toId }))} buildings={placedBuildings.map(b => ({ id: b.id, x: b.x, y: b.y }))} />
+            <RoadsLayer roads={roads} />
+            <CitizensLayer
+              buildings={placedBuildings.map(b => ({ id: b.id, typeId: b.typeId, x: b.x, y: b.y }))}
+              roads={roads}
+              tileTypes={tileTypes}
+              onBuildRoads={(tiles)=>{
+                // merge new road tiles, avoid duplicates
+                setRoads(prev => {
+                  const seen = new Set(prev.map(t=>`${t.x},${t.y}`));
+                  const merged = [...prev];
+                  tiles.forEach(t=>{ const k=`${t.x},${t.y}`; if (!seen.has(k)) { merged.push(t); seen.add(k); } });
+                  return merged;
+                });
+              }}
+            />
             {acceptedNotice && (
               <EffectsLayer trigger={{ eventKey: acceptedNoticeKeyRef.current || 'accept', deltas: acceptedNotice.delta || {}, gridX: selectedTile?.x ?? 10, gridY: selectedTile?.y ?? 10 }} />
             )}
