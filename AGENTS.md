@@ -210,3 +210,7 @@ See docs/agents/EXTENSIONS.md for patterns and pitfalls
     - `building_multipliers: Record<typeId, number>`
     - `upkeep_grain_per_worker_delta: number`
   - Agents should treat modifiers as small tilts and keep forecasts conservative.
+
+# User-provided custom instructions
+
+Adhere to the best practices of the written languages. Always verify that your code works and is ready to be merged. Make sure to read the AGENTS.md and use the best practices and listen to the rules.

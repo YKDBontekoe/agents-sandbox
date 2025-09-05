@@ -1,30 +1,47 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { SupabaseUnitOfWork } from '@/infrastructure/supabase/unit-of-work'
 import { SIM_BUILDINGS } from '@/lib/buildingCatalog'
+import type { GameState } from '@/domain/repositories/game-state-repository'
 
 type ResKey = 'grain' | 'wood' | 'planks' | 'coin' | 'mana' | 'favor' | 'unrest' | 'threat';
+
+interface BuildingData {
+  id?: string
+  typeId?: string
+  workers?: number
+  level?: number
+  traits?: Record<string, unknown>
+  recipe?: string
+  x?: number
+  y?: number
+}
+
+interface RouteData {
+  id: string
+  fromId: string
+  toId: string
+  length?: number
+}
+
+type ExtendedState = GameState & {
+  buildings?: BuildingData[]
+  routes?: RouteData[]
+  edicts?: Record<string, number>
+}
 
 // Advance one cycle: apply accepted proposals to resources with simple rules and clear applied
 export async function POST() {
   const supabase = createSupabaseServerClient()
+  const uow = new SupabaseUnitOfWork(supabase)
 
   // Get latest state
-  const { data: state, error: stateErr } = await supabase
-    .from('game_state')
-    .select('*')
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-  if (stateErr) return NextResponse.json({ error: stateErr.message }, { status: 500 })
+  const state = await uow.gameStates.getLatest()
   if (!state) return NextResponse.json({ error: 'No game state' }, { status: 400 })
+  const extState = state as ExtendedState
 
   // Fetch accepted proposals
-  const { data: accepted, error: propErr } = await supabase
-    .from('proposals')
-    .select('*')
-    .eq('state_id', state.id)
-    .eq('status', 'accepted')
-  if (propErr) return NextResponse.json({ error: propErr.message }, { status: 500 })
+  const accepted = await uow.proposals.listByState(state.id, ['accepted'])
 
   // Apply predicted deltas
   const resources = { ...state.resources }
@@ -37,17 +54,17 @@ export async function POST() {
   }
 
   // Apply per-building production (conservative: skip building if any input is missing)
-  const buildings: Array<{ typeId?: string; workers?: number } & Record<string, unknown>> = Array.isArray(state.buildings) ? state.buildings as any : []
-  let workers = Number(state.workers ?? 0)
-  const edicts: Record<string, number> = (state as any).edicts || {}
+  const buildings: BuildingData[] = Array.isArray(extState.buildings) ? extState.buildings : []
+  let workers = Number(extState.workers ?? 0)
+  const edicts: Record<string, number> = extState.edicts ?? {}
   // Trade tariffs: 0..100 -> route coin multiplier ~ 0.8..1.4
   const tariffValue = Math.max(0, Math.min(100, Number(edicts['tariffs'] ?? 50)))
   const routeCoinMultiplier = 0.8 + (tariffValue * 0.006) // 0.8..1.4
   const patrolsEnabled = Number(edicts['patrols'] ?? 0) === 1
   
   // Precompute routing graph to detect storehouse connections
-  const routes2: Array<{ id: string; fromId: string; toId: string; length?: number }> = Array.isArray((state as any).routes) ? (state as any).routes as any : []
-  const byId = new Map<string, any>((buildings as any).map((bb: any) => [String(bb.id), bb]))
+  const routes2: RouteData[] = Array.isArray(extState.routes) ? extState.routes : []
+  const byId = new Map<string, BuildingData>(buildings.map(bb => [String(bb.id), bb]))
   const connectedToStorehouse = new Set<string>()
   if (routes2.length > 0) {
     for (const r of routes2) {
@@ -63,13 +80,13 @@ export async function POST() {
     const typeId = String(b.typeId || '')
     const def = SIM_BUILDINGS[typeId]
     if (!def) continue
-    const level = Math.max(1, Number((b as any).level ?? 1))
+    const level = Math.max(1, Number(b.level ?? 1))
     const levelOutScale = 1 + 0.5 * (level - 1)
     const levelCapScale = 1 + 0.25 * (level - 1)
     const capacity = Math.round((def.workCapacity ?? 0) * levelCapScale)
     const assigned = Math.min(typeof b.workers === 'number' ? b.workers : 0, capacity)
     const ratio = capacity > 0 ? assigned / capacity : 1
-    const traits = (b as any).traits || {}
+    const traits = b.traits || {}
     // Check inputs
     let canProduce = true
     for (const [k, v] of Object.entries(def.inputs)) {
@@ -82,8 +99,8 @@ export async function POST() {
     // Consume inputs
     for (const [k, v] of Object.entries(def.inputs)) {
       let mult = 1
-      if (typeId === 'sawmill' && k === 'wood' && (b as any).recipe === 'fine') mult = (4/3)
-      if (typeId === 'trade_post' && k === 'grain' && (b as any).recipe === 'premium') mult = (3/2)
+      if (typeId === 'sawmill' && k === 'wood' && b.recipe === 'fine') mult = (4/3)
+      if (typeId === 'trade_post' && k === 'grain' && b.recipe === 'premium') mult = (3/2)
       const need = Math.max(0, Math.round((Number(v ?? 0)) * ratio * mult))
       if (k === 'workers') {
         workers = Math.max(0, workers - need)
@@ -108,10 +125,10 @@ export async function POST() {
         const forestAdj = Math.min(3, Number(traits.forestAdj ?? 0))
         out += 2 * forestAdj
       }
-      if (typeId === 'sawmill' && k === 'planks' && (b as any).recipe === 'fine') {
+      if (typeId === 'sawmill' && k === 'planks' && b.recipe === 'fine') {
         out = (9) * ratio * levelOutScale
       }
-      if ((b as any).id && connectedToStorehouse.has(String((b as any).id)) && (k === 'grain' || k === 'wood' || k === 'planks')) {
+      if (b.id && connectedToStorehouse.has(String(b.id)) && (k === 'grain' || k === 'wood' || k === 'planks')) {
         out *= 1.15
       }
       if (typeId === 'shrine' && k === 'favor') {
@@ -130,13 +147,12 @@ export async function POST() {
 
   // Trade routes: add coin based on distance; minor unrest pressure
   if (routes2.length > 0) {
-    const byId = new Map<string, any>((buildings as any).map((bb: any) => [String(bb.id), bb]))
     const MAX_ROUTE_LEN = 20
     for (const r of routes2) {
       const a = byId.get(String(r.fromId))
       const b = byId.get(String(r.toId))
       if (!a || !b) continue
-      const dist = Math.abs(Number(a.x ?? 0) - Number(b.x ?? 0)) + Math.abs(Number(a.y ?? 0) - Number(b.y ?? 0))
+      const dist = Math.abs(Number(a?.x ?? 0) - Number(b?.x ?? 0)) + Math.abs(Number(a?.y ?? 0) - Number(b?.y ?? 0))
       const length = Math.min(MAX_ROUTE_LEN, Number(r.length ?? dist))
       const coinGain = Math.max(1, Math.round(length * 0.5 * routeCoinMultiplier))
       resources.coin = Math.max(0, Number(resources.coin ?? 0) + coinGain)
@@ -189,25 +205,28 @@ export async function POST() {
   // Increment cycle and persist max_cycle
   const newCycle = Number(state.cycle) + 1
   const newMax = Math.max(Number(state.max_cycle ?? 0), newCycle)
-  const { data: updated, error: upErr } = await supabase
-    .from('game_state')
-    .update({
+  let updated
+  try {
+    updated = await uow.gameStates.update(state.id, {
       cycle: newCycle,
       max_cycle: newMax,
       resources,
       workers,
-      buildings: state.buildings ?? [],
-      routes: (state as any).routes ?? [],
+      buildings: extState.buildings ?? [],
+      routes: extState.routes ?? [],
       updated_at: new Date().toISOString(),
     })
-    .eq('id', state.id)
-    .select('*')
-    .single()
-  if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 })
+  } catch (upErr: unknown) {
+    const message = upErr instanceof Error ? upErr.message : String(upErr)
+    return NextResponse.json({ error: message }, { status: 500 })
+  }
 
   // Mark proposals as applied
   if ((accepted?.length ?? 0) > 0) {
-    await supabase.from('proposals').update({ status: 'applied' }).in('id', accepted!.map(p => p.id))
+    await uow.proposals.updateMany(
+      accepted!.map(p => p.id),
+      { status: 'applied' },
+    )
   }
 
   return NextResponse.json({ state: updated, crisis })

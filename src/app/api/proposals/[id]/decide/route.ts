@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { SupabaseUnitOfWork } from '@/infrastructure/supabase/unit-of-work'
 import { z } from 'zod'
 
 interface RouteContext {
@@ -14,6 +15,7 @@ const BodySchema = z.object({
 export async function POST(req: NextRequest, context: RouteContext) {
   const params = await context.params
   const supabase = createSupabaseServerClient()
+  const uow = new SupabaseUnitOfWork(supabase)
   const { id } = params
   const json = await req.json().catch(() => ({}))
   const parsed = BodySchema.safeParse(json)
@@ -25,8 +27,7 @@ export async function POST(req: NextRequest, context: RouteContext) {
   }
   const { decision, comment } = parsed.data
 
-  const { data: prop, error: propErr } = await supabase.from('proposals').select('*').eq('id', id).maybeSingle()
-  if (propErr) return NextResponse.json({ error: propErr.message }, { status: 500 })
+  const prop = await uow.proposals.getById(id)
   if (!prop) return NextResponse.json({ error: 'Proposal not found' }, { status: 404 })
 
   // Record decision
@@ -35,8 +36,12 @@ export async function POST(req: NextRequest, context: RouteContext) {
 
   // Update proposal status
   const status = decision === 'accept' ? 'accepted' : 'rejected'
-  const { error: upErr } = await supabase.from('proposals').update({ status }).eq('id', id)
-  if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 })
+  try {
+    await uow.proposals.update(id, { status })
+  } catch (upErr: unknown) {
+    const message = upErr instanceof Error ? upErr.message : String(upErr)
+    return NextResponse.json({ error: message }, { status: 500 })
+  }
 
   return NextResponse.json({ ok: true })
 }
