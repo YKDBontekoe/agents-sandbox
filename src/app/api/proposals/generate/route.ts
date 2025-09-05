@@ -5,19 +5,9 @@ import { config } from '@/infrastructure/config'
 import { generateText } from 'ai'
 import { createOpenAI } from '@ai-sdk/openai'
 import { z } from 'zod'
-import { accumulateEffects, generateSkillTree } from '@/components/game/skills/procgen'
 import { rateLimit } from '@/middleware/rateLimit'
 import { buildGameContext } from '@/lib/gameContext'
-
-interface GameState {
-  id: string
-  cycle: number
-  resources: Record<string, number>
-  buildings?: Array<{ typeId?: string; traits?: Record<string, unknown> }>
-  routes?: unknown[]
-  skills?: string[]
-  skill_tree_seed?: number
-}
+import { getPrompt } from '@/prompts/registry'
 
 const openai = createOpenAI({ apiKey: config.openAiApiKey })
 
@@ -61,6 +51,8 @@ export async function POST(req: NextRequest) {
 
   if (!hasOpenAI) {
     // Deterministic, rule-based fallback when OpenAI is not configured
+    const promptVersion = 'generate-fallback-v1'
+    const modelVersion = 'deterministic'
     const guildMap: Record<string, { title: string; desc: string; delta: Record<string, number> }[]> = {
       Wardens: [
         { title: 'Fortify the Outer Walls', desc: 'Repair battlements and station extra sentries along the perimeter.', delta: { threat: -3, unrest: -1, coin: -10 } },
@@ -88,6 +80,8 @@ export async function POST(req: NextRequest) {
       description: p.desc,
       predicted_delta: p.delta,
       status: 'pending' as const,
+      gen_prompt_version: promptVersion,
+      gen_model_version: modelVersion,
     }))
 
     try {
@@ -100,10 +94,9 @@ export async function POST(req: NextRequest) {
   }
 
   // Use AI to draft 1-3 proposals aligned with README fantasy
-  const system = `You are an autonomous guild agent in a fantasy realm management game. Propose concise, actionable proposals with predicted resource deltas.
-Resources: grain, coin, mana, favor, unrest, threat.
-Guilds: Wardens(defense), Alchemists(resources), Scribes(infra), Stewards(policy).
-Return JSON array, each item: { title, description, predicted_delta: {resource:number,...} }`
+  const promptDef = getPrompt('proposalGeneration')
+  const promptVersion = `${promptDef.id}-v${promptDef.version}`
+  const model = 'gpt-4o-mini'
 
   // Build planning context
   const gameContext = buildGameContext(state)
@@ -119,9 +112,17 @@ Return JSON array, each item: { title, description, predicted_delta: {resource:n
   const user = `Context: ${JSON.stringify(context)}\nGenerate 2 proposals rooted in this guild focus and the game's tone. Keep predicted_delta conservative and numeric. JSON only.`
 
   const { text } = await generateText({
-    model: openai('gpt-4o-mini'),
-    system,
+    model: openai(model),
+    system: promptDef.system,
     prompt: user,
+    providerOptions: {
+      openai: {
+        response_format: {
+          type: 'json_schema',
+          json_schema: { schema: promptDef.schema as any, name: 'response' },
+        },
+      },
+    },
   })
 
   let parsedJson: unknown
@@ -151,6 +152,8 @@ Return JSON array, each item: { title, description, predicted_delta: {resource:n
     description: p.description,
     predicted_delta: p.predicted_delta,
     status: 'pending' as const,
+    gen_prompt_version: promptVersion,
+    gen_model_version: model,
   }))
 
   try {

@@ -19,7 +19,11 @@ create table if not exists proposals (
   title text not null,
   description text not null,
   predicted_delta jsonb not null default '{}',
-  status text not null default 'pending' check (status in ('pending','accepted','rejected','applied'))
+  status text not null default 'pending' check (status in ('pending','accepted','rejected','applied')),
+  gen_prompt_version text,
+  gen_model_version text,
+  scry_prompt_version text,
+  scry_model_version text
 );
 
 create table if not exists decisions (

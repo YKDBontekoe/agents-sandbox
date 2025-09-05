@@ -1,14 +1,17 @@
 export type ProposalStatus = 'pending' | 'accepted' | 'rejected' | 'applied'
 
-export interface Proposal {
-  id: string
-  state_id: string
+import type { Proposal as EngineProposal } from '@engine'
+
+export interface Proposal extends EngineProposal {
   guild: string
   title: string
   description: string
-  predicted_delta: Record<string, number>
   status: ProposalStatus
   created_at?: string
+  gen_prompt_version?: string | null
+  gen_model_version?: string | null
+  scry_prompt_version?: string | null
+  scry_model_version?: string | null
 }
 
 export interface ProposalRepository {

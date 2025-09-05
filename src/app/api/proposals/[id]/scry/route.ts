@@ -5,17 +5,9 @@ import { config } from '@/infrastructure/config'
 import { generateText } from 'ai'
 import { createOpenAI } from '@ai-sdk/openai'
 import { z } from 'zod'
-import { accumulateEffects, generateSkillTree } from '@/components/game/skills/procgen'
 import { rateLimit } from '@/middleware/rateLimit'
 import { buildGameContext } from '@/lib/gameContext'
-
-interface GameState {
-  resources?: Record<string, number>
-  buildings?: Array<{ typeId?: string; traits?: Record<string, unknown> }>
-  routes?: unknown[]
-  skills?: string[]
-  skill_tree_seed?: number
-}
+import { getPrompt } from '@/prompts/registry'
 
 const openai = createOpenAI({ apiKey: config.openAiApiKey })
 
@@ -58,6 +50,9 @@ export async function POST(req: NextRequest, context: RouteContext) {
 
   const proposal = await uow.proposals.getById(id)
   if (!proposal) return NextResponse.json({ error: 'Proposal not found' }, { status: 404 })
+  if (!proposal.state_id) {
+    return NextResponse.json({ error: 'Proposal missing state reference' }, { status: 400 })
+  }
   const gameState = await uow.gameStates.getById(proposal.state_id)
 
   const hasOpenAI = !!config.openAiApiKey &&
@@ -66,6 +61,8 @@ export async function POST(req: NextRequest, context: RouteContext) {
 
   // Deterministic fallback when OpenAI is not configured
   if (!hasOpenAI) {
+    const promptVersion = 'scry-fallback-v1'
+    const modelVersion = 'deterministic'
     const p = proposal as unknown as ProposalRow
     const guild = String(p.guild ?? '')
     const title = String(p.title ?? '')
@@ -131,21 +128,34 @@ export async function POST(req: NextRequest, context: RouteContext) {
     }
 
     const predicted_delta = inferDelta()
-    await uow.proposals.update(id, { predicted_delta })
+    await uow.proposals.update(id, { predicted_delta, scry_prompt_version: promptVersion, scry_model_version: modelVersion })
     return NextResponse.json({
       predicted_delta,
       risk_note: 'Deterministic fallback estimate based on guild heuristics (no OpenAI configured).',
     })
   }
 
-  const system = `You are a scrying oracle. Given a proposal and current state context (resources, buildings, routes, terrain, skill modifiers), forecast likely deltas conservatively.
-Return strict JSON: { predicted_delta: {resource:number,...}, risk_note: string }`
+  const promptDef = getPrompt('proposalScry')
+  const promptVersion = `${promptDef.id}-v${promptDef.version}`
+  const model = 'gpt-4o-mini'
 
   const p = proposal as ProposalRow
   const stateRes = gameState?.resources ?? {}
   const extraContext = buildGameContext(gameState)
   const user = `Context: ${JSON.stringify({ resources: stateRes, ...extraContext })}\nProposal: ${String(p.title ?? '')} - ${String(p.description ?? '')}`
-  const { text } = await generateText({ model: openai('gpt-4o-mini'), system, prompt: user })
+  const { text } = await generateText({
+    model: openai(model),
+    system: promptDef.system,
+    prompt: user,
+    providerOptions: {
+      openai: {
+        response_format: {
+          type: 'json_schema',
+          json_schema: { schema: promptDef.schema as any, name: 'response' },
+        },
+      },
+    },
+  })
 
   let parsedJson: unknown
   try {
@@ -166,6 +176,10 @@ Return strict JSON: { predicted_delta: {resource:number,...}, risk_note: string 
     )
   }
 
-  await uow.proposals.update(id, { predicted_delta: parsed.data.predicted_delta })
+  await uow.proposals.update(id, {
+    predicted_delta: parsed.data.predicted_delta,
+    scry_prompt_version: promptVersion,
+    scry_model_version: model,
+  })
   return NextResponse.json(parsed.data)
 }
