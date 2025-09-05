@@ -39,8 +39,18 @@ const fromEnv: Partial<Config> = {
   nextPublicDisableRealtime: process.env.NEXT_PUBLIC_DISABLE_REALTIME === '1'
 };
 
+const ClientSchema = ConfigSchema.partial({
+  supabaseUrl: true,
+  supabaseServiceRoleKey: true,
+  supabaseJwtSecret: true,
+  openAiApiKey: true,
+});
+
 export function loadConfig(overrides: Partial<Config> = {}): Config {
-  return ConfigSchema.parse({ ...defaults, ...fromEnv, ...overrides });
+  const base = { ...defaults, ...fromEnv, ...overrides } as any;
+  const isBrowser = typeof window !== 'undefined';
+  const parsed = isBrowser ? ClientSchema.parse(base) : ConfigSchema.parse(base);
+  return parsed as Config;
 }
 
 export const config = loadConfig();

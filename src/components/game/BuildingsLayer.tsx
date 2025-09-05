@@ -88,6 +88,31 @@ function drawIcon(g: PIXI.Graphics, typeId: string, tw: number, th: number) {
       g.endFill();
       break;
     }
+    case 'lumber_camp': {
+      // log pile
+      g.beginFill(0x92400e);
+      g.drawRect(-tw * 0.22, -th * 0.02, tw * 0.44, th * 0.06);
+      g.drawRect(-tw * 0.18, th * 0.04, tw * 0.36, th * 0.06);
+      g.endFill();
+      break;
+    }
+    case 'sawmill': {
+      // small mill blade + plank stack
+      g.beginFill(0x6b7280);
+      g.drawCircle(-tw * 0.1, 0, Math.min(tw, th) * 0.12);
+      g.endFill();
+      g.beginFill(0xf59e0b);
+      g.drawRect(tw * 0.02, -th * 0.02, tw * 0.28, th * 0.1);
+      g.endFill();
+      break;
+    }
+    case 'storehouse': {
+      // warehouse box
+      g.beginFill(0x334155);
+      g.drawRect(-tw * 0.18, -th * 0.04, tw * 0.36, th * 0.2);
+      g.endFill();
+      break;
+    }
     case 'shrine': {
       g.beginFill(0x7c3aed);
       g.drawCircle(0, 0, Math.min(tw, th) * 0.18);
@@ -118,6 +143,7 @@ export default function BuildingsLayer({ buildings, tileWidth = 64, tileHeight =
     const container = new PIXI.Container();
     container.name = 'buildings-layer';
     container.sortableChildren = true;
+    container.zIndex = 500; // render above base grid
     viewport.addChild(container);
     containerRef.current = container;
 
@@ -139,13 +165,21 @@ export default function BuildingsLayer({ buildings, tileWidth = 64, tileHeight =
       const { worldX, worldY } = gridToWorld(b.x, b.y, tileWidth, tileHeight);
       const url = getBuildingSpriteUrl(b.typeId);
       if (url) {
+        // subtle shadow for contrast
+        const shadow = new PIXI.Graphics();
+        shadow.position.set(worldX, worldY + 2);
+        shadow.zIndex = 515;
+        shadow.beginFill(0x000000, 0.12);
+        shadow.drawEllipse(0, 0, tileWidth * 0.22, tileHeight * 0.18);
+        shadow.endFill();
+
         const spr = PIXI.Sprite.from(url);
         spr.anchor.set(0.5);
-        spr.position.set(worldX, worldY - tileHeight * 0.05);
+        spr.position.set(worldX, worldY - tileHeight * 0.06);
         spr.zIndex = 520;
         // Scale to roughly fit within a tile diamond
-        const targetW = tileWidth * 0.6;
-        const targetH = tileHeight * 0.9;
+        const targetW = tileWidth * 0.7;
+        const targetH = tileHeight * 1.05;
         // If base texture size is unknown yet, set scale after first update tick
         const applyScale = () => {
           const bw = spr.texture.width || 64;
@@ -161,11 +195,12 @@ export default function BuildingsLayer({ buildings, tileWidth = 64, tileHeight =
           // Fallback: apply scale immediately if texture dimensions are not available
           applyScale();
         }
+        container.addChild(shadow);
         container.addChild(spr);
       } else {
         const g = new PIXI.Graphics();
         g.position.set(worldX, worldY);
-        g.zIndex = 500; // above tiles
+        g.zIndex = 510; // above tiles
         drawIcon(g, b.typeId, tileWidth, tileHeight);
         container.addChild(g);
       }

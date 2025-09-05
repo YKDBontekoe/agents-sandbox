@@ -161,7 +161,8 @@ export default function GameCanvas({
           events: app.renderer.events,
         });
 
-        // Add viewport to stage
+        // Add viewport to stage and enable zIndex sorting among layer containers
+        viewport.sortableChildren = true;
         app.stage.addChild(viewport);
         viewportRef.current = viewport;
 
@@ -171,12 +172,11 @@ export default function GameCanvas({
             mouseButtons: "all",
           })
           .pinch()
-          // Removed decelerate to avoid clamp bounce feedback causing jitter
-          // .decelerate({
-          //   friction: 0.95,
-          //   bounce: 0.8,
-          //   minSpeed: 0.01,
-          // })
+          .decelerate({
+            friction: 0.92,
+            bounce: 0.0,
+            minSpeed: 0.02,
+          })
           .clampZoom({
             minScale: 0.2,
             maxScale: 3,

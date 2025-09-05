@@ -51,12 +51,10 @@ export default function IsometricGrid({
     const tileType = tileTypes[gridY]?.[gridX] || "grass";
     
     const tile = new PIXI.Graphics();
-    
-    const color = TILE_COLORS[tileType] ?? 0xdde7f7;
-    tile.fill({ color, alpha: 0.9 });
-    tile.setStrokeStyle({ width: 1, color: 0x374151, alpha: 0.9 });
-    
-    // Isometric diamond shape
+    const base = TILE_COLORS[tileType] ?? 0xdde7f7;
+    tile.setStrokeStyle({ width: 1, color: 0x374151, alpha: 0.8 });
+    // Single diamond fill (clean look)
+    tile.fill({ color: base, alpha: 0.95 });
     tile.moveTo(0, -tileHeight / 2);
     tile.lineTo(tileWidth / 2, 0);
     tile.lineTo(0, tileHeight / 2);
@@ -82,6 +80,14 @@ export default function IsometricGrid({
     
     // Per-tile hover/selection handled centrally on the grid container to avoid flicker
 
+    // Optional animated overlays per tile type
+    const overlay = new PIXI.Graphics();
+    overlay.zIndex = 5;
+    (overlay as any).eventMode = 'none';
+    overlay.position.set(worldX, worldY);
+    gridContainerRef.current?.addChild(overlay);
+    (tile as any).__overlay = overlay; // attach for animation tick
+
     return { x: gridX, y: gridY, worldX, worldY, tileType, sprite: tile };
   }, [tileHeight, tileTypes, tileWidth, onTileHover, onTileClick]);
 
@@ -103,6 +109,7 @@ export default function IsometricGrid({
     gridContainer.name = 'isometric-grid';
     // ensure overlays can be drawn above tiles in order
     gridContainer.sortableChildren = true;
+    gridContainer.zIndex = 100; // base layer under buildings
     // enable leave detection for hover overlay
     (gridContainer as any).eventMode = 'static';
     viewport.addChild(gridContainer);
@@ -295,13 +302,14 @@ export default function IsometricGrid({
     };
   }, [viewport, gridSize, tileWidth, tileHeight, tileTypes]);
 
-  // Performance optimization: Viewport culling and LOD
+  // Performance optimization: Viewport culling and LOD + lightweight animations
   useEffect(() => {
     if (!viewport || !gridContainerRef.current) return;
 
     let lastScale = viewport.scale?.x || 1;
     let animationFrameId: number | null = null;
     let isUpdating = false;
+    let t = 0;
 
     const updateVisibilityAndLOD = () => {
       if (!viewport || !viewport.scale || isUpdating) return;
@@ -339,12 +347,10 @@ export default function IsometricGrid({
         // Only redraw graphics if scale changed significantly and tile is visible
         if (shouldShowTile && scaleChanged) {
           const lineWidth = Math.max(0.3, Math.min(2.5, scale * 1.2));
-          
           tile.sprite.clear();
           const baseColor = TILE_COLORS[tile.tileType] ?? 0xdde7f7;
-          tile.sprite.fill({ color: baseColor, alpha: 0.9 });
           tile.sprite.setStrokeStyle({ width: lineWidth, color: 0x374151, alpha: 0.8 });
-          
+          tile.sprite.fill({ color: baseColor, alpha: 0.95 });
           tile.sprite.moveTo(0, -tileHeight / 2);
           tile.sprite.lineTo(tileWidth / 2, 0);
           tile.sprite.lineTo(0, tileHeight / 2);
@@ -352,6 +358,29 @@ export default function IsometricGrid({
           tile.sprite.closePath();
           tile.sprite.fill();
           tile.sprite.stroke();
+        }
+
+        // Lightweight tile animations via overlay
+        const overlay = (tile.sprite as any).__overlay as PIXI.Graphics | undefined;
+        if (overlay) {
+          overlay.visible = shouldShowTile;
+          if (shouldShowTile) {
+            overlay.clear();
+            if (tile.tileType === 'water') {
+              const r = (tileHeight / 4) + Math.sin(t * 0.005 + (tile.x + tile.y)) * 2;
+              overlay.fill({ color: 0xffffff, alpha: 0.05 });
+              overlay.drawCircle(0, 0, r);
+              overlay.fill({ color: 0xffffff, alpha: 0.03 });
+              overlay.drawCircle(0, 0, r * 0.6);
+            } else if (tile.tileType === 'forest') {
+              overlay.setStrokeStyle({ width: 1, color: 0x14532d, alpha: 0.2 });
+              const sway = Math.sin(t * 0.006 + (tile.x * 0.1)) * 3;
+              overlay.moveTo(-tileWidth/4 + sway, -tileHeight/6);
+              overlay.lineTo(-tileWidth/8 + sway, 0);
+              overlay.lineTo(-tileWidth/4 + sway, tileHeight/6);
+              overlay.stroke();
+            }
+          }
         }
       });
       
@@ -369,14 +398,19 @@ export default function IsometricGrid({
     // Listen to viewport events with throttling
     viewport.on('zoomed', throttledUpdate);
     viewport.on('moved', throttledUpdate);
+    // Global animation ticker
+    const tick = () => {
+      t += 16;
+      throttledUpdate();
+      animationFrameId = requestAnimationFrame(tick);
+    };
+    animationFrameId = requestAnimationFrame(tick);
     
     // Initial update
     updateVisibilityAndLOD();
 
     return () => {
-      if (animationFrameId) {
-        cancelAnimationFrame(animationFrameId);
-      }
+      if (animationFrameId) cancelAnimationFrame(animationFrameId);
       viewport.off('zoomed', throttledUpdate);
       viewport.off('moved', throttledUpdate);
     };

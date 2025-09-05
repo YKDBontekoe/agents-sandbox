@@ -27,6 +27,7 @@ interface RoutesLayerProps {
 export default function RoutesLayer({ routes, buildings, tileWidth = 64, tileHeight = 32 }: RoutesLayerProps) {
   const { viewport } = useGameContext();
   const containerRef = useRef<PIXI.Container | null>(null);
+  const caravansRef = useRef<Array<{ sprite: PIXI.Graphics; ax: number; ay: number; bx: number; by: number; speed: number; phase: number }>>([]);
 
   useEffect(() => {
     if (!viewport) return;
@@ -35,10 +36,24 @@ export default function RoutesLayer({ routes, buildings, tileWidth = 64, tileHei
     container.sortableChildren = true;
     viewport.addChild(container);
     containerRef.current = container;
+    let raf: number | null = null;
+    const animate = () => {
+      const list = caravansRef.current;
+      list.forEach(c => {
+        c.phase = (c.phase + c.speed) % 1;
+        const t = c.phase;
+        const x = c.ax + (c.bx - c.ax) * t;
+        const y = c.ay + (c.by - c.ay) * t;
+        c.sprite.position.set(x, y);
+      });
+      raf = requestAnimationFrame(animate);
+    };
+    raf = requestAnimationFrame(animate);
     return () => {
       if (container.parent) container.parent.removeChild(container);
       container.destroy({ children: true });
       containerRef.current = null;
+      if (raf) cancelAnimationFrame(raf);
     };
   }, [viewport]);
 
@@ -48,6 +63,7 @@ export default function RoutesLayer({ routes, buildings, tileWidth = 64, tileHei
     container.removeChildren();
 
     const byId = new Map(buildings.map(b => [b.id, b] as const));
+    caravansRef.current = [];
     routes.forEach(r => {
       const a = byId.get(r.fromId);
       const b = byId.get(r.toId);
@@ -62,13 +78,13 @@ export default function RoutesLayer({ routes, buildings, tileWidth = 64, tileHei
       g.lineTo(bw.worldX, bw.worldY);
       container.addChild(g);
 
-      const mid = new PIXI.Text({
-        text: '⇄',
-        style: { fill: 0x1e293b, fontSize: 12, fontWeight: '600' },
-      });
-      mid.anchor.set(0.5);
-      mid.position.set((aw.worldX + bw.worldX) / 2, (aw.worldY + bw.worldY) / 2 - 6);
-      container.addChild(mid);
+      // Caravan dot
+      const c = new PIXI.Graphics();
+      c.zIndex = 350;
+      c.fill({ color: 0xf59e0b, alpha: 0.9 });
+      c.drawCircle(0, 0, 3);
+      container.addChild(c);
+      caravansRef.current.push({ sprite: c, ax: aw.worldX, ay: aw.worldY, bx: bw.worldX, by: bw.worldY, speed: 0.004 + Math.random() * 0.004, phase: Math.random() });
     });
   }, [JSON.stringify(routes), JSON.stringify(buildings), tileWidth, tileHeight]);
 

@@ -26,6 +26,9 @@ export function getBuildingSpriteUrl(typeId: string): string | null {
     trade_post: '/sprites/buildings/trade-post.svg',
     automation_workshop: '/sprites/buildings/automation-workshop.svg',
     farm: '/sprites/buildings/farm.svg',
+    lumber_camp: '/sprites/buildings/lumber-camp.svg',
+    sawmill: '/sprites/buildings/sawmill.svg',
+    storehouse: '/sprites/buildings/storehouse.svg',
     shrine: '/sprites/buildings/shrine.svg',
     house: '/sprites/buildings/house.svg',
   };

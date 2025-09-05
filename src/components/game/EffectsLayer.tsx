@@ -87,19 +87,22 @@ export default function EffectsLayer({ trigger, tileWidth = 64, tileHeight = 32 
       t += dt;
       const p = Math.min(1, t / duration);
 
-      // Ring: grows and fades
+      // Ring: grows and fades (color varies for clicks vs decree)
       const radius = 8 + p * 26;
       const alpha = 0.35 * (1 - p);
       ring.clear();
-      ring.lineStyle(2, 0x22c55e, alpha);
+      const ringColor = (trigger.eventKey || '').startsWith('click-') ? 0x3b82f6 : 0x22c55e; // blue for click, emerald otherwise
+      ring.lineStyle(2, ringColor, alpha);
       ring.drawCircle(0, 0, radius);
 
-      // Texts: fade in and float
-      const tp = Math.min(1, t / textDuration);
-      texts.forEach((txt, i) => {
-        txt.alpha = Math.min(1, tp * 1.2);
-        txt.y = wy - 10 - i * 16 - tp * 8;
-      });
+      // Texts: fade in and float (skip for click-only ripples)
+      if (!(trigger.eventKey || '').startsWith('click-')) {
+        const tp = Math.min(1, t / textDuration);
+        texts.forEach((txt, i) => {
+          txt.alpha = Math.min(1, tp * 1.2);
+          txt.y = wy - 10 - i * 16 - tp * 8;
+        });
+      }
 
       if (t >= Math.max(duration, textDuration)) {
         app.ticker.remove(tick);

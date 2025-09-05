@@ -22,6 +22,10 @@ import { LeylineSystem, Leyline } from '@/components/game/LeylineSystem';
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
 import { accumulateEffects, generateSkillTree, SkillNode } from '@/components/game/skills/procgen';
 import EffectsLayer from '@/components/game/EffectsLayer';
+import PreviewLayer from '@/components/game/PreviewLayer';
+import AmbientLayer from '@/components/game/AmbientLayer';
+import SeasonalLayer from '@/components/game/SeasonalLayer';
+import TileTooltip from '@/components/game/TileTooltip';
 import HeatLayer from '@/components/game/HeatLayer';
 import MarkersLayer from '@/components/game/MarkersLayer';
 import BuildingsLayer from '@/components/game/BuildingsLayer';
@@ -46,6 +50,7 @@ function TileInfoPanel({
   simResources,
   placedBuildings,
   routes,
+  onPreviewType,
   onBuild,
   onUpgrade,
   onDismantle,
@@ -66,6 +71,7 @@ function TileInfoPanel({
   simResources: SimResources | null;
   placedBuildings: StoredBuilding[];
   routes: TradeRoute[];
+  onPreviewType: (typeId: BuildTypeId | null) => void;
   onBuild: (typeId: BuildTypeId) => void | Promise<void>;
   onUpgrade: (buildingId: string) => void | Promise<void>;
   onDismantle: (buildingId: string) => void | Promise<void>;
@@ -241,6 +247,8 @@ function TileInfoPanel({
                     <div className="text-[11px] text-slate-500">{renderCost(typeId)}{!placeable ? ' • cannot build on this terrain' : ''}</div>
                   </div>
                   <button
+                    onMouseEnter={() => onPreviewType(typeId)}
+                    onMouseLeave={() => onPreviewType(null)}
                     onClick={() => {
                       onBuild(typeId);
                       if ((tutorialFree[typeId] || 0) > 0) onConsumeTutorialFree(typeId);
@@ -441,6 +449,10 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     return () => window.removeEventListener('ad_unlock_skill', onUnlock as any);
   }, [state, unlockedSkillIds]);
   const [selectedTile, setSelectedTile] = useState<{ x: number; y: number; tileType?: string } | null>(null);
+  const [hoverTile, setHoverTile] = useState<{ x: number; y: number; tileType?: string } | null>(null);
+  const [previewTypeId, setPreviewTypeId] = useState<BuildTypeId | null>(null);
+  const [tooltipLocked, setTooltipLocked] = useState(false);
+  const [clickEffectKey, setClickEffectKey] = useState<string | null>(null);
   const [selectedLeyline, setSelectedLeyline] = useState<Leyline | null>(null);
   const [isDrawingMode, _setIsDrawingMode] = useState(false);
   const hasAutoOpenedCouncilRef = useRef(false);
@@ -874,12 +886,21 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
             useExternalProvider
             gridSize={20}
             tileTypes={tileTypes}
-            onTileHover={(x,y,t)=>{ setSelectedTile({x,y,tileType:t}); }}
+            onTileHover={(x,y,t)=>{ setHoverTile({x,y,tileType:t}); }}
             onTileClick={(x,y,t)=>{
               setSelectedTile({x,y,tileType:t});
+              setTooltipLocked(true);
+              setClickEffectKey(`click-${Date.now()}-${x}-${y}`);
               try { window.dispatchEvent(new CustomEvent('ad_select_tile', { detail: { gridX: x, gridY: y, tileWidth: 64, tileHeight: 32 } })); } catch {}
             }}
           >
+            <PreviewLayer
+              hoverTile={hoverTile}
+              selectedTile={selectedTile}
+              tileTypes={tileTypes}
+              buildings={placedBuildings.map(b => ({ id: b.id, typeId: b.typeId, x: b.x, y: b.y }))}
+              previewTypeId={previewTypeId}
+            />
             <DistrictSprites districts={districts} tileTypes={tileTypes} onDistrictHover={()=>{}} />
             <LeylineSystem leylines={leylines} onLeylineCreate={()=>{}} onLeylineSelect={setSelectedLeyline} selectedLeyline={selectedLeyline} isDrawingMode={false} />
             <HeatLayer gridSize={20} tileWidth={64} tileHeight={32} unrest={resources.unrest} threat={resources.threat} />
@@ -888,8 +909,24 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
             {acceptedNotice && (
               <EffectsLayer trigger={{ eventKey: acceptedNoticeKeyRef.current || 'accept', deltas: acceptedNotice.delta || {}, gridX: selectedTile?.x ?? 10, gridY: selectedTile?.y ?? 10 }} />
             )}
+            {clickEffectKey && selectedTile && (
+              <EffectsLayer trigger={{ eventKey: clickEffectKey, deltas: {}, gridX: selectedTile.x, gridY: selectedTile.y }} />
+            )}
+            <AmbientLayer tileTypes={tileTypes} />
+            <SeasonalLayer season={((state.cycle ?? 0) % 4 === 0 ? 'spring' : (state.cycle % 4 === 1 ? 'summer' : (state.cycle % 4 === 2 ? 'autumn' : 'winter')))} />
             <MarkersLayer markers={markers.map(m => ({ id: m.id, gridX: m.x, gridY: m.y, label: m.label }))} />
           </GameRenderer>
+
+          {/* DOM tooltip overlay, lockable on tile click */}
+          <TileTooltip
+            hoverTile={hoverTile}
+            selectedTile={selectedTile}
+            previewTypeId={previewTypeId}
+            tileTypes={tileTypes}
+            buildings={placedBuildings}
+            locked={tooltipLocked}
+            onUnlock={() => setTooltipLocked(false)}
+          />
 
           {/* Early Quest Tracker */}
           <QuestTracker
@@ -940,6 +977,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
               simResources={simResources}
               placedBuildings={placedBuildings}
               routes={routes || []}
+              onPreviewType={(t)=> setPreviewTypeId(t)}
               onBuild={async (typeId) => {
                 if (!simResources) return;
                 const gx = selectedTile.x, gy = selectedTile.y;
