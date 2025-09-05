@@ -20,6 +20,14 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Environment Variables
+
+The server exposes a basic rate limiter for proposal-related endpoints. Configure the maximum number of requests per minute with:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PROPOSAL_RATE_LIMIT` | `5` | Max proposals or scries per minute per IP |
+
 ## Design Tokens
 
 Global color tokens are defined in `src/app/globals.css` and surfaced in Tailwind via `theme.extend.colors`.

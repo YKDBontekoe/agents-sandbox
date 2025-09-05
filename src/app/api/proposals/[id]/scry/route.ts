@@ -4,6 +4,7 @@ import { generateText } from 'ai'
 import { createOpenAI } from '@ai-sdk/openai'
 import { z } from 'zod'
 import { accumulateEffects, generateSkillTree } from '@/components/game/skills/procgen'
+import { rateLimit } from '@/middleware/rateLimit'
 
 const openai = createOpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
@@ -27,6 +28,11 @@ interface ProposalRow {
 }
 
 export async function POST(req: NextRequest, context: RouteContext) {
+  const ip = req.ip ?? req.headers.get('x-forwarded-for')?.split(',')[0] ?? 'unknown'
+  const limit = Number(process.env.PROPOSAL_RATE_LIMIT ?? '5')
+  if (!rateLimit(ip, { limit })) {
+    return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 })
+  }
   const params = await context.params
   const supabase = createSupabaseServerClient()
   const { id } = params
