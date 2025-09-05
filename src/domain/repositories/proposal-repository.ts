@@ -1,15 +1,8 @@
 export type ProposalStatus = 'pending' | 'accepted' | 'rejected' | 'applied'
 
-export interface Proposal {
-  id: string
-  state_id: string
-  guild: string
-  title: string
-  description: string
-  predicted_delta: Record<string, number>
-  status: ProposalStatus
-  created_at?: string
-}
+import type { Proposal } from '@engine'
+
+export type { Proposal }
 
 export interface ProposalRepository {
   listByState(stateId: string, statuses?: ProposalStatus[]): Promise<Proposal[]>
