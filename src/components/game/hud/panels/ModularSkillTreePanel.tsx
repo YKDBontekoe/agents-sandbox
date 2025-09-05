@@ -61,38 +61,152 @@ export function ModularSkillTreePanel({ seed = 12345, onUnlock, variant = 'compa
   return (
     <ResponsivePanel
       title={variant === 'minimal' ? 'Skills' : 'Skill Tree'}
-      icon={(<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6l4 2" /></svg>)}
+      icon={(
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+        </svg>
+      )}
       variant={variant}
       collapsible
-      className="min-w-0"
+      className="min-w-0 bg-gradient-to-b from-slate-50 to-white shadow-lg border-slate-200"
     >
-      <div className="mb-2 flex items-center gap-2">
-        <input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search skills..." className="px-2 py-1 text-xs rounded border border-border bg-white/80 w-full" />
-        <button onClick={() => setOpen(true)} className="px-3 py-1 text-xs rounded border border-border bg-panel hover:bg-muted">Open Full Tree</button>
+      {/* Enhanced Search and Controls */}
+      <div className="mb-4 space-y-2">
+        <div className="relative">
+          <input 
+            value={query} 
+            onChange={e=>setQuery(e.target.value)} 
+            placeholder="Search skills by name, category, or tags..." 
+            className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 bg-white/90 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 placeholder-slate-400"
+          />
+          <svg className="absolute right-3 top-2.5 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+        </div>
+        <button 
+          onClick={() => setOpen(true)} 
+          className="w-full px-4 py-2 text-sm font-medium rounded-lg bg-gradient-to-r from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 shadow-md hover:shadow-lg"
+        >
+          <span className="flex items-center justify-center gap-2">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+            </svg>
+            Open Full Tree
+          </span>
+        </button>
       </div>
-      <div className="mb-2 flex items-center gap-1 flex-wrap">
-        {(['economic','military','mystical','infrastructure','diplomatic','social'] as SkillNode['category'][]).map(cat => (
-          <button
-            key={cat}
-            onClick={() => toggleCat(cat)}
-            className={`px-2 py-0.5 text-[11px] rounded border ${categoryFilter[cat] ? 'bg-slate-200 border-slate-300' : 'bg-white border-slate-200 text-slate-500'}`}
-            title={`Filter ${cat}`}
-          >
-            {cat}
-          </button>
-        ))}
+      {/* Enhanced Category Filters */}
+      <div className="mb-3 space-y-2">
+        <div className="text-xs font-semibold text-slate-600 mb-1">Categories</div>
+        <div className="grid grid-cols-2 gap-1.5">
+          {(['economic','military','mystical','infrastructure','diplomatic','social'] as SkillNode['category'][]).map(cat => {
+            const categoryColors = {
+              economic: { bg: 'bg-emerald-100', border: 'border-emerald-300', text: 'text-emerald-700', active: 'bg-emerald-200 border-emerald-400' },
+              military: { bg: 'bg-red-100', border: 'border-red-300', text: 'text-red-700', active: 'bg-red-200 border-red-400' },
+              mystical: { bg: 'bg-purple-100', border: 'border-purple-300', text: 'text-purple-700', active: 'bg-purple-200 border-purple-400' },
+              infrastructure: { bg: 'bg-amber-100', border: 'border-amber-300', text: 'text-amber-700', active: 'bg-amber-200 border-amber-400' },
+              diplomatic: { bg: 'bg-blue-100', border: 'border-blue-300', text: 'text-blue-700', active: 'bg-blue-200 border-blue-400' },
+              social: { bg: 'bg-pink-100', border: 'border-pink-300', text: 'text-pink-700', active: 'bg-pink-200 border-pink-400' }
+            };
+            const colors = categoryColors[cat];
+            const availableInCategory = available.filter(n => n.category === cat).length;
+            return (
+              <button
+                key={cat}
+                onClick={() => toggleCat(cat)}
+                className={`px-2 py-1.5 text-xs rounded-lg border transition-all duration-200 flex items-center justify-between ${
+                  categoryFilter[cat] 
+                    ? `${colors.active} ${colors.text} shadow-sm` 
+                    : `${colors.bg} ${colors.border} ${colors.text} opacity-60 hover:opacity-100`
+                }`}
+                title={`Filter ${cat} skills (${availableInCategory} available)`}
+              >
+                <span className="font-medium capitalize">{cat}</span>
+                <span className="text-[10px] opacity-75 ml-1">{availableInCategory}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
-      <div className="mb-2 text-[11px] text-slate-600">Available {filtered.length} • Unlocked {unlockedCount} • Total {tree.nodes.length}</div>
-      <div className="grid grid-cols-1 gap-2">
-        {shortlist.map(n => (
-          <div key={n.id} className={`rounded border px-2 py-1 flex items-center justify-between ${trend === n.category ? 'border-amber-300 bg-amber-50' : 'border-slate-200 bg-white/90'}`}>
-            <div className="min-w-0">
-              <div className="font-medium text-slate-800 text-sm truncate">{n.title}</div>
-              <div className="text-[11px] text-slate-500 truncate">{n.category} • {n.cost.coin ? `🜚 ${n.cost.coin} ` : ''}{n.cost.mana ? ` ✨ ${n.cost.mana} ` : ''}{n.cost.favor ? ` ☼ ${n.cost.favor}` : ''}</div>
-            </div>
-            <ResponsiveButton onClick={() => handleUnlock(n)} variant='primary' size={{ mobile: 'xs', tablet: 'xs', desktop: 'sm', wide: 'sm' }}>Unlock</ResponsiveButton>
+      {/* Enhanced Stats Display */}
+      <div className="mb-3 p-2 bg-slate-100/50 rounded-lg border border-slate-200">
+        <div className="flex items-center justify-between text-xs text-slate-600">
+          <div className="flex items-center gap-3">
+            <span className="font-medium">Available: <span className="text-emerald-600 font-semibold">{filtered.length}</span></span>
+            <span className="font-medium">Unlocked: <span className="text-blue-600 font-semibold">{unlockedCount}</span></span>
           </div>
-        ))}
+          <div className="text-slate-500">
+            Total: {tree.nodes.length}
+          </div>
+        </div>
+        <div className="mt-1 w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
+          <div 
+            className="h-full bg-gradient-to-r from-emerald-400 to-emerald-500 transition-all duration-500"
+            style={{ width: `${(unlockedCount / tree.nodes.length) * 100}%` }}
+          />
+        </div>
+      </div>
+      {/* Enhanced Skill Cards */}
+      <div className="space-y-2">
+        {shortlist.map(n => {
+          const categoryColors = {
+            economic: { border: 'border-emerald-200', bg: 'bg-emerald-50', accent: 'bg-emerald-500' },
+            military: { border: 'border-red-200', bg: 'bg-red-50', accent: 'bg-red-500' },
+            mystical: { border: 'border-purple-200', bg: 'bg-purple-50', accent: 'bg-purple-500' },
+            infrastructure: { border: 'border-amber-200', bg: 'bg-amber-50', accent: 'bg-amber-500' },
+            diplomatic: { border: 'border-blue-200', bg: 'bg-blue-50', accent: 'bg-blue-500' },
+            social: { border: 'border-pink-200', bg: 'bg-pink-50', accent: 'bg-pink-500' }
+          };
+          const colors = categoryColors[n.category];
+          const isHighlighted = trend === n.category;
+          
+          return (
+            <div 
+              key={n.id} 
+              className={`rounded-lg border-2 p-3 transition-all duration-200 hover:shadow-md ${
+                isHighlighted 
+                  ? 'border-amber-300 bg-amber-50 shadow-sm' 
+                  : `${colors.border} ${colors.bg} hover:border-opacity-60`
+              }`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <div className={`w-2 h-2 rounded-full ${colors.accent}`}></div>
+                    <div className="font-semibold text-slate-800 text-sm truncate">{n.title}</div>
+                    <div className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${
+                      n.rarity === 'legendary' ? 'bg-purple-100 text-purple-700' :
+                      n.rarity === 'rare' ? 'bg-blue-100 text-blue-700' :
+                      n.rarity === 'uncommon' ? 'bg-green-100 text-green-700' :
+                      'bg-gray-100 text-gray-600'
+                    }`}>
+                      {n.rarity}
+                    </div>
+                  </div>
+                  <div className="text-xs text-slate-600 mb-2 line-clamp-2">{n.description}</div>
+                  <div className="flex items-center gap-3 text-[11px] text-slate-500">
+                    <span className="capitalize font-medium">{n.category}</span>
+                    <div className="flex items-center gap-1">
+                      {n.cost.coin && <span className="flex items-center gap-0.5">🜚 {n.cost.coin}</span>}
+                      {n.cost.mana && <span className="flex items-center gap-0.5">✨ {n.cost.mana}</span>}
+                      {n.cost.favor && <span className="flex items-center gap-0.5">☼ {n.cost.favor}</span>}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex-shrink-0">
+                  <ResponsiveButton 
+                    onClick={() => handleUnlock(n)} 
+                    variant='primary' 
+                    size={{ mobile: 'xs', tablet: 'xs', desktop: 'sm', wide: 'sm' }}
+                    className="shadow-sm hover:shadow-md transition-shadow"
+                  >
+                    Unlock
+                  </ResponsiveButton>
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </div>
       {filtered.length > 6 && (
         <div className="mt-2 text-right">
