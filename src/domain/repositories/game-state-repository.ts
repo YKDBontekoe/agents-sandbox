@@ -1,16 +1,6 @@
-export interface GameState {
-  id: string
-  cycle: number
-  resources: Record<string, number>
-  workers?: number
-  buildings?: unknown[]
-  routes?: unknown[]
-  edicts?: Record<string, number>
-  skills?: string[]
-  skill_tree_seed?: number
-  max_cycle?: number
-  updated_at: string
-}
+import type { GameState } from '@engine'
+
+export type { GameState }
 
 export interface GameStateRepository {
   getLatest(): Promise<GameState | null>
