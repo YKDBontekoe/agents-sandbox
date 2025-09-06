@@ -192,7 +192,7 @@ export function ModularActionPanel({
               const next = presets[(idx + 1) % presets.length];
               onChangeIntervalMs?.(next);
             }}
-            className="px-2 py-0.5 rounded-full border border-slate-300 bg-white text-[10px] text-slate-700 hover:bg-slate-50"
+            className="px-2 py-0.5 rounded-full border border-gray-600 bg-gray-700 text-[10px] text-gray-100 hover:bg-gray-600"
             aria-label="Cycle simulation speed"
             title="Click to cycle speed"
           >

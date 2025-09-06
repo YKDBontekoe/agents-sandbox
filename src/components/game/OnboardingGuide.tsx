@@ -54,19 +54,19 @@ export default function OnboardingGuide({ step, onClose }: OnboardingGuideProps)
   const content = steps[step] || steps[6];
   return (
     <div className="absolute top-24 left-4 z-50 pointer-events-auto">
-      <div className="bg-white/95 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl w-[320px]">
-        <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
-          <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">Getting Started</div>
-          <button onClick={onClose} className="text-slate-500 hover:text-slate-700 dark:text-slate-300 dark:hover:text-white">✕</button>
+      <div className="bg-gray-800/90 border border-gray-700 rounded-lg shadow-xl w-[320px]">
+        <div className="px-4 py-3 border-b border-gray-700 flex items-center justify-between">
+          <div className="text-sm font-semibold text-gray-100">Getting Started</div>
+          <button onClick={onClose} className="text-gray-300 hover:text-white">✕</button>
         </div>
         <div className="px-4 py-3">
-          <div className="text-slate-900 dark:text-slate-100 font-medium mb-2">{content.title}</div>
-          <ul className="list-disc pl-5 space-y-1 text-sm text-slate-700 dark:text-slate-300">
+          <div className="text-gray-100 font-medium mb-2">{content.title}</div>
+          <ul className="list-disc pl-5 space-y-1 text-sm text-gray-300">
             {content.details.map((d, i) => (
               <li key={i}>{d}</li>
             ))}
           </ul>
-          <div className="mt-3 text-xs text-slate-500 dark:text-slate-400">
+          <div className="mt-3 text-xs text-gray-400">
             Step {Math.min(step, 6)} of 6
           </div>
         </div>
@@ -74,4 +74,3 @@ export default function OnboardingGuide({ step, onClose }: OnboardingGuideProps)
     </div>
   );
 }
-

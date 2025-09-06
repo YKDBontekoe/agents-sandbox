@@ -35,7 +35,7 @@ export const ResponsivePanel = forwardRef<HTMLDivElement, ResponsivePanelProps>(
   
   // Responsive styling based on screen size and variant
   const getResponsiveClasses = () => {
-    const baseClasses = 'bg-white/90 backdrop-blur-sm border border-slate-200 rounded-lg shadow-sm pointer-events-auto';
+    const baseClasses = 'bg-gray-800/90 backdrop-blur-sm border border-gray-700 rounded-lg shadow-sm pointer-events-auto';
     
     const sizeClasses = {
       mobile: {
@@ -63,7 +63,7 @@ export const ResponsivePanel = forwardRef<HTMLDivElement, ResponsivePanelProps>(
     const priorityClasses = {
       low: 'opacity-90',
       medium: 'opacity-95',
-      high: 'opacity-100 ring-1 ring-blue-200'
+      high: 'opacity-100 ring-1 ring-blue-400/30'
     };
 
     const collapseClasses = isCollapsed ? 'scale-95 opacity-75' : '';
@@ -82,11 +82,11 @@ export const ResponsivePanel = forwardRef<HTMLDivElement, ResponsivePanelProps>(
       data-priority={priority}
     >
       {(title || collapsible || actions) && (
-        <div className="flex items-center justify-between mb-2 pb-1 border-b border-slate-100">
+        <div className="flex items-center justify-between mb-2 pb-1 border-b border-gray-700">
           <div className="flex items-center gap-2">
-            {icon && <span className="text-slate-500">{icon}</span>}
+            {icon && <span className="text-gray-400">{icon}</span>}
             {title && (
-              <h3 className="font-medium text-slate-700 truncate">
+              <h3 className="font-medium text-gray-200 truncate">
                 {title}
               </h3>
             )}
@@ -96,7 +96,7 @@ export const ResponsivePanel = forwardRef<HTMLDivElement, ResponsivePanelProps>(
             {collapsible && (
               <button
                 onClick={onToggleCollapse}
-                className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
+                className="p-1 rounded hover:bg-gray-700 text-gray-400 hover:text-gray-200 transition-colors"
                 aria-label={isCollapsed ? 'Expand panel' : 'Collapse panel'}
               >
                 <svg 
@@ -249,12 +249,12 @@ export function ResponsiveText({
   };
   
   const colorClasses = {
-    primary: 'text-slate-900',
-    secondary: 'text-slate-700',
-    muted: 'text-slate-500',
-    danger: 'text-red-600',
-    success: 'text-green-600',
-    warning: 'text-yellow-600'
+    primary: 'text-gray-200',
+    secondary: 'text-gray-300',
+    muted: 'text-gray-400',
+    danger: 'text-red-400',
+    success: 'text-green-400',
+    warning: 'text-yellow-400'
   };
   
   const currentSize = size[screenSize] || 'sm';
@@ -301,7 +301,7 @@ export function ResponsiveButton({
   
   const variantClasses = {
     primary: 'bg-blue-600 hover:bg-blue-700 text-white',
-    secondary: 'bg-slate-200 hover:bg-slate-300 text-slate-700',
+    secondary: 'bg-gray-700 hover:bg-gray-600 text-gray-100',
     danger: 'bg-red-600 hover:bg-red-700 text-white',
     success: 'bg-green-600 hover:bg-green-700 text-white'
   };

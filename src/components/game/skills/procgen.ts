@@ -102,7 +102,7 @@ function pick<T>(rng: () => number, arr: T[]): T {
   return arr[Math.floor(rng() * arr.length)];
 }
 
-export function generateSkillTree(seed = 42): SkillTree {
+export function generateSkillTree(seed = 42, tiers: number = 8): SkillTree {
   const rng = mulberry32(seed);
   const categories: SkillNode['category'][] = ['economic', 'military', 'mystical', 'infrastructure', 'diplomatic', 'social'];
   const nodes: SkillNode[] = [];
@@ -220,7 +220,6 @@ export function generateSkillTree(seed = 42): SkillTree {
   };
 
   // Generate hierarchical tiers with optimized connectivity
-  const tiers = 8; // larger tree
   let prevTier: string[] = [];
   const nodesByCategory: Record<SkillNode['category'], string[]> = {
     economic: [], military: [], mystical: [], infrastructure: [], diplomatic: [], social: []
@@ -503,6 +502,110 @@ export function generateSkillTree(seed = 42): SkillTree {
       ]
     }
   };
+}
+
+// Expand an existing skill tree with more tiers deterministically by seed
+export function expandSkillTree(tree: SkillTree, seed: number, moreTiers: number = 4): SkillTree {
+  const rng = mulberry32(seed + (tree.layout?.maxTier ?? 0) * 1009);
+  const categories: SkillNode['category'][] = ['economic', 'military', 'mystical', 'infrastructure', 'diplomatic', 'social'];
+  const nextStartTier = (tree.layout?.maxTier ?? -1) + 1;
+  if (!tree.layout) tree.layout = { tiers: {}, maxTier: -1, categoryDistribution: { economic: [], military: [], mystical: [], infrastructure: [], diplomatic: [], social: [] } };
+
+  const existingByCategory: Record<SkillNode['category'], string[]> = { economic: [], military: [], mystical: [], infrastructure: [], diplomatic: [], social: [] };
+  tree.nodes.forEach(n => { existingByCategory[n.category].push(n.id); });
+  let prevTier = tree.nodes.filter(n => n.tier === tree.layout!.maxTier).map(n => n.id);
+
+  const idBase = tree.nodes.length;
+  let idCounter = idBase;
+  const id = () => `skill_${idCounter++}`;
+
+  const pick = <T,>(arr: T[]) => arr[Math.floor(rng() * arr.length)];
+  const pickRarity = (): SkillNode['rarity'] => { const r = rng(); return r < 0.55 ? 'common' : r < 0.85 ? 'uncommon' : r < 0.97 ? 'rare' : 'legendary'; };
+  const pickQuality = (tier: number): NodeQuality => { const r = rng(); const tb = tier * 0.05; return r < 0.4 - tb ? 'common' : r < 0.7 - tb ? 'rare' : r < 0.9 - tb ? 'epic' : 'legendary'; };
+  const getQualityMultiplier = (q: NodeQuality) => q === 'common' ? 1.0 : q === 'rare' ? 1.3 : q === 'epic' ? 1.6 : 2.0;
+  const makeCost = (rarity: SkillNode['rarity'], unlockCount: number = 0) => {
+    const base = rarity === 'common' ? 1 : rarity === 'uncommon' ? 1.5 : rarity === 'rare' ? 2 : 3;
+    const progressiveMultiplier = 1 + (unlockCount * 0.15);
+    const baseCost = { coin: Math.round((15 + rng() * 35) * base), mana: Math.round((3 + rng() * 8) * base), favor: Math.round((2 + rng() * 6) * base) };
+    const cost = { coin: Math.round(baseCost.coin! * progressiveMultiplier), mana: Math.round(baseCost.mana! * progressiveMultiplier), favor: Math.round(baseCost.favor! * progressiveMultiplier) };
+    return { cost, baseCost };
+  };
+  const createSpecialAbility = (quality: NodeQuality, category: SkillNode['category']): SpecialAbility | undefined => {
+    if (quality === 'common') return undefined;
+    const abilities: Record<SkillNode['category'], SpecialAbility[]> = {
+      economic: [ { id: 'golden_touch', name: 'Golden Touch', description: 'Double coin generation for 5 minutes', power: 2.0, quality } ],
+      military: [ { id: 'battle_fury', name: 'Battle Fury', description: 'Reduce all military costs by 50%', power: 0.5, quality } ],
+      mystical: [ { id: 'mana_storm', name: 'Mana Storm', description: 'Triple mana generation for 3 minutes', power: 3.0, quality } ],
+      infrastructure: [ { id: 'rapid_construction', name: 'Rapid Construction', description: 'Instant building completion', power: 1.0, quality } ],
+      diplomatic: [ { id: 'silver_tongue', name: 'Silver Tongue', description: 'Double favor from all sources', power: 2.0, quality } ],
+      social: [ { id: 'festival_spirit', name: 'Festival Spirit', description: 'Boost all resource generation by 25%', power: 1.25, quality } ],
+    };
+    return pick(abilities[category]);
+  };
+  const makeEffects = (cat: SkillNode['category']): SkillEffect[] => {
+    switch (cat) {
+      case 'economic': return rng() < 0.5 ? [{ kind: 'resource_multiplier', resource: 'coin', factor: 1.06 + rng() * 0.08 }] : [{ kind: 'route_bonus', percent: 5 + Math.floor(rng() * 10) }];
+      case 'military': return [{ kind: 'upkeep_delta', grainPerWorkerDelta: -0.02 - rng() * 0.04 }];
+      case 'mystical': return [{ kind: 'resource_multiplier', resource: 'mana', factor: 1.08 + rng() * 0.10 }];
+      case 'infrastructure': return rng() < 0.5 ? [{ kind: 'building_multiplier', typeId: pick(['farm','lumber_camp','sawmill','trade_post','storehouse']), factor: 1.10 + rng() * 0.12 }] : [{ kind: 'logistics_bonus', percent: 5 + Math.floor(rng() * 10) }];
+      case 'diplomatic': return [{ kind: 'resource_multiplier', resource: 'favor', factor: 1.10 + rng() * 0.12 }];
+      case 'social': return [{ kind: 'resource_multiplier', resource: 'grain', factor: 1.05 + rng() * 0.08 }];
+    }
+  };
+
+  const titlesByCat: Record<SkillNode['category'], string[]> = {
+    economic: ['Tariff Tuning', 'Market Savvy', 'Guild Contracts', 'Ledger Lore'],
+    military: ['Guard Drills', 'Supply Lines', 'Road Wardens', 'Siege Readiness'],
+    mystical: ['Mana Channels', 'Rune Etching', 'Ley Tuning', 'Arcane Economy'],
+    infrastructure: ['Granary Logic', 'Saw Alignment', 'Gearworks', 'Stone Roads'],
+    diplomatic: ['Fair Tribute', 'Caravan Pacts', 'Envoy Network', 'Open Ports'],
+    social: ['Festivals', 'Guild Mediation', 'Bread & Circus', 'Public Works'],
+  };
+
+  for (let t = nextStartTier; t < nextStartTier + moreTiers; t++) {
+    const count = 6 + Math.floor(rng() * 5);
+    const current: string[] = [];
+    const currentByCat: Record<SkillNode['category'], string[]> = { economic: [], military: [], mystical: [], infrastructure: [], diplomatic: [], social: [] };
+    for (let i = 0; i < count; i++) {
+      const cat = pick(categories);
+      const rarity = pickRarity();
+      const requires: string[] = [];
+      if (prevTier.length) { const primary = pick(prevTier); requires.push(primary); }
+      if (t > 2 && existingByCategory[cat].length && rng() < 0.4) { const catReq = pick(existingByCategory[cat]); if (!requires.includes(catReq)) requires.push(catReq); }
+      const importance = Math.min(1.0, t * 0.2 + (rarity === 'common' ? 0.1 : rarity === 'uncommon' ? 0.3 : rarity === 'rare' ? 0.6 : 1.0) + requires.length * 0.15);
+      const quality = pickQuality(t);
+      const qm = getQualityMultiplier(quality);
+      const { cost, baseCost } = makeCost(rarity, idCounter);
+      const node: SkillNode = {
+        id: id(),
+        title: pick(titlesByCat[cat]),
+        description: `Benefit aligned to ${cat}. Procedurally tailored.`,
+        category: cat,
+        rarity,
+        quality,
+        tags: [cat, rarity],
+        cost,
+        baseCost,
+        effects: makeEffects(cat),
+        requires: requires.length ? requires : undefined,
+        tier: t,
+        importance,
+        unlockCount: idCounter,
+        isRevealed: false,
+        specialAbility: createSpecialAbility(quality, cat),
+        statMultiplier: qm,
+      };
+      tree.nodes.push(node);
+      current.push(node.id);
+      existingByCategory[cat].push(node.id);
+      if (!tree.layout!.tiers[t]) tree.layout!.tiers[t] = [];
+      tree.layout!.tiers[t].push(node);
+      if (node.requires) node.requires.forEach(req => tree.edges.push({ from: req, to: node.id }));
+    }
+    prevTier = current;
+    tree.layout!.maxTier = t;
+  }
+  return tree;
 }
 
 export function accumulateEffects(unlocked: SkillNode[]): { resMul: Record<string, number>; bldMul: Record<string, number>; upkeepDelta: number } {

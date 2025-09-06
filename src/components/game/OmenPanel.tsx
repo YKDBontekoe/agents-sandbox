@@ -70,18 +70,18 @@ const EventCard: React.FC<{
 
   const getTypeColor = (type: SeasonalEvent['type']) => {
     switch (type) {
-      case 'blessing': return 'border-green-200 bg-green-50';
-      case 'curse': return 'border-red-200 bg-red-50';
-      case 'crisis': return 'border-orange-200 bg-orange-50';
-      default: return 'border-gray-200 bg-gray-50';
+      case 'blessing': return 'border-emerald-700/60 bg-emerald-900/20';
+      case 'curse': return 'border-rose-700/60 bg-rose-900/20';
+      case 'crisis': return 'border-amber-700/60 bg-amber-900/20';
+      default: return 'border-gray-700 bg-gray-900/20';
     }
   };
 
   const getProbabilityColor = (probability: number) => {
-    if (probability >= 80) return 'text-red-600';
-    if (probability >= 60) return 'text-amber-600';
-    if (probability >= 40) return 'text-blue-600';
-    return 'text-slate-500';
+    if (probability >= 80) return 'text-rose-400';
+    if (probability >= 60) return 'text-amber-400';
+    if (probability >= 40) return 'text-blue-400';
+    return 'text-gray-400';
   };
 
   return (
@@ -97,14 +97,14 @@ const EventCard: React.FC<{
           <SeasonIcon season={event.season} />
           <div>
             <h3 className={`font-medium ${
-              event.isRevealed ? 'text-slate-900' : 'text-slate-500'
+              event.isRevealed ? 'text-gray-100' : 'text-gray-400'
             }`}>
               {event.isRevealed ? event.name : '???'}
             </h3>
             <div className="flex items-center gap-2 text-xs">
-              <span className="text-slate-500">Cycle {targetCycle}</span>
-              <span className="text-slate-400">•</span>
-              <span className="capitalize text-slate-500">{event.season}</span>
+              <span className="text-gray-400">Cycle {targetCycle}</span>
+              <span className="text-gray-500">•</span>
+              <span className="capitalize text-gray-400">{event.season}</span>
             </div>
           </div>
         </div>
@@ -113,7 +113,7 @@ const EventCard: React.FC<{
             {event.probability}%
           </div>
           {isImminent && (
-            <div className="text-xs text-amber-600 font-medium">
+            <div className="text-xs text-amber-400 font-medium">
               IMMINENT
             </div>
           )}
@@ -122,7 +122,7 @@ const EventCard: React.FC<{
 
       {/* Description */}
       <p className={`text-sm mb-3 ${
-        event.isRevealed ? 'text-slate-700' : 'text-slate-500 italic'
+        event.isRevealed ? 'text-gray-300' : 'text-gray-400 italic'
       }`}>
         {event.isRevealed ? event.description : 'The future remains shrouded in mystery...'}
       </p>
@@ -130,10 +130,10 @@ const EventCard: React.FC<{
       {/* Effects */}
       {event.isRevealed && event.effects.length > 0 && (
         <div className="space-y-1">
-          <div className="text-xs text-slate-500">Predicted Effects:</div>
+          <div className="text-xs text-gray-400">Predicted Effects:</div>
           {event.effects.map((effect, index) => (
-            <div key={index} className="text-xs text-slate-700 flex items-center gap-2">
-              <span className="text-blue-600">{effect.resource}:</span>
+            <div key={index} className="text-xs text-gray-300 flex items-center gap-2">
+              <span className="text-blue-400">{effect.resource}:</span>
               <span>{effect.impact}</span>
             </div>
           ))}
@@ -142,7 +142,7 @@ const EventCard: React.FC<{
 
       {/* Duration */}
       {event.duration && event.duration > 1 && (
-        <div className="mt-2 text-xs text-slate-500">
+        <div className="mt-2 text-xs text-gray-400">
           Duration: {event.duration} cycles
         </div>
       )}
@@ -159,35 +159,35 @@ const OmenReadingCard: React.FC<{
   const isStale = age > 5;
 
   const getConfidenceColor = (confidence: number) => {
-    if (confidence >= 80) return 'text-emerald-600';
-    if (confidence >= 60) return 'text-amber-600';
-    if (confidence >= 40) return 'text-orange-600';
-    return 'text-red-600';
+    if (confidence >= 80) return 'text-emerald-400';
+    if (confidence >= 60) return 'text-amber-400';
+    if (confidence >= 40) return 'text-orange-400';
+    return 'text-rose-400';
   };
 
   return (
-    <div className={`bg-purple-50 border border-purple-200 rounded-lg p-4 ${
-      isRecent ? 'ring-1 ring-purple-200' : ''
+    <div className={`bg-purple-900/20 border border-purple-700/60 rounded-lg p-4 ${
+      isRecent ? 'ring-1 ring-purple-700/40' : ''
     } ${isStale ? 'opacity-60' : ''}`}>
       <div className="flex items-start justify-between mb-2">
         <div className="flex items-center gap-2">
           <span className="text-lg">🔮</span>
-          <h3 className="text-purple-700 font-medium">{reading.title}</h3>
+          <h3 className="text-purple-300 font-medium">{reading.title}</h3>
         </div>
         <div className="text-right">
           <div className={`text-xs font-mono ${getConfidenceColor(reading.confidence)}`}>
             {reading.confidence}% confidence
           </div>
-          <div className="text-xs text-slate-500">
+          <div className="text-xs text-gray-400">
             Cycle {reading.revealedAt}
           </div>
         </div>
       </div>
-      <p className="text-purple-700 text-sm italic">
+      <p className="text-purple-300 text-sm italic">
         &ldquo;{reading.description}&rdquo;
       </p>
       {isRecent && (
-        <div className="mt-2 text-xs text-purple-600">
+        <div className="mt-2 text-xs text-purple-300">
           ✨ Recent vision
         </div>
       )}
@@ -206,7 +206,7 @@ const TimelineView: React.FC<{
 
   return (
     <div className="space-y-2">
-      <h3 className="text-lg font-semibold text-slate-900 mb-4">📅 Timeline</h3>
+      <h3 className="text-lg font-semibold text-gray-100 mb-4">📅 Timeline</h3>
       <div className="space-y-2 max-h-64 overflow-y-auto">
         {sortedEvents.map((event) => {
           const targetCycle = currentCycle + event.cycleOffset;
@@ -214,24 +214,24 @@ const TimelineView: React.FC<{
           
           return (
             <div key={event.id} className={`flex items-center gap-3 p-2 rounded ${
-              isImminent ? 'bg-yellow-50' : 'bg-slate-50'
+              isImminent ? 'bg-amber-900/20' : 'bg-gray-900/20'
             }`}>
-              <div className="text-xs font-mono text-slate-500 w-12">
+              <div className="text-xs font-mono text-gray-400 w-12">
                 {targetCycle}
               </div>
               <SeasonIcon season={event.season} />
               <EventTypeIcon type={event.type} />
               <div className="flex-1">
                 <div className={`text-sm ${
-                  event.isRevealed ? 'text-slate-900' : 'text-slate-500'
+                  event.isRevealed ? 'text-gray-100' : 'text-gray-400'
                 }`}>
                   {event.isRevealed ? event.name : 'Unknown Event'}
                 </div>
               </div>
               <div className={`text-xs font-mono ${
-                event.probability >= 80 ? 'text-red-600' :
-                event.probability >= 60 ? 'text-amber-600' :
-                event.probability >= 40 ? 'text-blue-600' : 'text-slate-500'
+                event.probability >= 80 ? 'text-rose-400' :
+                event.probability >= 60 ? 'text-amber-400' :
+                event.probability >= 40 ? 'text-blue-400' : 'text-gray-400'
               }`}>
                 {event.probability}%
               </div>
@@ -269,16 +269,16 @@ export const OmenPanel: React.FC<OmenPanelProps> = ({
         <Dialog.Content
           className="card-elevated fixed inset-0 z-[110] flex items-center justify-center p-4 data-[state=open]:opacity-100 data-[state=closed]:opacity-0 data-[state=closed]:scale-95 motion-safe:transition-[opacity,transform] motion-safe:duration-200 motion-safe:data-[state=open]:animate-scale-in"
         >
-          <div className="bg-white/95 backdrop-blur-sm w-full max-w-6xl max-h-[90vh] overflow-hidden rounded-lg">
+          <div className="bg-gray-800 text-gray-200 backdrop-blur-sm w-full max-w-6xl max-h-[90vh] overflow-hidden rounded-lg border border-gray-700">
           {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b border-neutral-200">
+          <div className="flex items-center justify-between p-6 border-b border-gray-700">
             <div className="flex items-center gap-3">
               <span className="text-2xl">🔮</span>
               <div>
-                <Dialog.Title className="text-heading-2 text-neutral-900">
+                <Dialog.Title className="text-heading-2 text-gray-100">
                   Omen Readings
                 </Dialog.Title>
-                <Dialog.Description className="text-neutral-600 text-sm">
+                <Dialog.Description className="text-gray-400 text-sm">
                   Glimpses of future seasons and events • Current: {currentSeason} (Cycle {currentCycle})
                 </Dialog.Description>
               </div>
@@ -291,7 +291,7 @@ export const OmenPanel: React.FC<OmenPanelProps> = ({
                       <button
                         onClick={onRequestReading}
                         disabled={!canRequestReading || !canAffordReading}
-                        className={`btn-primary text-sm ${
+                        className={`text-sm px-4 py-2 rounded bg-blue-600 hover:bg-blue-700 text-white transition-colors ${
                           canRequestReading && canAffordReading
                             ? ''
                             : 'opacity-50 cursor-not-allowed'
@@ -302,9 +302,9 @@ export const OmenPanel: React.FC<OmenPanelProps> = ({
                     </Tooltip.Trigger>
                     {(!canRequestReading || !canAffordReading) && (
                       <Tooltip.Portal>
-                        <Tooltip.Content className="bg-white border border-slate-200 text-slate-700 px-2 py-1 rounded text-xs shadow-sm" sideOffset={5}>
+                        <Tooltip.Content className="bg-gray-800 border border-gray-700 text-gray-200 px-2 py-1 rounded text-xs shadow-sm" sideOffset={5}>
                           {!canAffordReading ? 'Insufficient mana' : 'Reading not available'}
-                          <Tooltip.Arrow className="fill-white" />
+                          <Tooltip.Arrow className="fill-gray-800" />
                         </Tooltip.Content>
                       </Tooltip.Portal>
                     )}
@@ -312,7 +312,7 @@ export const OmenPanel: React.FC<OmenPanelProps> = ({
                 </Tooltip.Provider>
               )}
               <Dialog.Close asChild>
-                <button className="p-2 hover:bg-neutral-100 rounded text-neutral-500 hover:text-neutral-700 transition-colors">
+                <button className="p-2 hover:bg-gray-700 rounded text-gray-400 hover:text-gray-100 transition-colors">
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
@@ -334,7 +334,7 @@ export const OmenPanel: React.FC<OmenPanelProps> = ({
                 {/* Imminent Events */}
                 {imminentEvents.length > 0 && (
                   <div>
-                    <h3 className="text-lg font-semibold text-warning-600 mb-4 flex items-center gap-2">
+                    <h3 className="text-lg font-semibold text-amber-400 mb-4 flex items-center gap-2">
                       ⚠️ Imminent Events
                     </h3>
                     <div className="grid gap-4">
@@ -348,7 +348,7 @@ export const OmenPanel: React.FC<OmenPanelProps> = ({
                 {/* Revealed Events */}
                 {revealedEvents.length > 0 && (
                   <div>
-                    <h3 className="text-lg font-semibold text-neutral-900 mb-4">🔍 Known Events</h3>
+                    <h3 className="text-lg font-semibold text-gray-100 mb-4">🔍 Known Events</h3>
                     <div className="grid gap-4">
                       {revealedEvents
                         .filter(e => !imminentEvents.includes(e))
@@ -363,7 +363,7 @@ export const OmenPanel: React.FC<OmenPanelProps> = ({
                 {/* Hidden Events */}
                 {hiddenEvents.length > 0 && (
                   <div>
-                    <h3 className="text-lg font-semibold text-neutral-600 mb-4">❓ Mysterious Portents</h3>
+                    <h3 className="text-lg font-semibold text-gray-400 mb-4">❓ Mysterious Portents</h3>
                     <div className="grid gap-4">
                       {hiddenEvents.slice(0, 3).map(event => (
                         <EventCard key={event.id} event={event} currentCycle={currentCycle} />
@@ -375,7 +375,7 @@ export const OmenPanel: React.FC<OmenPanelProps> = ({
                 {/* Omen Readings */}
                 {omenReadings.length > 0 && (
                   <div>
-                    <h3 className="text-lg font-semibold text-primary-600 mb-4">📜 Recent Visions</h3>
+                    <h3 className="text-lg font-semibold text-blue-400 mb-4">📜 Recent Visions</h3>
                     <div className="space-y-3">
                       {omenReadings
                         .sort((a, b) => b.revealedAt - a.revealedAt)
@@ -391,8 +391,8 @@ export const OmenPanel: React.FC<OmenPanelProps> = ({
                 {upcomingEvents.length === 0 && omenReadings.length === 0 && (
                   <div className="text-center py-12">
                     <div className="text-6xl mb-4">🔮</div>
-                    <h3 className="text-xl font-medium text-neutral-900 mb-2">The Future is Unclear</h3>
-                    <p className="text-neutral-600 mb-4">
+                    <h3 className="text-xl font-medium text-gray-100 mb-2">The Future is Unclear</h3>
+                    <p className="text-gray-400 mb-4">
                       The mists of time obscure what is to come. Request a divine reading to glimpse future events.
                     </p>
                   </div>

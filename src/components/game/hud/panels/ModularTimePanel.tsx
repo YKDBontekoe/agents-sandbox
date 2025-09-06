@@ -28,7 +28,7 @@ function TimeDisplay({ label, value, variant = 'default', icon }: TimeDisplayPro
       {icon && variant !== 'minimal' && (
         <ResponsiveIcon 
           size={{ mobile: 'xs', tablet: 'sm', desktop: 'sm', wide: 'md' }}
-          className="text-slate-500 mx-auto mb-1"
+          className="text-gray-400 mx-auto mb-1"
         >
           {icon}
         </ResponsiveIcon>
@@ -213,7 +213,7 @@ export function ModularTimePanel({
         />
       </ResponsiveGrid>
       
-      <div className="pt-2 border-t border-slate-200">
+      <div className="pt-2 border-t border-gray-700">
         <TimeControls 
           isPaused={isPaused}
           onPause={onPause}
@@ -224,10 +224,10 @@ export function ModularTimePanel({
       </div>
 
       {variant !== 'minimal' && (
-        <div className="mt-3 border-t border-slate-200 pt-3">
+        <div className="mt-3 border-t border-gray-700 pt-3">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs text-slate-600">Simulation Speed</span>
-            <span className="text-xs tabular-nums text-slate-700">
+            <span className="text-xs text-gray-400">Simulation Speed</span>
+            <span className="text-xs tabular-nums text-gray-200">
               {(() => {
                 const ms = typeof intervalMs === 'number' ? intervalMs : (typeof time.intervalMs === 'number' ? time.intervalMs! : 60000);
                 const x = Math.round((60000 / Math.max(1, ms)) * 100) / 100;
@@ -250,10 +250,10 @@ export function ModularTimePanel({
                 const ms = Math.round(60000 / Math.min(4, Math.max(0.25, x)));
                 onChangeIntervalMs?.(ms);
               }}
-              className="flex-1 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer"
+              className="flex-1 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
               aria-label="Simulation speed"
             />
-            <span className="text-[10px] text-slate-500">1x=60s</span>
+            <span className="text-[10px] text-gray-400">1x=60s</span>
           </div>
           <div className="mt-2 grid grid-cols-4 gap-2">
             {[
@@ -268,7 +268,7 @@ export function ModularTimePanel({
                 <button
                   key={opt.label}
                   onClick={() => onChangeIntervalMs?.(opt.ms)}
-                  className={`px-2 py-1 rounded border text-xs transition-colors ${active ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-300 hover:bg-slate-50'}`}
+                  className={`px-2 py-1 rounded border text-xs transition-colors ${active ? 'border-blue-500 bg-blue-900/40 text-blue-300' : 'border-gray-600 hover:bg-gray-700 text-gray-200'}`}
                 >
                   {opt.label}
                 </button>

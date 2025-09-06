@@ -1,12 +1,7 @@
-// Lightweight sprite URL generator using inline SVGs.
-// Avoids bundling external image assets and works offline.
+// Sprite URL resolver for 2D art assets living under /public/sprites
+// Prefer SVGs in /sprites/buildings; optional PNG set in /sprites/medieval
 
-function svgWrap(content: string, w = 64, h = 64): string {
-  const svg = `<?xml version="1.0" encoding="UTF-8"?><svg xmlns='http://www.w3.org/2000/svg' width='${w}' height='${h}' viewBox='0 0 ${w} ${h}' shape-rendering='crispEdges'>${content}</svg>`;
-  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
-}
-
-const USE_MEDIEVAL_ASSETS = false; // set to true if PNGs are provided under /public/sprites/medieval
+const USE_MEDIEVAL_ASSETS = false; // flip to true to use PNG set
 
 export function getBuildingSpriteUrl(typeId: string): string | null {
   if (USE_MEDIEVAL_ASSETS) {
@@ -17,10 +12,13 @@ export function getBuildingSpriteUrl(typeId: string): string | null {
       farm: '/sprites/medieval/farm.png',
       shrine: '/sprites/medieval/shrine.png',
       house: '/sprites/medieval/house.png',
+      lumber_camp: '/sprites/medieval/lumber-camp.png',
+      sawmill: '/sprites/medieval/sawmill.png',
+      storehouse: '/sprites/medieval/storehouse.png',
     };
     return medieval[typeId] || null;
   }
-  // Default vector assets
+  // Default to SVG set
   const vector: Record<string, string> = {
     council_hall: '/sprites/buildings/council-hall.svg',
     trade_post: '/sprites/buildings/trade-post.svg',
@@ -33,4 +31,24 @@ export function getBuildingSpriteUrl(typeId: string): string | null {
     house: '/sprites/buildings/house.svg',
   };
   return vector[typeId] || null;
+}
+
+// Return a prioritized list of candidate sprite URLs for a building at a given level.
+// This lets the renderer try level-specific art first and fall back to the base icon if not present.
+export function getBuildingSpriteCandidates(typeId: string, level: number = 1): string[] {
+  const base = getBuildingSpriteUrl(typeId);
+  if (!base) return [];
+  const safeLevel = Math.max(1, Math.floor(level || 1));
+  // split extension
+  const match = base.match(/^(.*)\.(svg|png)$/i);
+  if (!match) return [base];
+  const prefix = match[1];
+  const ext = match[2];
+  const candidates = [
+    `${prefix}-lv${safeLevel}.${ext}`,
+    `${prefix}-l${safeLevel}.${ext}`,
+    `${prefix}-${safeLevel}.${ext}`,
+    base,
+  ];
+  return candidates;
 }

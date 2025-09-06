@@ -15,9 +15,13 @@ interface PreviewLayerProps {
   previewTypeId: BuildTypeId | null;
   tileWidth?: number;
   tileHeight?: number;
+  buildHint?: { valid: boolean; reason?: string };
+  highlightAllPlaceable?: boolean;
+  hasCouncil?: boolean;
+  affordable?: boolean;
 }
 
-export default function PreviewLayer({ hoverTile, selectedTile, tileTypes, buildings, previewTypeId, tileWidth = 64, tileHeight = 32 }: PreviewLayerProps) {
+export default function PreviewLayer({ hoverTile, selectedTile, tileTypes, buildings, previewTypeId, tileWidth = 64, tileHeight = 32, buildHint, highlightAllPlaceable, hasCouncil, affordable }: PreviewLayerProps) {
   const { viewport } = useGameContext();
   const containerRef = useRef<PIXI.Container | null>(null);
 
@@ -39,6 +43,49 @@ export default function PreviewLayer({ hoverTile, selectedTile, tileTypes, build
     const container = containerRef.current;
     if (!container) return;
     container.removeChildren();
+
+    // Optional: highlight all placeable tiles for current preview type
+    if (previewTypeId && highlightAllPlaceable) {
+      const allowedTerrain: Record<BuildTypeId, string[]> = {
+        council_hall: ['grass','mountain'],
+        trade_post: ['grass'],
+        automation_workshop: ['grass'],
+        farm: ['grass'],
+        lumber_camp: ['forest'],
+        sawmill: ['grass'],
+        storehouse: ['grass'],
+        house: ['grass'],
+        shrine: ['grass']
+      };
+      const needsCouncil = (previewTypeId === 'trade_post' || previewTypeId === 'automation_workshop');
+      const councilOk = !needsCouncil || !!hasCouncil;
+      const globallyOk = councilOk && (affordable !== false);
+      if (globallyOk) {
+        const occ = new Set(buildings.map(b => `${b.x},${b.y}`));
+        for (let yy = 0; yy < tileTypes.length; yy++) {
+          const row = tileTypes[yy] || [];
+          for (let xx = 0; xx < row.length; xx++) {
+            const tt = row[xx];
+            const terrainOk = (allowedTerrain[previewTypeId] || []).includes(tt);
+            if (!terrainOk) continue;
+            if (occ.has(`${xx},${yy}`)) continue;
+            const p = gridToWorld(xx, yy, tileWidth, tileHeight);
+            const hl = new PIXI.Graphics();
+            hl.position.set(p.worldX, p.worldY);
+            hl.zIndex = 900;
+            hl.beginFill(0x10b981, 0.12);
+            hl.drawPolygon([
+              0, -tileHeight / 2,
+              tileWidth / 2, 0,
+              0, tileHeight / 2,
+              -tileWidth / 2, 0,
+            ]);
+            hl.endFill();
+            container.addChild(hl);
+          }
+        }
+      }
+    }
 
     // Determine preview tile: prefer hover; fall back to selected
     const tile = hoverTile || selectedTile;
@@ -66,7 +113,7 @@ export default function PreviewLayer({ hoverTile, selectedTile, tileTypes, build
       terrainOk = (allowedTerrain[previewTypeId] || []).includes(tile.tileType);
     }
 
-    const isValid = !occupied && terrainOk;
+    const isValid = buildHint ? buildHint.valid : (!occupied && terrainOk);
     // Ghost diamond overlay
     const ghost = new PIXI.Graphics();
     ghost.position.set(worldX, worldY);
@@ -82,6 +129,18 @@ export default function PreviewLayer({ hoverTile, selectedTile, tileTypes, build
     ]);
     ghost.endFill();
     container.addChild(ghost);
+
+    // If invalid and reason provided, show a small label above
+    if (!isValid && buildHint?.reason) {
+      const label = new PIXI.Text({
+        text: buildHint.reason,
+        style: new PIXI.TextStyle({ fontSize: 11, fill: 0xffffff, fontFamily: 'ui-sans-serif, system-ui', stroke: { color: 0x000000, width: 3 } }),
+      });
+      label.anchor.set(0.5, 1);
+      label.position.set(worldX, worldY - tileHeight * 0.7);
+      label.zIndex = 970;
+      container.addChild(label);
+    }
 
     // Adjacency bonus hints for specific preview types
     if (previewTypeId) {
@@ -111,6 +170,59 @@ export default function PreviewLayer({ hoverTile, selectedTile, tileTypes, build
           container.addChild(g);
         }
       });
+    }
+
+    // Compact potential tooltip (at full staffing, level 1)
+    if (previewTypeId) {
+      const def = (SIM_BUILDINGS as any)[previewTypeId];
+      if (def) {
+        // compute adjacency modifiers roughly matching engine
+        const dirs = [ [1,0], [-1,0], [0,1], [0,-1] ];
+        let waterAdj = 0, mountainAdj = 0, forestAdj = 0;
+        dirs.forEach(([dx, dy]) => {
+          const nx = x + dx, ny = y + dy;
+          if (ny >= 0 && ny < tileTypes.length && nx >= 0 && nx < (tileTypes[ny]?.length || 0)) {
+            const tt = tileTypes[ny][nx];
+            if (tt === 'water') waterAdj++;
+            if (tt === 'mountain') mountainAdj++;
+            if (tt === 'forest') forestAdj++;
+          }
+        });
+        const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
+        waterAdj = clamp(waterAdj, 0, 2);
+        mountainAdj = clamp(mountainAdj, 0, 2);
+        forestAdj = clamp(forestAdj, 0, 3);
+
+        // ratio 1 (full staffing if applicable), levelOutScale 1
+        const deltas: Record<string, number> = {};
+        // inputs are negative
+        Object.entries(def.inputs || {}).forEach(([k, v]: any) => {
+          const need = Math.round(Number(v || 0));
+          if (need) deltas[k] = (deltas[k] || 0) - need;
+        });
+        // outputs with adjacency tweaks
+        Object.entries(def.outputs || {}).forEach(([k, v]: any) => {
+          let out = Number(v || 0);
+          if (previewTypeId === 'trade_post' && k === 'coin') out += 2 * waterAdj;
+          if (previewTypeId === 'farm' && k === 'grain') out += 3 * waterAdj;
+          if (previewTypeId === 'lumber_camp' && k === 'wood') out += 2 * forestAdj;
+          if (previewTypeId === 'shrine' && k === 'favor') out += 1 * mountainAdj;
+          if (out) deltas[k] = (deltas[k] || 0) + Math.round(out);
+        });
+        // Build summary: pick two most significant entries
+        const sorted = Object.entries(deltas).sort((a,b) => Math.abs(b[1]) - Math.abs(a[1])).slice(0,2);
+        if (sorted.length) {
+          const text = sorted.map(([k,v]) => `${k} ${v>=0?'+':''}${v}`).join('  ');
+          const label = new PIXI.Text({
+            text,
+            style: new PIXI.TextStyle({ fontSize: 11, fill: 0x0f172a, fontFamily: 'ui-sans-serif, system-ui', stroke: { color: 0xffffff, width: 3 } })
+          });
+          label.anchor.set(0.5, 0);
+          label.position.set(worldX, worldY + tileHeight * 0.6);
+          label.zIndex = 970;
+          container.addChild(label);
+        }
+      }
     }
   }, [hoverTile?.x, hoverTile?.y, hoverTile?.tileType, selectedTile?.x, selectedTile?.y, selectedTile?.tileType, previewTypeId, tileTypes.length]);
 

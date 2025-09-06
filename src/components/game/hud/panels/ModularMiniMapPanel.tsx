@@ -87,7 +87,7 @@ export function ModularMiniMapPanel({
       className="min-w-0"
     >
       <div className="flex items-start gap-3">
-        <div className="rounded border border-slate-200 overflow-hidden shadow-sm">
+        <div className="rounded border border-gray-700 overflow-hidden shadow-sm">
           <MiniMap gridSize={gridSize} tileWidth={tileWidth} tileHeight={tileHeight} width={dims.w} height={dims.h} />
         </div>
         {variant !== 'minimal' && (
@@ -128,4 +128,3 @@ export function ModularMiniMapPanel({
 }
 
 export default ModularMiniMapPanel;
-

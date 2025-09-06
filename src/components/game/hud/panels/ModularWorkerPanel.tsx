@@ -122,8 +122,8 @@ export default function ModularWorkerPanel({ buildings, idleWorkers, onAssign, o
       priority="medium"
       actions={(
         <div className="flex items-center gap-1">
-          <span className={`px-1.5 py-0.5 rounded-full text-[10px] leading-none tabular-nums ${idleWorkers>0 ? 'bg-emerald-600 text-white animate-pulse' : 'bg-slate-200 text-slate-700'}`} title="Idle workers">{idleWorkers}</span>
-          <button onClick={handleAutoAssign} className="px-1.5 py-0.5 text-[10px] rounded border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 disabled:opacity-50" disabled={idleWorkers <= 0} title="Auto-assign idle workers across buildings">Auto</button>
+          <span className={`px-1.5 py-0.5 rounded-full text-[10px] leading-none tabular-nums ${idleWorkers>0 ? 'bg-emerald-600 text-white animate-pulse' : 'bg-gray-700 text-gray-100'}`} title="Idle workers">{idleWorkers}</span>
+          <button onClick={handleAutoAssign} className="px-1.5 py-0.5 text-[10px] rounded border border-gray-600 bg-gray-700 hover:bg-gray-600 text-gray-100 disabled:opacity-50" disabled={idleWorkers <= 0} title="Auto-assign idle workers across buildings">Auto</button>
         </div>
       )}
       className="min-w-0"
@@ -131,19 +131,23 @@ export default function ModularWorkerPanel({ buildings, idleWorkers, onAssign, o
     >
       <div className="flex items-center justify-between text-xs mb-2">
         <div className="flex items-center gap-2">
-          <span className="text-slate-600">Idle</span>
-          <span className="font-mono text-slate-800">{idleWorkers}</span>
+          <span className="text-gray-400">Idle</span>
+          <span className="font-mono text-gray-200">{idleWorkers}</span>
         </div>
         {(() => {
           const moraleScore = Math.max(0, 100 - unrest * 7 - Math.max(0, (totalWorkers * 0.2) - Math.max(0, grain)) * 1);
           const status = moraleScore >= 70 ? 'Stable' : moraleScore >= 40 ? 'Concerned' : 'Restless';
-          const cls = status === 'Stable' ? 'bg-emerald-100 text-emerald-800 border-emerald-200' : status === 'Concerned' ? 'bg-amber-100 text-amber-800 border-amber-200' : 'bg-rose-100 text-rose-800 border-rose-200';
+          const cls = status === 'Stable' 
+            ? 'text-emerald-300 border border-emerald-700/60 bg-emerald-900/20' 
+            : status === 'Concerned' 
+              ? 'text-amber-300 border border-amber-700/60 bg-amber-900/20' 
+              : 'text-rose-300 border border-rose-700/60 bg-rose-900/20';
           return (
-            <span className={`px-2 py-0.5 rounded-full border ${cls}`} title={`Unrest ${unrest}`}>Morale: {status}</span>
+            <span className={`px-2 py-0.5 rounded-full ${cls}`} title={`Unrest ${unrest}`}>Morale: {status}</span>
           );
         })()}
       </div>
-      <div className="text-[10px] text-slate-500 mb-2">Upkeep ~{Math.round((totalWorkers || 0) * 0.2)} grain / cycle</div>
+      <div className="text-[10px] text-gray-400 mb-2">Upkeep ~{Math.round((totalWorkers || 0) * 0.2)} grain / cycle</div>
       <div className="space-y-2">
         {buildings.length === 0 && (
           <ResponsiveText size={{ mobile: 'xs', tablet: 'xs', desktop: 'sm', wide: 'sm' }} color="muted">No buildings</ResponsiveText>
@@ -156,18 +160,18 @@ export default function ModularWorkerPanel({ buildings, idleWorkers, onAssign, o
           const ratio = cap > 0 ? Math.min(1, (b.workers || 0) / cap) : 0;
           const pred = predictPrimaryOutput(b);
           return (
-            <div key={b.id} className="flex items-center justify-between text-xs">
+            <div key={b.id} className="flex items-center justify-between text-xs text-gray-200">
               <div className="flex-1 min-w-0 mr-2" title={`Workers ${b.workers}/${cap} (Lv.${level})`}>
                 <div className="flex items-center justify-between">
-                  <span className="text-slate-800 truncate mr-2">{def.name}</span>
-                  <span className="font-mono text-[10px] text-slate-600">Lv.{level}</span>
+                  <span className="truncate mr-2">{def.name}</span>
+                  <span className="font-mono text-[10px] text-gray-400">Lv.{level}</span>
                 </div>
                 {cap > 0 && (
-                  <div className="mt-1 h-1.5 bg-slate-200 rounded" aria-label="Efficiency">
+                  <div className="mt-1 h-1.5 bg-gray-700 rounded" aria-label="Efficiency">
                     <div className="h-1.5 rounded" style={{ width: `${ratio * 100}%`, background: ratio >= 1 ? '#059669' : '#10b981' }} />
                   </div>
                 )}
-                <div className="mt-1 text-[10px] text-slate-500">
+                <div className="mt-1 text-[10px] text-gray-400">
                   {pred ? (<span>≈ +{pred.value} {pred.key}</span>) : (<span className="opacity-60">—</span>)}
                 </div>
               </div>
@@ -175,14 +179,14 @@ export default function ModularWorkerPanel({ buildings, idleWorkers, onAssign, o
                 <button
                   onClick={() => { onUnassign(b.id); scheduleCollapse(); }}
                   disabled={b.workers <= 0}
-                  className="px-2 py-0.5 border border-slate-300 rounded disabled:opacity-50"
+                  className="px-2 py-0.5 border border-gray-600 rounded disabled:opacity-50"
                 >-
                 </button>
                 <span className="font-mono">{b.workers}/{cap}</span>
                 <button
                   onClick={() => { onAssign(b.id); scheduleCollapse(); }}
                   disabled={idleWorkers <= 0 || b.workers >= cap}
-                  className="px-2 py-0.5 border border-slate-300 rounded disabled:opacity-50"
+                  className="px-2 py-0.5 border border-gray-600 rounded disabled:opacity-50"
                 >+
                 </button>
               </div>

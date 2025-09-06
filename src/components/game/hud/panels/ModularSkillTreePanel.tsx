@@ -8,9 +8,10 @@ interface ModularSkillTreePanelProps {
   seed?: number;
   onUnlock?: (node: SkillNode) => boolean; // return true if unlocked
   variant?: 'default' | 'compact' | 'minimal';
+  resources?: { coin?: number; mana?: number; favor?: number };
 }
 
-export function ModularSkillTreePanel({ seed = 12345, onUnlock, variant = 'compact' }: ModularSkillTreePanelProps) {
+export function ModularSkillTreePanel({ seed = 12345, onUnlock, variant = 'compact', resources }: ModularSkillTreePanelProps) {
   const [open, setOpen] = useState(false);
   const [trend, setTrend] = useState<SkillNode['category'] | null>(null);
   useEffect(() => {
@@ -96,7 +97,7 @@ export function ModularSkillTreePanel({ seed = 12345, onUnlock, variant = 'compa
       )}
       variant={variant}
       collapsible
-      className="min-w-0 bg-gradient-to-b from-slate-50 to-white shadow-lg border-slate-200"
+      className="min-w-0 bg-gray-900/20 shadow-lg border border-gray-700 text-gray-200"
     >
       {/* Enhanced Search and Controls */}
       <div className="mb-4 space-y-2">
@@ -105,9 +106,9 @@ export function ModularSkillTreePanel({ seed = 12345, onUnlock, variant = 'compa
             value={query} 
             onChange={e=>setQuery(e.target.value)} 
             placeholder="Search skills by name, category, or tags..." 
-            className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 bg-white/90 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 placeholder-slate-400"
+            className="w-full px-3 py-2 text-sm rounded-lg border border-gray-700 bg-gray-800 text-gray-200 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
           />
-          <svg className="absolute right-3 top-2.5 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="absolute right-3 top-2.5 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
         </div>
@@ -125,16 +126,16 @@ export function ModularSkillTreePanel({ seed = 12345, onUnlock, variant = 'compa
       </div>
       {/* Enhanced Category Filters */}
       <div className="mb-3 space-y-2">
-        <div className="text-xs font-semibold text-slate-600 mb-1">Categories</div>
+        <div className="text-xs font-semibold text-gray-400 mb-1">Categories</div>
         <div className="grid grid-cols-2 gap-1.5">
           {(['economic','military','mystical','infrastructure','diplomatic','social'] as SkillNode['category'][]).map(cat => {
             const categoryColors = {
-              economic: { bg: 'bg-emerald-100', border: 'border-emerald-300', text: 'text-emerald-700', active: 'bg-emerald-200 border-emerald-400' },
-              military: { bg: 'bg-red-100', border: 'border-red-300', text: 'text-red-700', active: 'bg-red-200 border-red-400' },
-              mystical: { bg: 'bg-purple-100', border: 'border-purple-300', text: 'text-purple-700', active: 'bg-purple-200 border-purple-400' },
-              infrastructure: { bg: 'bg-amber-100', border: 'border-amber-300', text: 'text-amber-700', active: 'bg-amber-200 border-amber-400' },
-              diplomatic: { bg: 'bg-blue-100', border: 'border-blue-300', text: 'text-blue-700', active: 'bg-blue-200 border-blue-400' },
-              social: { bg: 'bg-pink-100', border: 'border-pink-300', text: 'text-pink-700', active: 'bg-pink-200 border-pink-400' }
+              economic: { bg: 'bg-emerald-900/20', border: 'border-emerald-700/60', text: 'text-emerald-300', active: 'bg-emerald-900/30 border-emerald-600' },
+              military: { bg: 'bg-rose-900/20', border: 'border-rose-700/60', text: 'text-rose-300', active: 'bg-rose-900/30 border-rose-600' },
+              mystical: { bg: 'bg-purple-900/20', border: 'border-purple-700/60', text: 'text-purple-300', active: 'bg-purple-900/30 border-purple-600' },
+              infrastructure: { bg: 'bg-amber-900/20', border: 'border-amber-700/60', text: 'text-amber-300', active: 'bg-amber-900/30 border-amber-600' },
+              diplomatic: { bg: 'bg-blue-900/20', border: 'border-blue-700/60', text: 'text-blue-300', active: 'bg-blue-900/30 border-blue-600' },
+              social: { bg: 'bg-pink-900/20', border: 'border-pink-700/60', text: 'text-pink-300', active: 'bg-pink-900/30 border-pink-600' }
             };
             const colors = categoryColors[cat];
             const availableInCategory = available.filter(n => n.category === cat).length;
@@ -157,17 +158,17 @@ export function ModularSkillTreePanel({ seed = 12345, onUnlock, variant = 'compa
         </div>
       </div>
       {/* Enhanced Stats Display */}
-      <div className="mb-3 p-2 bg-slate-100/50 rounded-lg border border-slate-200">
-        <div className="flex items-center justify-between text-xs text-slate-600">
+      <div className="mb-3 p-2 bg-gray-900/20 rounded-lg border border-gray-700">
+        <div className="flex items-center justify-between text-xs text-gray-400">
           <div className="flex items-center gap-3">
             <span className="font-medium">Available: <span className="text-emerald-600 font-semibold">{filtered.length}</span></span>
             <span className="font-medium">Unlocked: <span className="text-blue-600 font-semibold">{unlockedCount}</span></span>
           </div>
-          <div className="text-slate-500">
+          <div className="text-gray-400">
             Total: {tree.nodes.length}
           </div>
         </div>
-        <div className="mt-1 w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
+        <div className="mt-1 w-full h-1.5 bg-gray-700 rounded-full overflow-hidden">
           <div 
             className="h-full bg-gradient-to-r from-emerald-400 to-emerald-500 transition-all duration-500"
             style={{ width: `${(unlockedCount / tree.nodes.length) * 100}%` }}
@@ -178,12 +179,12 @@ export function ModularSkillTreePanel({ seed = 12345, onUnlock, variant = 'compa
       <div className="space-y-2">
         {shortlist.map(n => {
           const categoryColors = {
-            economic: { border: 'border-emerald-200', bg: 'bg-emerald-50', accent: 'bg-emerald-500' },
-            military: { border: 'border-red-200', bg: 'bg-red-50', accent: 'bg-red-500' },
-            mystical: { border: 'border-purple-200', bg: 'bg-purple-50', accent: 'bg-purple-500' },
-            infrastructure: { border: 'border-amber-200', bg: 'bg-amber-50', accent: 'bg-amber-500' },
-            diplomatic: { border: 'border-blue-200', bg: 'bg-blue-50', accent: 'bg-blue-500' },
-            social: { border: 'border-pink-200', bg: 'bg-pink-50', accent: 'bg-pink-500' }
+            economic: { border: 'border-emerald-700/60', bg: 'bg-emerald-900/20', accent: 'bg-emerald-500' },
+            military: { border: 'border-rose-700/60', bg: 'bg-rose-900/20', accent: 'bg-rose-500' },
+            mystical: { border: 'border-purple-700/60', bg: 'bg-purple-900/20', accent: 'bg-purple-500' },
+            infrastructure: { border: 'border-amber-700/60', bg: 'bg-amber-900/20', accent: 'bg-amber-500' },
+            diplomatic: { border: 'border-blue-700/60', bg: 'bg-blue-900/20', accent: 'bg-blue-500' },
+            social: { border: 'border-pink-700/60', bg: 'bg-pink-900/20', accent: 'bg-pink-500' }
           };
           const colors = categoryColors[n.category];
           const isHighlighted = trend === n.category;
@@ -193,7 +194,7 @@ export function ModularSkillTreePanel({ seed = 12345, onUnlock, variant = 'compa
               key={n.id} 
               className={`rounded-lg border-2 p-3 transition-all duration-200 hover:shadow-md ${
                 isHighlighted 
-                  ? 'border-amber-300 bg-amber-50 shadow-sm' 
+                  ? 'border-amber-700/60 bg-amber-900/20 shadow-sm' 
                   : `${colors.border} ${colors.bg} hover:border-opacity-60`
               }`}
             >
@@ -201,18 +202,18 @@ export function ModularSkillTreePanel({ seed = 12345, onUnlock, variant = 'compa
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
                     <div className={`w-2 h-2 rounded-full ${colors.accent}`}></div>
-                    <div className="font-semibold text-slate-800 text-sm truncate">{n.title}</div>
+                    <div className="font-semibold text-gray-100 text-sm truncate">{n.title}</div>
                     <div className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${
-                      n.rarity === 'legendary' ? 'bg-purple-100 text-purple-700' :
-                      n.rarity === 'rare' ? 'bg-blue-100 text-blue-700' :
-                      n.rarity === 'uncommon' ? 'bg-green-100 text-green-700' :
-                      'bg-gray-100 text-gray-600'
+                      n.rarity === 'legendary' ? 'bg-purple-900/30 text-purple-300 border border-purple-700/60' :
+                      n.rarity === 'rare' ? 'bg-blue-900/30 text-blue-300 border border-blue-700/60' :
+                      n.rarity === 'uncommon' ? 'bg-green-900/30 text-green-300 border border-green-700/60' :
+                      'bg-gray-900/30 text-gray-300 border border-gray-700/60'
                     }`}>
                       {n.rarity}
                     </div>
                   </div>
-                  <div className="text-xs text-slate-600 mb-2 line-clamp-2">{n.description}</div>
-                  <div className="flex items-center gap-3 text-[11px] text-slate-500">
+                  <div className="text-xs text-gray-300 mb-2 line-clamp-2">{n.description}</div>
+                  <div className="flex items-center gap-3 text-[11px] text-gray-400">
                     <span className="capitalize font-medium">{n.category}</span>
                     <div className="flex items-center gap-1">
                       {n.cost.coin && <span className="flex items-center gap-0.5">🜚 {n.cost.coin}</span>}
@@ -238,11 +239,11 @@ export function ModularSkillTreePanel({ seed = 12345, onUnlock, variant = 'compa
       </div>
       {filtered.length > 6 && (
         <div className="mt-2 text-right">
-          <button onClick={() => setShowAll(v=>!v)} className="text-xs underline text-slate-600 hover:text-slate-800">{showAll ? 'Show less' : 'Show more'}</button>
+          <button onClick={() => setShowAll(v=>!v)} className="text-xs underline text-gray-400 hover:text-gray-200">{showAll ? 'Show less' : 'Show more'}</button>
         </div>
       )}
       {open && (
-        <SkillTreeModal isOpen={open} onClose={() => setOpen(false)} />
+        <SkillTreeModal isOpen={open} onClose={() => setOpen(false)} resources={resources} />
       )}
     </ResponsivePanel>
   );

@@ -45,11 +45,11 @@ export default function TileTooltip({ hoverTile, selectedTile, previewTypeId, ti
       className="absolute z-20 pointer-events-auto"
       style={{ left: pos.left, top: pos.top }}
     >
-      <div className="bg-white/95 border border-slate-200 rounded shadow-sm px-2 py-1 text-[11px] text-slate-700 min-w-[160px]">
+      <div className="bg-gray-800/95 border border-gray-700 rounded shadow-sm px-2 py-1 text-[11px] text-gray-200 min-w-[160px]">
         <div className="flex items-center justify-between">
-          <div className="font-semibold text-slate-800">Tile {target.x},{target.y}</div>
+          <div className="font-semibold text-gray-100">Tile {target.x},{target.y}</div>
           {locked && (
-            <button className="text-slate-400 hover:text-slate-600" onClick={onUnlock} title="Unlock tooltip">✕</button>
+            <button className="text-gray-400 hover:text-gray-200" onClick={onUnlock} title="Unlock tooltip">✕</button>
           )}
         </div>
         <div className="mt-0.5 flex items-center gap-2">
@@ -57,12 +57,12 @@ export default function TileTooltip({ hoverTile, selectedTile, previewTypeId, ti
             <span className="w-2 h-2 rounded-full" style={{ backgroundColor: tt === 'water' ? '#60a5fa' : tt === 'forest' ? '#16a34a' : tt === 'mountain' ? '#6b7280' : '#94a3b8' }} />
             <span>{tt || 'unknown'}</span>
           </span>
-          <span className={`ml-auto ${occupied ? 'text-red-600' : 'text-emerald-600'}`}>{occupied ? 'Occupied' : 'Free'}</span>
+          <span className={`ml-auto ${occupied ? 'text-rose-400' : 'text-emerald-300'}`}>{occupied ? 'Occupied' : 'Free'}</span>
         </div>
         {previewTypeId && (
           <div className="mt-1 flex items-center gap-2">
             <span>Preview:</span>
-            <span className={`px-1 rounded ${placeable && !occupied ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>{placeable && !occupied ? 'Placeable' : 'Blocked'}</span>
+            <span className={`px-1 rounded ${placeable && !occupied ? 'bg-emerald-900/30 text-emerald-300' : 'bg-rose-900/30 text-rose-300'}`}>{placeable && !occupied ? 'Placeable' : 'Blocked'}</span>
           </div>
         )}
       </div>

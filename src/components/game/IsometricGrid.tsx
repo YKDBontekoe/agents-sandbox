@@ -48,20 +48,86 @@ export default function IsometricGrid({
   // Create a tile sprite
   const createTileSprite = useCallback((gridX: number, gridY: number) => {
     const { worldX, worldY } = gridToWorld(gridX, gridY, tileWidth, tileHeight);
-    const tileType = tileTypes[gridY]?.[gridX] || "grass";
+    const tileType = tileTypes[gridY]?.[gridX] || "unknown";
     
     const tile = new PIXI.Graphics();
     const base = TILE_COLORS[tileType] ?? 0xdde7f7;
-    tile.setStrokeStyle({ width: 1, color: 0x374151, alpha: 0.8 });
-    // Single diamond fill (clean look)
-    tile.fill({ color: base, alpha: 0.95 });
+    const shade = (hex: number, factor: number) => {
+      const r = Math.max(0, Math.min(255, Math.round(((hex >> 16) & 0xff) * factor)));
+      const g = Math.max(0, Math.min(255, Math.round(((hex >> 8) & 0xff) * factor)));
+      const b = Math.max(0, Math.min(255, Math.round((hex & 0xff) * factor)));
+      return (r << 16) | (g << 8) | b;
+    };
+    const lighter = shade(base, 1.08);
+    const darker = shade(base, 0.85);
+
+    // Base diamond with subtle center light and beveled edges
+    // Base fill
+    tile.fill({ color: base, alpha: 0.96 });
     tile.moveTo(0, -tileHeight / 2);
     tile.lineTo(tileWidth / 2, 0);
     tile.lineTo(0, tileHeight / 2);
     tile.lineTo(-tileWidth / 2, 0);
     tile.closePath();
     tile.fill();
+
+    // Inner highlight diamond
+    tile.fill({ color: lighter, alpha: 0.12 });
+    tile.moveTo(0, -tileHeight * 0.36);
+    tile.lineTo(tileWidth * 0.36, 0);
+    tile.lineTo(0, tileHeight * 0.36);
+    tile.lineTo(-tileWidth * 0.36, 0);
+    tile.closePath();
+    tile.fill();
+
+    // Bevel: darker stroke on right/bottom edges
+    tile.setStrokeStyle({ width: 1.5, color: darker, alpha: 0.55 });
+    tile.moveTo(0, tileHeight / 2);
+    tile.lineTo(tileWidth / 2, 0);
+    tile.lineTo(0, -tileHeight / 2);
     tile.stroke();
+    // Fine outline
+    tile.setStrokeStyle({ width: 1, color: 0x334155, alpha: 0.35 });
+    tile.moveTo(0, -tileHeight / 2);
+    tile.lineTo(tileWidth / 2, 0);
+    tile.lineTo(0, tileHeight / 2);
+    tile.lineTo(-tileWidth / 2, 0);
+    tile.lineTo(0, -tileHeight / 2);
+    tile.stroke();
+
+    // Subtle terrain micro-textures
+    const tex = new PIXI.Graphics();
+    tex.zIndex = 3;
+    tex.position.set(worldX, worldY);
+    (tex as any).eventMode = 'none';
+    if (tileType === 'water') {
+      tex.setStrokeStyle({ width: 1, color: 0x93c5fd, alpha: 0.35 });
+      const y0 = -tileHeight * 0.12, y1 = 0, y2 = tileHeight * 0.12;
+      tex.moveTo(-tileWidth * 0.25, y0); tex.quadraticCurveTo(0, y0 + 2, tileWidth * 0.25, y0);
+      tex.moveTo(-tileWidth * 0.3, y1); tex.quadraticCurveTo(0, y1 + 2, tileWidth * 0.3, y1);
+      tex.moveTo(-tileWidth * 0.2, y2); tex.quadraticCurveTo(0, y2 + 2, tileWidth * 0.2, y2);
+      tex.stroke();
+    } else if (tileType === 'forest') {
+      tex.fill({ color: 0x166534, alpha: 0.12 });
+      const s = Math.max(2, Math.floor(tileHeight * 0.08));
+      tex.drawPolygon([ -s, 0, 0, -s, s, 0, -s, 0 ]);
+      tex.endFill();
+    } else if (tileType === 'mountain') {
+      tex.setStrokeStyle({ width: 1, color: 0x64748b, alpha: 0.35 });
+      tex.moveTo(-tileWidth * 0.2, tileHeight * 0.05);
+      tex.lineTo(0, -tileHeight * 0.15);
+      tex.lineTo(tileWidth * 0.2, tileHeight * 0.05);
+      tex.stroke();
+    } else if (tileType === 'grass') {
+      tex.setStrokeStyle({ width: 1, color: 0x16a34a, alpha: 0.15 });
+      tex.moveTo(-tileWidth * 0.1, tileHeight * 0.04);
+      tex.lineTo(-tileWidth * 0.02, tileHeight * 0.01);
+      tex.moveTo(tileWidth * 0.1, -tileHeight * 0.04);
+      tex.lineTo(tileWidth * 0.02, -tileHeight * 0.01);
+      tex.stroke();
+    }
+    gridContainerRef.current?.addChild(tex);
+    (tile as any).__tex = tex;
     
     tile.x = worldX;
     tile.y = worldY;
@@ -177,7 +243,8 @@ export default function IsometricGrid({
     const onPointerMove = (e: PIXI.FederatedPointerEvent) => {
       const local = gridContainer.toLocal({ x: e.globalX, y: e.globalY } as any);
       const { gx, gy } = toTileIndex(local.x, local.y);
-      if (gx < 0 || gy < 0 || gx >= gridSize || gy >= gridSize) {
+      const key = `${gx},${gy}`;
+      if (gx < 0 || gy < 0 || !tilesRef.current.has(key)) {
         const hover = hoverOverlayRef.current;
         if (hover) hover.visible = false;
         lastHoverIndexRef.current = null;
@@ -207,9 +274,9 @@ export default function IsometricGrid({
     const onPointerTap = (e: PIXI.FederatedPointerEvent) => {
       const local = gridContainer.toLocal({ x: e.globalX, y: e.globalY } as any);
       const { gx, gy } = toTileIndex(local.x, local.y);
-      if (gx < 0 || gy < 0 || gx >= gridSize || gy >= gridSize) return;
+      if (gx < 0 || gy < 0 || !tilesRef.current.has(`${gx},${gy}`)) return;
       const { worldX, worldY } = gridToWorld(gx, gy, tileWidth, tileHeight);
-      selectedTileRef.current = { x: gx, y: gy, worldX, worldY, tileType: tileTypes[gy]?.[gx] || 'grass', sprite: new PIXI.Graphics() } as any;
+      selectedTileRef.current = { x: gx, y: gy, worldX, worldY, tileType: tileTypes[gy]?.[gx] || 'unknown', sprite: new PIXI.Graphics() } as any;
       const select = selectOverlayRef.current;
       if (select) {
         select.visible = true;
@@ -301,6 +368,54 @@ export default function IsometricGrid({
       initializedRef.current = false;
     };
   }, [viewport, gridSize, tileWidth, tileHeight, tileTypes]);
+
+  // Dynamically add missing tiles when gridSize grows
+  useEffect(() => {
+    const gridContainer = gridContainerRef.current;
+    if (!gridContainer) return;
+    const tiles = tilesRef.current;
+    let added = 0;
+    for (let x = 0; x < gridSize; x++) {
+      for (let y = 0; y < gridSize; y++) {
+        const key = `${x},${y}`;
+        if (!tiles.has(key)) {
+          const tile = createTileSprite(x, y);
+          tiles.set(key, tile);
+          gridContainer.addChild(tile.sprite);
+          added++;
+        }
+      }
+    }
+    if (added > 0) {
+      logger.debug(`IsometricGrid: added ${added} tiles after gridSize changed to ${gridSize}`);
+    }
+  }, [gridSize, createTileSprite]);
+
+  // Refresh tile graphics when tileTypes change
+  useEffect(() => {
+    const gridContainer = gridContainerRef.current;
+    if (!gridContainer) return;
+    const tiles = tilesRef.current;
+    let updates = 0;
+    tiles.forEach((gridTile, key) => {
+      const nextType = tileTypes[gridTile.y]?.[gridTile.x];
+      if (nextType && nextType !== gridTile.tileType) {
+        const oldSprite: any = gridTile.sprite as any;
+        const oldTex = oldSprite.__tex;
+        if (oldTex) {
+          try { gridContainer.removeChild(oldTex); } catch {}
+        }
+        try { gridContainer.removeChild(gridTile.sprite); } catch {}
+        const newTile = createTileSprite(gridTile.x, gridTile.y);
+        tiles.set(key, newTile);
+        gridContainer.addChild(newTile.sprite);
+        updates++;
+      }
+    });
+    if (updates > 0) {
+      logger.debug(`IsometricGrid: updated ${updates} tiles due to tileTypes change`);
+    }
+  }, [tileTypes, createTileSprite]);
 
   // Performance optimization: Viewport culling and LOD + lightweight animations
   useEffect(() => {
@@ -401,6 +516,14 @@ export default function IsometricGrid({
     // Global animation ticker
     const tick = () => {
       t += 16;
+      // Subtle pulse on selection overlay
+      const sel = selectOverlayRef.current;
+      if (sel && sel.visible) {
+        const base = 0.35;
+        const amp = 0.1;
+        const w = 0.002;
+        sel.alpha = base + amp * (0.5 + 0.5 * Math.sin(t * w));
+      }
       throttledUpdate();
       animationFrameId = requestAnimationFrame(tick);
     };

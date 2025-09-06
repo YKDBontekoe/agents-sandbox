@@ -34,6 +34,8 @@ import RoutesLayer from '@/components/game/RoutesLayer';
 import RoadsLayer from '@/components/game/RoadsLayer';
 import CitizensLayer from '@/components/game/CitizensLayer';
 import AssignmentLinesLayer, { type AssignLine } from '@/components/game/AssignmentLinesLayer';
+import PathHintsLayer, { type PathHint } from '@/components/game/PathHintsLayer';
+import BuildingPulseLayer, { type Pulse } from '@/components/game/BuildingPulseLayer';
 import type { CrisisData } from '@/components/game/CrisisModal';
 import GoalBanner from '@/components/game/GoalBanner';
 import OnboardingGuide from '@/components/game/OnboardingGuide';
@@ -340,6 +342,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   const [error, setError] = useState<string | null>(null);
   const [isPaused, setIsPaused] = useState(true);
   const [timeRemaining, setTimeRemaining] = useState(60);
+  const [edgeScrollEnabled, setEdgeScrollEnabled] = useState(true);
   const [, setCrisis] = useState<CrisisData | null>(null);
   const [isCouncilOpen, setIsCouncilOpen] = useState(false);
   const [onboardingStep, setOnboardingStep] = useState<number>(() => {
@@ -379,8 +382,31 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   // simplified: direct tile builds; no separate build selection UI here
   const [districts, _setDistricts] = useState<District[]>([]);
   const [leylines, setLeylines] = useState<Leyline[]>([]);
-  const [gridSize, _setGridSize] = useState(20);
+  const [gridSize, setGridSize] = useState<number | null>(null);
   const [tileTypes, setTileTypes] = useState<string[][]>([]);
+  const [mapSizeModalOpen, setMapSizeModalOpen] = useState(true);
+  const [pendingMapSize, setPendingMapSize] = useState<number>(32);
+
+  // Expand map with 'unknown' tiles when interacting near the edges
+  const ensureCapacityAround = useCallback((x: number, y: number, margin: number = 2) => {
+    setTileTypes((prev) => {
+      const rows = prev.length;
+      const cols = rows > 0 ? prev[0].length : 0;
+      const needRows = Math.max(rows, y + 1 + margin);
+      const needCols = Math.max(cols, x + 1 + margin);
+      if (needRows === rows && needCols === cols) return prev;
+      const next: string[][] = new Array(needRows);
+      for (let r = 0; r < needRows; r++) {
+        next[r] = new Array(needCols);
+        for (let c = 0; c < needCols; c++) {
+          const val = (r < rows && c < (prev[r]?.length ?? 0)) ? prev[r][c] : 'unknown';
+          next[r][c] = val || 'unknown';
+        }
+      }
+      return next;
+    });
+  }, []);
+
   const [routeDraftFrom, setRouteDraftFrom] = useState<string | null>(null);
   const [edicts, setEdicts] = useState<Record<string, number>>({ tariffs: 50, patrols: 0 });
   const [pendingEdictChanges, setPendingEdictChanges] = useState<Record<string, number>>({});
@@ -470,6 +496,53 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   const hasAutoOpenedCouncilRef = useRef(false);
   const [routeHoverToId, setRouteHoverToId] = useState<string | null>(null);
   const [assignLines, setAssignLines] = useState<AssignLine[]>([]);
+  const [pathHints, setPathHints] = useState<PathHint[]>([]);
+  const [pulses, setPulses] = useState<Pulse[]>([]);
+  const [ctxMenu, setCtxMenu] = useState<{ open: boolean; buildingId: string | null; x: number; y: number }>({ open: false, buildingId: null, x: 0, y: 0 });
+
+  const computeRoadPath = useCallback((sx:number, sy:number, tx:number, ty:number): Array<{x:number;y:number}> => {
+    // Lightweight Dijkstra with road preference
+    const key = (x:number,y:number)=>`${x},${y}`;
+    const roadSet = new Set((roads||[]).map(r=>`${r.x},${r.y}`));
+    const inBounds = (x:number,y:number) => y>=0 && y<tileTypes.length && x>=0 && x<(tileTypes[y]?.length||0);
+    const nbrs = (x:number,y:number) => {
+      const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+      const res: Array<{x:number;y:number;cost:number}> = [];
+      for (const [dx,dy] of dirs) {
+        const nx=x+dx, ny=y+dy;
+        if (!inBounds(nx,ny)) continue;
+        const onRoad = roadSet.has(key(nx,ny));
+        res.push({x:nx,y:ny,cost: onRoad ? 0.6 : 1.0});
+      }
+      return res;
+    };
+    const dist = new Map<string,number>();
+    const prev = new Map<string,{x:number;y:number}>();
+    const pq: Array<{x:number;y:number;d:number}> = [{x:sx,y:sy,d:0}];
+    dist.set(key(sx,sy),0);
+    while (pq.length) {
+      pq.sort((a,b)=>a.d-b.d);
+      const cur = pq.shift()!;
+      if (cur.x===tx && cur.y===ty) break;
+      for (const n of nbrs(cur.x, cur.y)) {
+        const nd = cur.d + n.cost;
+        const k = key(n.x,n.y);
+        if (nd < (dist.get(k) ?? Infinity)) {
+          dist.set(k, nd);
+          prev.set(k, {x:cur.x,y:cur.y});
+          pq.push({x:n.x,y:n.y,d:nd});
+        }
+      }
+    }
+    const out: Array<{x:number;y:number}> = [];
+    let cx = tx, cy = ty; let k = key(cx,cy);
+    if (!prev.has(k) && !(sx===tx&&sy===ty)) return out;
+    out.push({x:cx,y:cy});
+    while (prev.has(k)) { const p = prev.get(k)!; out.push({x:p.x,y:p.y}); cx=p.x; cy=p.y; k=key(cx,cy); if (cx===sx && cy===sy) break; }
+    out.reverse();
+    // Filter to only road tiles for the hint
+    return out.filter(t => roadSet.has(key(t.x,t.y)));
+  }, [JSON.stringify(roads), JSON.stringify(tileTypes)]);
 
   // HUD layout presets omitted for stability
 
@@ -515,22 +588,91 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
       setRouteDraftFrom(id);
       setIsSettingsOpen(false);
       setIsCouncilOpen(false);
+      try { notify({ type: 'info', title: 'Route Draft', message: 'Select a target trade post to connect.' }); } catch {}
+    };
+    const onShowMenu = (e: any) => {
+      const { buildingId, screenX, screenY } = e?.detail || {};
+      if (!buildingId) return;
+      setCtxMenu({ open: true, buildingId, x: screenX, y: screenY });
     };
     const onHoverBuilding = (e: any) => {
       const id = e?.detail?.buildingId as string | undefined;
       if (!routeDraftFrom) return;
       setRouteHoverToId(id || null);
     };
+    const onTapBuilding = async (e: any) => {
+      const toId = e?.detail?.buildingId as string | undefined;
+      const fromId = routeDraftFrom;
+      if (!fromId || !toId || fromId === toId) return;
+      if (!simResources) return;
+      const a = placedBuildings.find(b => b.id === fromId);
+      const b = placedBuildings.find(b => b.id === toId);
+      if (!a || !b) return;
+      if (a.typeId !== 'trade_post' || b.typeId !== 'trade_post') {
+        setRouteDraftFrom(null); setRouteHoverToId(null);
+        try { notify({ type: 'warning', title: 'Invalid Route', message: 'Routes can only connect trade posts.' }); } catch {}
+        return;
+      }
+      if ((routes || []).some(r => (r.fromId === a.id && r.toId === b.id) || (r.fromId === b.id && r.toId === a.id))) {
+        setRouteDraftFrom(null); setRouteHoverToId(null);
+        try { notify({ type: 'info', title: 'No Change', message: 'A route already exists between these posts.' }); } catch {}
+        return;
+      }
+      const MAX_ROUTES_PER_NODE = 3;
+      const aCount = (routes || []).filter(r => r.fromId === a.id || r.toId === a.id).length;
+      const bCount = (routes || []).filter(r => r.fromId === b.id || r.toId === b.id).length;
+      if (aCount >= MAX_ROUTES_PER_NODE || bCount >= MAX_ROUTES_PER_NODE) {
+        setRouteDraftFrom(null); setRouteHoverToId(null);
+        try { notify({ type: 'warning', title: 'Too Many Routes', message: 'A post cannot exceed 3 connections.' }); } catch {}
+        return;
+      }
+      const length = Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+      const MAX_ROUTE_LEN = 20;
+      if (length > MAX_ROUTE_LEN) {
+        setRouteDraftFrom(null); setRouteHoverToId(null);
+        try { notify({ type: 'warning', title: 'Too Far', message: 'That route is longer than allowed.' }); } catch {}
+        return;
+      }
+      const cost = 5 + 2 * length;
+      if ((simResources.coin ?? 0) < cost) { try { notify({ type: 'error', title: 'Insufficient Coin', message: `Need ${cost} coin to build this route.` }); } catch {}; return; }
+      const newResSim = { ...simResources, coin: simResources.coin - cost };
+      const newResServer = { ...state!.resources, coin: (state!.resources.coin || 0) - cost } as any;
+      const newRoute: TradeRoute = { id: `r-${generateId()}`, fromId, toId, length };
+      const newRoutes = [newRoute, ...(routes || [])];
+      setRoutes(newRoutes);
+      setSimResources(newResSim);
+      setState(prev => prev ? { ...prev, resources: newResServer, routes: newRoutes } as any : prev);
+      await saveState({ resources: newResServer, routes: newRoutes });
+      try { notify({ type: 'success', title: 'Route Built', message: `Connected ${SIM_BUILDINGS[a.typeId].name} ↔ ${SIM_BUILDINGS[b.typeId].name}` }); } catch {}
+      setRouteDraftFrom(null);
+      setRouteHoverToId(null);
+    };
     window.addEventListener('ad_start_route', onStartRoute as any);
     window.addEventListener('ad_hover_building', onHoverBuilding as any);
+    window.addEventListener('ad_building_tap', onTapBuilding as any);
+    window.addEventListener('ad_show_building_menu', onShowMenu as any);
     return () => {
       window.removeEventListener('ad_start_route', onStartRoute as any);
       window.removeEventListener('ad_hover_building', onHoverBuilding as any);
+      window.removeEventListener('ad_building_tap', onTapBuilding as any);
+      window.removeEventListener('ad_show_building_menu', onShowMenu as any);
     };
-  }, [routeDraftFrom]);
+  }, [routeDraftFrom, routes, simResources, placedBuildings, state, notify]);
 
   useEffect(() => {
     const onKey = async (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && routeDraftFrom) {
+        setRouteDraftFrom(null); setRouteHoverToId(null);
+        try { notify({ type: 'info', title: 'Draft Cancelled', message: 'Route draft has been cancelled.' }); } catch {}
+        return;
+      }
+      if ((e.key === 'm' || e.key === 'M') && selectedTile) {
+        const b = placedBuildings.find(bb => bb.x === selectedTile.x && bb.y === selectedTile.y);
+        if (b) {
+          setCtxMenu({ open: true, buildingId: b.id, x: Math.round(window.innerWidth/2), y: Math.round(window.innerHeight/2) });
+          return;
+        }
+      }
       if (!selectedTile) return;
       const b = placedBuildings.find(bb => bb.x === selectedTile.x && bb.y === selectedTile.y);
       if (!b) return;
@@ -548,7 +690,16 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
           const targets = placedBuildings.filter(x => x.typeId === 'house' || x.typeId === 'storehouse');
           let src = targets[0]; let best = Number.POSITIVE_INFINITY;
           for (const t of targets) { const d = Math.hypot((t.x - b.x), (t.y - b.y)); if (d < best) { best = d; src = t; } }
-          if (src) setAssignLines(prev => [{ id: `al-${Date.now()}`, from: { x: src!.x, y: src!.y }, to: { x: b.x, y: b.y }, createdAt: performance.now(), ttl: 800 }, ...prev].slice(0, 8));
+          if (src) {
+            setAssignLines(prev => [{ id: `al-${Date.now()}`, from: { x: src!.x, y: src!.y }, to: { x: b.x, y: b.y }, createdAt: performance.now(), ttl: 800 }, ...prev].slice(0, 8));
+            const tiles = computeRoadPath(src!.x, src!.y, b.x, b.y);
+            if (tiles.length) {
+              setPathHints(prev => [{ id: `ph-${Date.now()}`, tiles, createdAt: performance.now(), ttl: 1100 }, ...prev].slice(0, 6));
+            } else {
+              try { notify({ type: 'info', title: 'No Road Path', message: 'No roads connect; citizens will take the long way.' }); } catch {}
+            }
+            setPulses(prev => [{ id: `bp-${Date.now()}`, x: b.x, y: b.y, createdAt: performance.now(), ttl: 650 }, ...prev].slice(0, 10));
+          }
         } catch {}
       } else if (e.key === '-' || e.key === '_') {
         if (b.workers <= 0) return;
@@ -988,8 +1139,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     return (
       <div className="h-screen flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin h-8 w-8 border-4 border-gray-300 border-t-indigo-600 rounded-full mx-auto" />
-          <p className="mt-4 text-gray-600">Loading game...</p>
+          <p className="text-gray-600">Initializing game state...</p>
         </div>
       </div>
     );
@@ -1101,34 +1251,89 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
 
   // Minimal inline scene to ensure we render beyond the spinner for validation
   return (
-    <div className="h-dvh w-full bg-neutral-50 overflow-hidden relative">
+    <div className="h-dvh w-full bg-gray-900 overflow-hidden relative">
       <div className="relative flex flex-col min-w-0 h-full">
         <GoalBanner />
         <div className="flex-1 relative min-h-0">
           <GameProvider app={pixiApp} viewport={pixiViewport} setApp={setPixiApp} setViewport={setPixiViewport}>
           <GameRenderer
             useExternalProvider
-            gridSize={20}
+            enableEdgeScroll={edgeScrollEnabled}
+            gridSize={Math.max(tileTypes.length, tileTypes[0]?.length ?? 0)}
             tileTypes={tileTypes}
-            onTileHover={(x,y,t)=>{ setHoverTile({x,y,tileType:t}); }}
+            onTileHover={(x,y,t)=>{ ensureCapacityAround(x,y,2); setHoverTile({x,y,tileType: t || tileTypes[y]?.[x] || 'unknown'}); }}
             onTileClick={(x,y,t)=>{
-              setSelectedTile({x,y,tileType:t});
-              setTooltipLocked(true);
-              setClickEffectKey(`click-${Date.now()}-${x}-${y}`);
-              try { window.dispatchEvent(new CustomEvent('ad_select_tile', { detail: { gridX: x, gridY: y, tileWidth: 64, tileHeight: 32 } })); } catch {}
-            }}
-          >
+          ensureCapacityAround(x,y,2);
+          setSelectedTile({x,y,tileType: t || tileTypes[y]?.[x] || 'unknown'});
+          setTooltipLocked(true);
+          setClickEffectKey(`click-${Date.now()}-${x}-${y}`);
+          try { window.dispatchEvent(new CustomEvent('ad_select_tile', { detail: { gridX: x, gridY: y, tileWidth: 64, tileHeight: 32 } })); } catch {}
+        }}
+      >
             <PreviewLayer
               hoverTile={hoverTile}
               selectedTile={selectedTile}
               tileTypes={tileTypes}
               buildings={placedBuildings.map(b => ({ id: b.id, typeId: b.typeId, x: b.x, y: b.y }))}
               previewTypeId={previewTypeId}
+              buildHint={( ()=>{
+                if (!previewTypeId) return undefined;
+                const tile = hoverTile || selectedTile;
+                if (!tile) return undefined;
+                const occupied = placedBuildings.some(b => b.x === tile.x && b.y === tile.y);
+                if (occupied) return { valid: false, reason: 'Occupied' };
+                const allowed = (BUILDABLE_TILES as any)[previewTypeId] as string[] | undefined;
+                if (allowed && tile.tileType && !allowed.includes(tile.tileType)) return { valid: false, reason: 'Invalid terrain' };
+                // Council prerequisite for advanced builds
+                const needsCouncil = (previewTypeId === 'trade_post' || previewTypeId === 'automation_workshop');
+                const hasCouncil = placedBuildings.some(b => b.typeId === 'council_hall');
+                if (needsCouncil && !hasCouncil) return { valid: false, reason: 'Requires Council Hall' };
+                // Affordability
+                const hasFree = (tutorialFree[previewTypeId as BuildTypeId] || 0) > 0;
+                if (!hasFree && simResources) {
+                  const cost = SIM_BUILDINGS[previewTypeId].cost as Record<string, number>;
+                  const lack: string[] = [];
+                  (Object.keys(cost) as Array<keyof typeof cost>).forEach((k) => {
+                    const need = cost[k] || 0;
+                    const cur = (simResources as any)[k] || 0;
+                    if (need > cur) lack.push(`${String(k)} ${need - cur}`);
+                  });
+                  if (lack.length > 0) return { valid: false, reason: `Insufficient: ${lack.slice(0,3).join(', ')}` } as any;
+                }
+                return { valid: true };
+              })()}
+              highlightAllPlaceable={!!previewTypeId}
+              hasCouncil={placedBuildings.some(b => b.typeId === 'council_hall')}
+              affordable={( ()=>{
+                if (!previewTypeId) return false;
+                const hasFree = (tutorialFree[previewTypeId as BuildTypeId] || 0) > 0;
+                if (hasFree) return true;
+                if (!simResources) return false;
+                return canAfford(SIM_BUILDINGS[previewTypeId].cost, simResources);
+              })()}
             />
             <DistrictSprites districts={districts} tileTypes={tileTypes} onDistrictHover={()=>{}} />
             <LeylineSystem leylines={leylines} onLeylineCreate={()=>{}} onLeylineSelect={setSelectedLeyline} selectedLeyline={selectedLeyline} isDrawingMode={false} />
-            <HeatLayer gridSize={20} tileWidth={64} tileHeight={32} unrest={resources.unrest} threat={resources.threat} />
-            <BuildingsLayer buildings={placedBuildings.map(b => ({ id: b.id, typeId: b.typeId, x: b.x, y: b.y, workers: b.workers, level: b.level }))} />
+            <HeatLayer gridSize={Math.max(tileTypes.length, tileTypes[0]?.length ?? 0)} tileWidth={64} tileHeight={32} unrest={resources.unrest} threat={resources.threat} />
+            {
+              (() => {
+                const connected = new Set<string>();
+                (routes || []).forEach(r => {
+                  const a = placedBuildings.find(b => b.id === r.fromId);
+                  const b = placedBuildings.find(b => b.id === r.toId);
+                  if (!a || !b) return;
+                  if (a.typeId === 'storehouse' && b.id) connected.add(b.id);
+                  if (b.typeId === 'storehouse' && a.id) connected.add(a.id);
+                });
+                return (
+                  <BuildingsLayer
+                    buildings={placedBuildings.map(b => ({ id: b.id, typeId: b.typeId, x: b.x, y: b.y, workers: b.workers, level: b.level }))}
+                    storeConnectedIds={Array.from(connected)}
+                    selected={selectedTile ? { x: selectedTile.x, y: selectedTile.y } : null}
+                  />
+                );
+              })()
+            }
             <RoutesLayer
               routes={(routes || []).map(r => ({ id: r.id, fromId: r.fromId, toId: r.toId }))}
               buildings={placedBuildings.map(b => ({ id: b.id, x: b.x, y: b.y }))}
@@ -1136,6 +1341,8 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
               draftToId={routeHoverToId}
             />
             <AssignmentLinesLayer lines={assignLines} />
+            <PathHintsLayer hints={pathHints} />
+            <BuildingPulseLayer pulses={pulses} />
             {showRoads && <RoadsLayer roads={roads} />}
             {showCitizens && (
             <CitizensLayer
@@ -1162,15 +1369,127 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
             <AmbientLayer tileTypes={tileTypes} />
             <SeasonalLayer season={((state.cycle ?? 0) % 4 === 0 ? 'spring' : (state.cycle % 4 === 1 ? 'summer' : (state.cycle % 4 === 2 ? 'autumn' : 'winter')))} />
             <MarkersLayer markers={markers.map(m => ({ id: m.id, gridX: m.x, gridY: m.y, label: m.label }))} />
-          </GameRenderer>
+      </GameRenderer>
+
+      {/* Route draft chip */}
+      {routeDraftFrom && (
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[9999]">
+          {(() => {
+            const from = placedBuildings.find(b => b.id === routeDraftFrom);
+            const msg = from?.typeId === 'storehouse'
+              ? 'Draft: only trade posts can finalize (Esc to cancel)'
+              : 'Draft: select target trade post (Esc to cancel)';
+            return (
+              <div className="px-3 py-1.5 rounded-full bg-blue-900/30 text-blue-300 border border-blue-700/60 text-xs shadow-sm">{msg}</div>
+            );
+          })()}
+        </div>
+      )}
+
+      {/* Context Menu */}
+      {ctxMenu?.open && ctxMenu.buildingId && (
+        <div className="fixed inset-0 z-[10000]" onClick={() => setCtxMenu({ open: false, buildingId: null, x: 0, y: 0 })}>
+          <div
+            className="absolute bg-gray-800 border border-gray-700 shadow-lg rounded-md text-sm min-w-[180px] text-gray-200"
+            style={{ left: ctxMenu.x, top: ctxMenu.y }}
+            onClick={(e)=> e.stopPropagation()}
+          >
+            {(() => {
+              const b = placedBuildings.find(bb => bb.id === ctxMenu.buildingId);
+              if (!b) return <div className="px-3 py-2 text-gray-400">No building</div>;
+              const cap = SIM_BUILDINGS[b.typeId].workCapacity ?? 0;
+              const level = Math.max(1, Number(b.level ?? 1));
+              const maxCap = Math.round(cap * (1 + 0.25 * (level - 1)));
+              return (
+                <div className="py-1">
+                  <button className="w-full text-left px-3 py-1.5 hover:bg-gray-700 disabled:opacity-50" disabled={(simResources?.workers ?? 0) <= 0 || b.workers >= maxCap}
+                    onClick={async ()=>{
+                      const idx = placedBuildings.findIndex(x=>x.id===b.id);
+                      if (idx===-1) return;
+                      const up = [...placedBuildings];
+                      up[idx] = { ...b, workers: b.workers + 1 };
+                      setPlacedBuildings(up);
+                      setSimResources(prev => prev ? { ...prev, workers: Math.max(0, prev.workers - 1) } : prev);
+                      await saveState({ buildings: up });
+                      setCtxMenu({ open: false, buildingId: null, x: 0, y: 0 });
+                    }}>Assign +1</button>
+                  <button className="w-full text-left px-3 py-1.5 hover:bg-gray-700 disabled:opacity-50" disabled={b.workers<=0}
+                    onClick={async ()=>{
+                      const idx = placedBuildings.findIndex(x=>x.id===b.id);
+                      if (idx===-1) return;
+                      const up = [...placedBuildings];
+                      up[idx] = { ...b, workers: b.workers - 1 };
+                      setPlacedBuildings(up);
+                      setSimResources(prev => prev ? { ...prev, workers: prev.workers + 1 } : prev);
+                      await saveState({ buildings: up });
+                      setCtxMenu({ open: false, buildingId: null, x: 0, y: 0 });
+                    }}>Unassign -1</button>
+                  <div className="h-px bg-gray-700 my-1" />
+                  {(() => {
+                    const def = SIM_BUILDINGS[b.typeId];
+                    const maxL = def.maxLevel ?? 3;
+                    const atMax = b.level >= maxL;
+                    const factor = 1 + 0.5 * b.level; const scaled: Partial<SimResources> = {};
+                    for (const [k,v] of Object.entries(def.cost)) { (scaled as any)[k] = Math.round((v ?? 0) * factor); }
+                    const can = canAfford(scaled, simResources!);
+                    const costStr = Object.entries(scaled).filter(([,v]) => (v as number) > 0).map(([k,v]) => `${k} ${v}`).join(', ');
+                    return (
+                      <button className="w-full text-left px-3 py-1.5 hover:bg-gray-700 disabled:opacity-50" disabled={atMax || !can}
+                        title={atMax ? 'Max level reached' : (!can ? `Need: ${costStr}` : `Cost: ${costStr}`)}
+                        onClick={async ()=>{
+                      const def = SIM_BUILDINGS[b.typeId]; const maxL = def.maxLevel ?? 3; if (b.level >= maxL) return;
+                      const factor = 1 + 0.5 * b.level; const scaled: Partial<SimResources> = {};
+                      for (const [k,v] of Object.entries(def.cost)) { (scaled as any)[k] = Math.round((v ?? 0) * factor); }
+                      if (!canAfford(scaled, simResources!)) return;
+                      const newResSim = applyCost(simResources!, scaled);
+                      const newResServer = { ...state!.resources } as Record<string, number>;
+                      for (const [k, v] of Object.entries(scaled)) { const key = k as keyof typeof newResServer; newResServer[key] = Math.max(0, (newResServer[key] || 0) - (v || 0)); }
+                      const up = placedBuildings.map(x=> x.id===b.id ? { ...x, level: x.level + 1 } : x);
+                      setPlacedBuildings(up); setSimResources(newResSim); setState(prev => prev ? { ...prev, resources: newResServer, buildings: up } : prev);
+                      await saveState({ resources: newResServer, buildings: up });
+                      setCtxMenu({ open: false, buildingId: null, x: 0, y: 0 });
+                        }}>Upgrade</button>
+                    );
+                  })()}
+                  <button className="w-full text-left px-3 py-1.5 hover:bg-gray-700 text-rose-400"
+                    onClick={async ()=>{
+                      if (!confirm('Dismantle this building?')) return;
+                      const idx = placedBuildings.findIndex(x=>x.id===b.id); if (idx===-1) return;
+                      const def = SIM_BUILDINGS[b.typeId]; const factor = 1 + 0.5 * (b.level - 1); const refund: Partial<SimResources> = {};
+                      for (const [k,v] of Object.entries(def.cost)) { (refund as any)[k] = Math.round(((v ?? 0) * factor) * 0.5); }
+                      const newResSim = simResources ? { ...simResources } : null; const newResServer = { ...state!.resources } as Record<string, number>;
+                      for (const [k,v] of Object.entries(refund)) { if (newResSim) (newResSim as any)[k] = ((newResSim as any)[k] || 0) + (v || 0); const key = k as keyof typeof newResServer; newResServer[key] = (newResServer[key] || 0) + (v || 0); }
+                      const keptRoutes = (routes || []).filter(r => r.fromId !== b.id && r.toId !== b.id);
+                      const up = placedBuildings.filter(x=>x.id!==b.id);
+                      setPlacedBuildings(up); if (newResSim) setSimResources(newResSim); setRoutes(keptRoutes);
+                      setState(prev => prev ? { ...prev, resources: newResServer, buildings: up, routes: keptRoutes } : prev);
+                      await saveState({ resources: newResServer, buildings: up, routes: keptRoutes });
+                      setCtxMenu({ open: false, buildingId: null, x: 0, y: 0 });
+                    }}>Dismantle</button>
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      )}
+
+          {/* Subtle build legend when a building type is selected */}
+          {previewTypeId && (
+            <div className="absolute left-4 bottom-40 pointer-events-none select-none">
+              <div className="inline-flex items-center gap-2 bg-gray-800/85 border border-gray-700 rounded px-2 py-1 text-[11px] text-gray-200 shadow-sm">
+                <span className="inline-block w-3 h-3 rounded-sm border border-emerald-600" style={{ backgroundColor: 'rgba(16,185,129,0.25)' }} />
+                Placeable tiles
+              </div>
+            </div>
+          )}
 
           {/* Minimal surface UI; world toggles moved to Settings to reduce clutter */}
 
           {/* Road confirmation modal */}
           {pendingRoad && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-[9999]">
-              <div className="bg-white rounded shadow-lg border border-slate-200 p-4 w-[360px]">
-                <div className="font-semibold mb-2">Approve Road Construction</div>
+            <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm z-[9999]">
+              <div className="bg-gray-800 rounded shadow-lg border border-gray-700 p-4 w-[380px] text-gray-200">
+                <div className="font-semibold mb-2 text-gray-100">Approve Road Construction</div>
                 {(() => {
                   const tiles = pendingRoad.tiles;
                   const unique = Array.from(new Set(tiles.map(t=>`${t.x},${t.y}`))).length;
@@ -1179,18 +1498,18 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
                   const haveCoin = state?.resources.coin ?? 0;
                   const havePlanks = (state?.resources as any).planks ?? 0;
                   return (
-                    <div className="text-sm text-slate-700">
+                    <div className="text-sm text-gray-300">
                       <div className="mb-1">Tiles: {unique}</div>
                       <div className="mb-3">Cost: coin {costCoin}, planks {costPlanks}</div>
-                      <div className={haveCoin>=costCoin && havePlanks>=costPlanks ? 'text-emerald-700' : 'text-red-600'}>
+                      <div className={haveCoin>=costCoin && havePlanks>=costPlanks ? 'text-emerald-400' : 'text-rose-400'}>
                         {haveCoin>=costCoin && havePlanks>=costPlanks ? 'Affordable' : 'Insufficient resources' }
                       </div>
                     </div>
                   );
                 })()}
                 <div className="mt-4 flex justify-end gap-2">
-                  <button className="px-3 py-1.5 rounded border border-slate-300" onClick={()=>setPendingRoad(null)}>Cancel</button>
-                  <button className="px-3 py-1.5 rounded bg-emerald-600 text-white" onClick={()=>{ applyRoads(pendingRoad.tiles); setPendingRoad(null); }}>Build</button>
+                  <button className="px-3 py-1.5 rounded border border-gray-600 text-gray-200 hover:bg-gray-700" onClick={()=>setPendingRoad(null)}>Cancel</button>
+                  <button className="px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white" onClick={()=>{ applyRoads(pendingRoad.tiles); setPendingRoad(null); }}>Build</button>
                 </div>
               </div>
             </div>
@@ -1278,6 +1597,13 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
                   }
                   if (src) {
                     setAssignLines(prev => [{ id: `al-${Date.now()}`, from: { x: src!.x, y: src!.y }, to: { x: b.x, y: b.y }, createdAt: performance.now(), ttl: 800 }, ...prev].slice(0, 8));
+                    const tiles = computeRoadPath(src!.x, src!.y, b.x, b.y);
+                    if (tiles.length) {
+                      setPathHints(prev => [{ id: `ph-${Date.now()}`, tiles, createdAt: performance.now(), ttl: 1100 }, ...prev].slice(0, 6));
+                    } else {
+                      try { notify({ type: 'info', title: 'No Road Path', message: 'No roads connect; citizens will take the long way.' }); } catch {}
+                    }
+                    setPulses(prev => [{ id: `bp-${Date.now()}`, x: b.x, y: b.y, createdAt: performance.now(), ttl: 650 }, ...prev].slice(0, 10));
                   }
                 } catch {}
                 if (onboardingStep === 3) setOnboardingStep(4);
@@ -1373,6 +1699,8 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
                 setState(prev => prev ? { ...prev, resources: newResServer, buildings: newBuildings } : prev);
                 await saveState({ resources: newResServer, buildings: newBuildings });
                 setMarkers(prev => [{ id: `m-${generateId()}`, x: gx, y: gy, label: SIM_BUILDINGS[typeId].name }, ...prev]);
+                // Build effect burst
+                setClickEffectKey(`build-${Date.now()}-${gx}-${gy}`);
                 // Tutorial progress + consume freebies
                 if (hasFree) setTutorialFree(prev => ({ ...prev, [typeId as BuildTypeId]: Math.max(0, (prev[typeId as BuildTypeId] || 0) - 1) }));
                 if (onboardingStep === 1 && typeId === 'farm') setOnboardingStep(2);
@@ -1553,6 +1881,8 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
         onToggleCitizens={(v)=> setShowCitizens(v)}
         requireRoadConfirm={requireRoadConfirm}
         onToggleRoadConfirm={(v)=> setRequireRoadConfirm(v)}
+        edgeScrollEnabled={edgeScrollEnabled}
+        onToggleEdgeScroll={(v)=> setEdgeScrollEnabled(v)}
         autoAssignWorkers={autoAssignWorkers}
         onToggleAutoAssignWorkers={(v)=> setAutoAssignWorkers(v)}
         citizensCount={citizensCount}

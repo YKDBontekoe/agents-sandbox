@@ -25,12 +25,12 @@ function ResourceItem({ label, value, delta, danger, icon, variant = 'default' }
   const showDelta = typeof delta === 'number' && delta !== 0;
   
   return (
-    <div className="flex items-center justify-between gap-2 px-2 py-1 rounded hover:bg-white/40 transition-colors">
+    <div className="flex items-center justify-between gap-2 px-2 py-1 rounded hover:bg-white/5 transition-colors">
       <div className="flex items-center gap-2 min-w-0 flex-1">
         {icon && (
           <ResponsiveIcon 
             size={{ mobile: 'xs', tablet: 'sm', desktop: 'sm', wide: 'md' }}
-            className="text-slate-500 flex-shrink-0"
+            className="text-gray-400 flex-shrink-0"
           >
             {icon}
           </ResponsiveIcon>
@@ -73,7 +73,7 @@ function WorkforceSection({ workforce, variant }: { workforce: WorkforceInfo; va
   if (variant === 'minimal') return null;
   
   return (
-    <div className="mt-3 pt-2 border-t border-slate-200">
+    <div className="mt-3 pt-2 border-t border-gray-700">
       <ResponsiveGrid 
         columns={{ mobile: 1, tablet: 2, desktop: 2, wide: 2 }}
         gap="sm"

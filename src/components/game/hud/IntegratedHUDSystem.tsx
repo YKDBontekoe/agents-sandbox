@@ -131,7 +131,11 @@ function HUDSystemCore({
               variant={currentPreset.panelVariants['action-panel'] || 'default'}
             />
             <div className="mt-2" />
-            <ModularSkillTreePanel />
+            <ModularSkillTreePanel resources={{
+              coin: gameData.resources.coin,
+              mana: gameData.resources.mana,
+              favor: gameData.resources.favor,
+            }} />
 
             {/* Inject additional right-sidebar children (e.g., Worker/Quest panels) */}
             <div className="mt-2" />
@@ -180,13 +184,13 @@ export function HUDSettingsPanel({ isOpen, onClose }: HUDSettingsPanelProps) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
+    <div className="fixed inset-0 bg-gray-900/80 flex items-center justify-center z-50">
+      <div className="bg-gray-800 text-gray-200 border border-gray-700 rounded-lg p-6 max-w-md w-full mx-4">
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-bold">HUD Settings</h2>
+          <h2 className="text-xl font-bold text-gray-100">HUD Settings</h2>
           <button
             onClick={onClose}
-            className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+            className="text-gray-400 hover:text-gray-200"
             aria-label="Close settings"
           >
             ✕
@@ -204,22 +208,22 @@ export function HUDSettingsPanel({ isOpen, onClose }: HUDSettingsPanelProps) {
                   key={preset.id}
                   onClick={() => setPreset(preset.id)}
                   className={`
-                    p-3 rounded border text-left transition-colors
+                    p-3 rounded border text-left transition-colors bg-gray-800
                     ${currentPreset.id === preset.id
-                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-900'
-                      : 'border-gray-300 dark:border-gray-600 hover:border-gray-400'
+                      ? 'border-blue-500 bg-blue-900/40'
+                      : 'border-gray-700 hover:border-gray-500'
                     }
                   `}
                 >
                   <div className="flex items-center space-x-2">
                     {preset.icon && (
-                      <div className="w-4 h-4 text-gray-600 dark:text-gray-400">
+                      <div className="w-4 h-4 text-gray-300">
                         {preset.icon}
                       </div>
                     )}
                     <div>
-                      <div className="font-medium text-sm">{preset.name}</div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                      <div className="font-medium text-sm text-gray-200">{preset.name}</div>
+                      <div className="text-xs text-gray-400">
                         {preset.description}
                       </div>
                     </div>
@@ -229,9 +233,9 @@ export function HUDSettingsPanel({ isOpen, onClose }: HUDSettingsPanelProps) {
             </div>
           </div>
           
-          <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+          <div className="pt-4 border-t border-gray-700">
             <h3 className="text-sm font-medium mb-2">Features</h3>
-            <div className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
+            <div className="space-y-2 text-sm text-gray-400">
               {currentPreset.features.autoHide && (
                 <div>• Auto-hide panels when not in use</div>
               )}

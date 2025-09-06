@@ -56,16 +56,16 @@ export default function ModularQuestPanel({ completed, variant = 'default', coll
         <div className="flex items-center gap-1">
           <span className="px-1.5 py-0.5 rounded-full text-[10px] leading-none bg-indigo-600 text-white tabular-nums">{remaining}</span>
           {next && (
-            <span className="max-w-[10rem] truncate px-1 py-0.5 rounded bg-slate-100 text-[10px] text-slate-700 hidden md:inline" title={next.text}>{next.text}</span>
+            <span className="max-w-[10rem] truncate px-1 py-0.5 rounded bg-gray-900/30 border border-gray-700 text-[10px] text-gray-300 hidden md:inline" title={next.text}>{next.text}</span>
           )}
         </div>
       )}
       className="min-w-0"
     >
-      <ul className="px-1 py-1 space-y-1 text-xs">
+      <ul className="px-1 py-1 space-y-1 text-xs text-gray-200">
         {QUESTS.map(q => (
-          <li key={q.id} className="flex items-center gap-2 text-slate-700">
-            <span className={`inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] ${completed[q.id] ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-600'}`}>
+          <li key={q.id} className="flex items-center gap-2">
+            <span className={`inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] ${completed[q.id] ? 'bg-emerald-600 text-white' : 'bg-gray-700 text-gray-300'}`}>
               {completed[q.id] ? '✓' : '•'}
             </span>
             <span className="truncate">{q.text}</span>

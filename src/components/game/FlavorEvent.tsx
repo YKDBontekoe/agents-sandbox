@@ -10,14 +10,14 @@ interface Props {
 export default function FlavorEvent({ event, onClose }: Props) {
   return (
     <div className="absolute top-24 left-1/2 -translate-x-1/2 z-50 pointer-events-auto">
-      <div className="bg-white/95 backdrop-blur-sm border border-slate-200 rounded-lg shadow-lg p-4 max-w-sm w-[90vw] sm:w-auto">
+      <div className="bg-gray-800/95 backdrop-blur-sm border border-gray-700 rounded-lg shadow-lg p-4 max-w-sm w-[90vw] sm:w-auto text-gray-200">
         <div className="flex items-start justify-between gap-4">
-          <div className="text-sm text-slate-800">
+          <div className="text-sm text-gray-100">
             {event.message}
           </div>
           <button
             onClick={onClose}
-            className="text-slate-500 hover:text-slate-900 rounded p-1 hover:bg-slate-100"
+            className="text-gray-400 hover:text-gray-100 rounded p-1 hover:bg-gray-700"
             aria-label="Close"
           >
             ✕

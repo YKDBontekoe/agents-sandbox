@@ -16,14 +16,14 @@ export function NotificationCenter({ notifications, onDismiss, onAction }: Props
         <div
           key={n.id}
           role="status"
-          className={`rounded-md shadow-md p-3 text-sm border bg-white/95 backdrop-blur ${
+          className={`rounded-md shadow-md p-3 text-sm border bg-gray-800/95 backdrop-blur ${
             n.type === 'error'
-              ? 'border-red-300 text-red-800'
+              ? 'border-rose-600 text-rose-300'
               : n.type === 'warning'
-              ? 'border-yellow-300 text-yellow-900'
+              ? 'border-amber-600 text-amber-300'
               : n.type === 'success'
-              ? 'border-green-300 text-green-800'
-              : 'border-slate-200 text-slate-700'
+              ? 'border-emerald-600 text-emerald-300'
+              : 'border-gray-700 text-gray-200'
           }`}
         >
           <div className="flex items-start justify-between gap-2">
@@ -34,7 +34,7 @@ export function NotificationCenter({ notifications, onDismiss, onAction }: Props
               </div>
               <div className="leading-5 opacity-90">{n.message}</div>
               {n.action && (
-                <button onClick={() => onAction?.(n)} className="mt-1 px-2 py-0.5 rounded border text-xs border-slate-300 bg-white hover:bg-slate-100 text-slate-700">
+                <button onClick={() => onAction?.(n)} className="mt-1 px-2 py-0.5 rounded border text-xs border-gray-600 bg-gray-700 hover:bg-gray-600 text-gray-100">
                   {n.action.label || 'View'}
                 </button>
               )}
@@ -43,7 +43,7 @@ export function NotificationCenter({ notifications, onDismiss, onAction }: Props
               <button
                 aria-label="Dismiss notification"
                 onClick={() => onDismiss(n.id)}
-                className="rounded p-1 text-slate-500 hover:text-slate-700 hover:bg-slate-100"
+                className="rounded p-1 text-gray-400 hover:text-gray-100 hover:bg-gray-700"
               >
                 ×
               </button>

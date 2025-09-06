@@ -9,8 +9,8 @@ interface Props {
 
 export function StatusBar({ fps = 60, quality = 'High' }: Props) {
   return (
-    <div className="bg-white/85 backdrop-blur rounded-md border border-slate-200 px-4 py-2 shadow-lg">
-      <div className="flex items-center justify-between text-xs text-slate-600">
+    <div className="bg-gray-800/90 backdrop-blur rounded-md border border-gray-700 px-4 py-2 shadow-lg text-gray-200">
+      <div className="flex items-center justify-between text-xs">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1">
             <FontAwesomeIcon icon={faMousePointer} className="text-xs" />
@@ -27,12 +27,12 @@ export function StatusBar({ fps = 60, quality = 'High' }: Props) {
         </div>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1">
-            <span className="text-slate-500">Quality:</span>
-            <span className={`font-medium ${quality === 'High' ? 'text-green-700' : quality === 'Medium' ? 'text-yellow-700' : 'text-red-700'}`}>{quality}</span>
+            <span className="text-gray-400">Quality:</span>
+            <span className={`font-medium ${quality === 'High' ? 'text-green-400' : quality === 'Medium' ? 'text-yellow-400' : 'text-rose-400'}`}>{quality}</span>
           </div>
           <div className="flex items-center gap-1">
-            <span className="text-slate-500">FPS:</span>
-            <span className={`font-mono font-bold ${fps >= 55 ? 'text-green-700' : fps >= 30 ? 'text-yellow-700' : 'text-red-700'}`}>{fps}</span>
+            <span className="text-gray-400">FPS:</span>
+            <span className={`font-mono font-bold ${fps >= 55 ? 'text-green-400' : fps >= 30 ? 'text-yellow-400' : 'text-rose-400'}`}>{fps}</span>
           </div>
         </div>
       </div>

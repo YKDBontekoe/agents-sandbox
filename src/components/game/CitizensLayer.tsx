@@ -17,7 +17,11 @@ interface CitizensLayerProps {
   seed?: number;
   tileWidth?: number;
   tileHeight?: number;
+  // Optional: length of a full in-game day in real seconds (compressed clock)
+  dayLengthSeconds?: number;
 }
+
+type CitizenActivity = 'CommuteToWork' | 'Work' | 'CommuteToShop' | 'Shop' | 'CommuteHome' | 'Sleep';
 
 type Citizen = {
   x: number; y: number; // grid coordinates
@@ -28,9 +32,21 @@ type Citizen = {
   speed: number;
   name: string;
   role: 'Hauler' | 'Builder';
+  // Daily-cycle routing
+  homeX: number; homeY: number;
+  workX: number; workY: number; workId?: string;
+  shopX: number; shopY: number;
+  activity: CitizenActivity;
+  nextDecisionHour: number; // to avoid repeated transitions within same window
+  baseWorldY: number; // stable Y for bobbing
+  wanderCooldown: number; // seconds remaining before next wander selection
+  // Stuck detection & smoothing helpers
+  lastDist: number; // last world-space distance to next waypoint
+  stuckFor: number; // seconds accumulated without progress
+  repathCooldown: number; // seconds until next allowed repath
 }
 
-export default function CitizensLayer({ buildings, roads, tileTypes, onProposeRoads, citizensCount, seed, tileWidth = 64, tileHeight = 32 }: CitizensLayerProps) {
+export default function CitizensLayer({ buildings, roads, tileTypes, onProposeRoads, citizensCount, seed, tileWidth = 64, tileHeight = 32, dayLengthSeconds = 60 }: CitizensLayerProps) {
   const { app, viewport } = useGameContext();
   const containerRef = useRef<PIXI.Container | null>(null);
   const citizensRef = useRef<Citizen[]>([]);
@@ -42,6 +58,7 @@ export default function CitizensLayer({ buildings, roads, tileTypes, onProposeRo
   const houses = useMemo(() => buildings.filter(b => b.typeId === 'house'), [JSON.stringify(buildings)]);
   const storehouses = useMemo(() => buildings.filter(b => b.typeId === 'storehouse'), [JSON.stringify(buildings)]);
   const producers = useMemo(() => buildings.filter(b => ['farm','lumber_camp','sawmill','trade_post','automation_workshop','shrine'].includes(b.typeId)), [JSON.stringify(buildings)]);
+  const leisureSpots = useMemo(() => buildings.filter(b => ['trade_post','shrine','council_hall'].includes(b.typeId)), [JSON.stringify(buildings)]);
   const producerWeights = useMemo(() => {
     const map = new Map<string, number>();
     producers.forEach(p => {
@@ -103,6 +120,9 @@ export default function CitizensLayer({ buildings, roads, tileTypes, onProposeRo
     return out;
   };
 
+  // Compressed day clock (seconds accumulate and wrap at dayLengthSeconds)
+  const dayClockRef = useRef<number>(0);
+
   useEffect(() => {
     if (!app || !viewport) return;
     const container = new PIXI.Container();
@@ -112,46 +132,79 @@ export default function CitizensLayer({ buildings, roads, tileTypes, onProposeRo
     viewport.addChild(container);
     containerRef.current = container;
 
-    // spawn a small citizen pool based on houses (cap at 12)
+    // spawn a small citizen pool based on houses (cap at 20)
     const rngSeed = Math.abs(Number(seed ?? 1337)) % 2147483647 || 1337;
     let rng = rngSeed;
     const rand = () => (rng = (rng * 48271) % 2147483647) / 2147483647;
     const count = Math.min(20, Math.max(2, Math.floor(citizensCount ?? (houses.length * 2 || 6))));
-    const home = houses[0] || storehouses[0] || producers[0];
+    const globalHome = houses[0] || storehouses[0] || producers[0] || { x: 10, y: 10 } as any;
     const names = ['Ava','Bran','Caro','Dane','Eira','Finn','Gale','Hale','Iris','Joss','Kade','Lena','Milo','Nora','Oren','Pia','Quin','Rhea','Seth','Tara'];
+
+    const chooseWeightedProducer = () => {
+      if (producers.length === 0) return globalHome;
+      const total = producers.reduce((s,p)=> s + (producerWeights.get(p.id) || 1), 0);
+      let r = rand() * (total || 1);
+      for (const p of producers) {
+        r -= (producerWeights.get(p.id) || 1);
+        if (r <= 0) return p;
+      }
+      return producers[0];
+    };
+
+    const chooseLeisure = () => leisureSpots[0] || producers.find(p=>p.typeId==='trade_post') || globalHome;
+
     for (let i=0;i<count;i++) {
-      const start = home || { x: 10, y: 10 } as any;
+      const home = houses[i % Math.max(1, houses.length)] || globalHome;
+      const work = chooseWeightedProducer();
+      const shop = chooseLeisure();
       const s = new PIXI.Graphics();
       s.zIndex = 555;
       s.beginFill(0x1d4ed8, 0.95);
       s.drawCircle(0, 0, 2.2);
       s.endFill();
-      const { worldX, worldY } = toWorld(start.x, start.y);
+      const { worldX, worldY } = toWorld(home.x, home.y);
       s.position.set(worldX + (rand()-0.5)*2, worldY - 4 + (rand()-0.5)*2);
       container.addChild(s);
       const name = names[Math.floor(rand()*names.length)] + '-' + Math.floor(10+rand()*89);
-      citizensRef.current.push({ x: start.x, y: start.y, tx: start.x, ty: start.y, path: [], carrying: null, sprite: s, speed: 0.014 + rand()*0.012, name, role: 'Hauler' });
+      citizensRef.current.push({
+        x: home.x, y: home.y, tx: home.x, ty: home.y, path: [], carrying: null,
+        sprite: s, speed: 0.014 + rand()*0.012, name, role: 'Hauler',
+        homeX: home.x, homeY: home.y,
+        workX: work.x, workY: work.y, workId: work.id,
+        shopX: shop.x, shopY: shop.y,
+        activity: 'Sleep', nextDecisionHour: -1, baseWorldY: worldY - 4, wanderCooldown: 0,
+        // smoothing & stuck detection init
+        lastDist: Infinity, stuckFor: 0, repathCooldown: 0,
+      });
     }
 
-    const chooseTask = (c: Citizen) => {
-      // target a producer then a storehouse, alternate
-      if (!c.carrying) {
-        // weighted choice favoring staffed producers
-        let target = home;
-        if (producers.length > 0) {
-          const total = producers.reduce((s,p)=> s + (producerWeights.get(p.id) || 1), 0);
-          let r = Math.random() * (total || 1);
-          for (const p of producers) {
-            r -= (producerWeights.get(p.id) || 1);
-            if (r <= 0) { target = p; break; }
-          }
+    const setPathTo = (c: Citizen, tx: number, ty: number) => {
+      c.tx = tx; c.ty = ty;
+      c.path = pathfind(c.x, c.y, tx, ty);
+    };
+
+    const updateActivityForHour = (c: Citizen, hour: number) => {
+      // Define simple schedule windows
+      // 05-07 commute to work, 07-16 work, 16-18 commute to shop, 18-20 shop, 20-22 commute home, 22-05 sleep
+      let desired: CitizenActivity;
+      if (hour >= 5 && hour < 7) desired = 'CommuteToWork';
+      else if (hour >= 7 && hour < 16) desired = 'Work';
+      else if (hour >= 16 && hour < 18) desired = 'CommuteToShop';
+      else if (hour >= 18 && hour < 20) desired = 'Shop';
+      else if (hour >= 20 && hour < 22) desired = 'CommuteHome';
+      else desired = 'Sleep';
+
+      if (c.activity !== desired) {
+        c.activity = desired;
+        c.wanderCooldown = 0;
+        if (desired === 'CommuteToWork' || desired === 'Work') {
+          setPathTo(c, c.workX, c.workY);
+        } else if (desired === 'CommuteToShop' || desired === 'Shop') {
+          setPathTo(c, c.shopX, c.shopY);
+        } else if (desired === 'CommuteHome' || desired === 'Sleep') {
+          setPathTo(c, c.homeX, c.homeY);
+          if (desired === 'Sleep') c.carrying = null; // drop carried items when day ends
         }
-        c.tx = target.x; c.ty = target.y;
-        c.path = pathfind(c.x, c.y, c.tx, c.ty);
-      } else {
-        const st = storehouses[0] || home;
-        c.tx = st.x; c.ty = st.y;
-        c.path = pathfind(c.x, c.y, c.tx, c.ty);
       }
     };
 
@@ -163,57 +216,145 @@ export default function CitizensLayer({ buildings, roads, tileTypes, onProposeRo
       // compute movement in world space, speed bonus on road
       const onRoad = roadSet.has(`${next.x},${next.y}`);
       const sp = (onRoad ? 1.8 : 1.0) * (c.speed * dt);
-      const dx = worldX - cur.x, dy = worldY - (cur.y+4);
+      const dx = worldX - cur.x, dy = (worldY - 4) - cur.y;
       const dist = Math.hypot(dx, dy);
+
+      // progress tracking for stuck detection (dt is ~frames, convert to seconds)
+      const dtSec = dt / 60; // since dt ~ 1 at 60fps
+      if (dist < c.lastDist - 0.5) {
+        c.lastDist = dist;
+        c.stuckFor = 0;
+      } else {
+        c.stuckFor += dtSec;
+      }
+
+      // If not making progress for a while, try to repath or wander to unstick
+      if (c.stuckFor > 1.2 && c.repathCooldown <= 0) {
+        c.repathCooldown = 2.0; // avoid thrashing
+        const prevPathLen = c.path.length;
+        // Attempt to repath to current target
+        c.path = pathfind(c.x, c.y, c.tx, c.ty);
+        if (!c.path.length || c.path.length >= prevPathLen) {
+          // fallback: pick a nearby tile to wander to
+          const neigh = neighbors(c.x, c.y).map(n => ({ x: n.x, y: n.y }));
+          if (neigh.length) {
+            const choice = neigh[Math.floor(Math.random() * neigh.length)];
+            c.tx = choice.x; c.ty = choice.y;
+            c.path = pathfind(c.x, c.y, c.tx, c.ty);
+          }
+        }
+        // reset progress tracking and skip moving this tick
+        c.lastDist = Infinity;
+        c.stuckFor = 0;
+        return;
+      }
+
       if (dist < 1.5) {
         // arrived at next tile
         c.x = next.x; c.y = next.y;
         c.path.shift();
         c.sprite.position.set(worldX, worldY - 4);
+        c.baseWorldY = worldY - 4;
+        // reset progress metrics on waypoint arrival
+        c.lastDist = Infinity; c.stuckFor = 0;
         if (!c.path.length) {
-          // reached destination
-          if (!c.carrying) {
-            // pick what producer provides
-            const here = producers.find(p => p.x===c.x && p.y===c.y);
-            if (here) {
-              if (here.typeId === 'farm') c.carrying = 'grain';
-              else if (here.typeId === 'lumber_camp') c.carrying = 'wood';
-              else if (here.typeId === 'sawmill') c.carrying = 'planks';
+          // reached destination - activity-specific behavior
+          if (c.activity === 'Work') {
+            // Work loop: shuttle between workplace and nearest storehouse
+            const hereIsWork = (c.x===c.workX && c.y===c.workY);
+            const hereIsStore = !!storehouses.find(s=>s.x===c.x && s.y===c.y);
+            if (!c.carrying && hereIsWork) {
+              // pick what producer provides
+              const here = producers.find(p => p.x===c.x && p.y===c.y);
+              if (here) {
+                if (here.typeId === 'farm') c.carrying = 'grain';
+                else if (here.typeId === 'lumber_camp') c.carrying = 'wood';
+                else if (here.typeId === 'sawmill') c.carrying = 'planks';
+              }
             }
-          } else {
-            // drop at storehouse
-            const st = storehouses.find(s=>s.x===c.x&&s.y===c.y);
-            if (st) {
-              carriedRef.current[c.carrying as 'wood'|'planks'|'grain'] = (carriedRef.current[c.carrying as 'wood'|'planks'|'grain']||0) + 1;
-              c.carrying = null;
+            if (c.carrying) {
+              if (hereIsStore) {
+                // drop at storehouse
+                const k = c.carrying as 'wood'|'planks'|'grain';
+                carriedRef.current[k] = (carriedRef.current[k]||0) + 1;
+                c.carrying = null;
+                setPathTo(c, c.workX, c.workY);
+              } else {
+                const st = storehouses[0] || { x: c.workX, y: c.workY };
+                setPathTo(c, st.x, st.y);
+              }
+            } else {
+              // not carrying: ensure we are heading back to work
+              setPathTo(c, c.workX, c.workY);
             }
+          } else if (c.activity === 'Shop') {
+            // Wander slightly around shop tile occasionally
+            if (c.wanderCooldown <= 0) {
+              const wx = c.shopX + (Math.random() < 0.5 ? 0 : (Math.random()<0.5?1:-1));
+              const wy = c.shopY + (Math.random() < 0.5 ? 0 : (Math.random()<0.5?1:-1));
+              if (inBounds(wx, wy)) setPathTo(c, wx, wy); else setPathTo(c, c.shopX, c.shopY);
+              c.wanderCooldown = 2 + Math.random()*3; // seconds
+            }
+          } else if (c.activity === 'Sleep') {
+            // Stay at home, minor reposition handled by bobbing only
           }
-          chooseTask(c);
         }
       } else {
-        const nx = cur.x + (dx/dist) * sp * 64; // scale to tile size
-        const ny = cur.y + (dy/dist) * sp * 64;
+        // movement easing near target to smooth arrival
+        const stepPixels = sp * 64;
+        const arriveRadius = 10; // pixels
+        const easeScale = dist < arriveRadius ? Math.max(0.25, dist / arriveRadius) : 1.0;
+        const step = stepPixels * easeScale;
+        const nx = cur.x + (dx/dist) * step;
+        const ny = cur.y + (dy/dist) * step;
         c.sprite.position.set(nx, ny);
       }
     };
 
     const tick = (ticker: PIXI.Ticker) => {
-      const dt = ticker.deltaMS / 16.6667; // normalize to ~60fps steps
+      const dtMs = ticker.deltaMS;
+      const dt = dtMs / 16.6667; // normalize to ~60fps steps
+
+      // advance compressed day clock
+      dayClockRef.current = (dayClockRef.current + dtMs / 1000) % Math.max(1, dayLengthSeconds);
+      const hourOfDay = (dayClockRef.current / Math.max(1, dayLengthSeconds)) * 24.0;
+
       citizensRef.current.forEach(c => {
-        // visual hint when carrying
-        const g = c.sprite as any;
-        if (c.carrying === 'grain') g.tint = 0x22c55e; else if (c.carrying === 'wood') g.tint = 0xb45309; else if (c.carrying === 'planks') g.tint = 0xf59e0b; else g.tint = 0xffffff;
-        if (!c.path.length) {
-          // assign task if idle
-          const st = storehouses[0] || home;
-          if (!st || producers.length===0) return;
-          const firstTarget = c.carrying ? st : producers[Math.floor(Math.random()*producers.length)];
-          c.tx = firstTarget.x; c.ty = firstTarget.y;
-          c.path = pathfind(c.x, c.y, c.tx, c.ty);
+        // schedule transitions
+        const hourBucket = Math.floor(hourOfDay * 2) / 2; // 30-minute buckets to reduce thrash
+        if (c.nextDecisionHour !== hourBucket) {
+          c.nextDecisionHour = hourBucket;
+          updateActivityForHour(c, hourOfDay);
         }
-        // slight bobbing for life-like motion
+
+        // state-driven tint (override with carrying colors if any)
+        const g = c.sprite as any;
+        let tint = 0xffffff;
+        switch (c.activity) {
+          case 'CommuteToWork': tint = 0x60a5fa; break; // blue
+          case 'Work': tint = 0x34d399; break; // green
+          case 'CommuteToShop': tint = 0xf472b6; break; // pink
+          case 'Shop': tint = 0xf59e0b; break; // amber
+          case 'CommuteHome': tint = 0xa78bfa; break; // purple
+          case 'Sleep': tint = 0x94a3b8; break; // slate
+        }
+        if (c.carrying === 'grain') g.tint = 0x22c55e; else if (c.carrying === 'wood') g.tint = 0xb45309; else if (c.carrying === 'planks') g.tint = 0xf59e0b; else g.tint = tint;
+
+        // handle wander cooldown countdown
+        if (c.wanderCooldown > 0) c.wanderCooldown -= dtMs / 1000;
+        if (c.repathCooldown > 0) c.repathCooldown -= dtMs / 1000;
+
+        if (!c.path.length) {
+          // If idle due to path failure, nudge towards current activity target
+          if (c.activity === 'Work') setPathTo(c, c.workX, c.workY);
+          else if (c.activity === 'Shop') setPathTo(c, c.shopX, c.shopY);
+          else if (c.activity === 'Sleep') setPathTo(c, c.homeX, c.homeY);
+        }
+
+        // sine bobbing around baseWorldY without drift
         const off = Math.sin(performance.now()/240 + c.x*7 + c.y*11) * 0.2;
-        c.sprite.y += off;
+        c.sprite.y = c.baseWorldY + off;
+
         stepAlong(c, dt);
       });
 
@@ -243,7 +384,7 @@ export default function CitizensLayer({ buildings, roads, tileTypes, onProposeRo
       container.destroy({ children: true });
       containerRef.current = null;
     };
-  }, [app, viewport, JSON.stringify(buildings), JSON.stringify(roads), tileWidth, tileHeight]);
+  }, [app, viewport, JSON.stringify(buildings), JSON.stringify(roads), tileWidth, tileHeight, dayLengthSeconds]);
 
   return null;
 }

@@ -26,10 +26,10 @@ const WorkerPanel: React.FC<WorkerPanelProps> = ({
 }) => {
   const sideClass = anchor === 'right' ? 'right-2' : 'left-2';
   return (
-    <div className={`absolute ${sideClass} bottom-24 bg-panel backdrop-blur-md border border-border p-3 rounded-lg shadow-lg pointer-events-auto z-40`}
+    <div className={`absolute ${sideClass} bottom-24 bg-gray-800/90 backdrop-blur-md border border-gray-700 p-3 rounded-lg shadow-lg pointer-events-auto z-40 text-gray-200`}
       style={{ width: '14rem' }}
     >
-      <h3 className="text-xs font-semibold mb-2 text-foreground">
+      <h3 className="text-xs font-semibold mb-2 text-gray-100">
         Workers: {idleWorkers} idle
       </h3>
       <div className="space-y-2">
@@ -38,12 +38,12 @@ const WorkerPanel: React.FC<WorkerPanelProps> = ({
           const cap = def.workCapacity ?? 0;
           return (
             <div key={b.id} className="flex items-center justify-between text-xs">
-              <span className="text-foreground mr-2 truncate">{def.name}</span>
+              <span className="text-gray-100 mr-2 truncate">{def.name}</span>
               <div className="flex items-center" style={{ gap: 'var(--spacing-xs)' }}>
                 <button
                   onClick={() => onUnassign(b.id)}
                   disabled={b.workers <= 0}
-                  className="px-2 py-0.5 border border-border rounded disabled:opacity-50"
+                  className="px-2 py-0.5 border border-gray-600 rounded disabled:opacity-50"
                 >
                   -
                 </button>
@@ -53,7 +53,7 @@ const WorkerPanel: React.FC<WorkerPanelProps> = ({
                 <button
                   onClick={() => onAssign(b.id)}
                   disabled={idleWorkers <= 0 || b.workers >= cap}
-                  className="px-2 py-0.5 border border-border rounded disabled:opacity-50"
+                  className="px-2 py-0.5 border border-gray-600 rounded disabled:opacity-50"
                 >
                   +
                 </button>
@@ -62,7 +62,7 @@ const WorkerPanel: React.FC<WorkerPanelProps> = ({
           );
         })}
         {buildings.length === 0 && (
-          <div className="text-muted text-xs">No buildings</div>
+          <div className="text-gray-400 text-xs">No buildings</div>
         )}
       </div>
     </div>

@@ -63,7 +63,7 @@ const DEFAULT_PRESETS: HUDLayoutPreset[] = [
         'bottom-center': { enabled: true, className: 'absolute bottom-4 left-1/2 -translate-x-1/2 z-40', maxPanels: 1, priority: 4 },
         'bottom-right': { enabled: true, className: 'absolute bottom-4 right-4 z-40', maxPanels: 2, priority: 3 },
         'sidebar-left': { enabled: false, className: '' },
-        'sidebar-right': { enabled: true, className: 'absolute top-0 right-0 h-full w-[300px] md:w-[340px] lg:w-[360px] flex flex-col gap-2 md:gap-3 p-3 md:p-4 overflow-y-auto z-40 bg-white/70 dark:bg-slate-900/40 backdrop-blur-md border-l border-black/10', maxPanels: 12, priority: 2 },
+        'sidebar-right': { enabled: true, className: 'absolute top-0 right-0 h-full w-[300px] md:w-[340px] lg:w-[360px] flex flex-col gap-2 md:gap-3 p-3 md:p-4 overflow-y-auto z-40 bg-gray-900/30 backdrop-blur-md border-l border-gray-800', maxPanels: 12, priority: 2 },
         'overlay': { enabled: true, className: 'absolute inset-0 z-50 pointer-events-none', priority: 11 }
       },
       responsive: {
@@ -115,7 +115,7 @@ const DEFAULT_PRESETS: HUDLayoutPreset[] = [
         'bottom-center': { enabled: true, className: 'absolute bottom-4 left-1/2 -translate-x-1/2 z-40', maxPanels: 1, priority: 7 },
         'bottom-right': { enabled: false, className: '' },
         'sidebar-left': { enabled: false, className: '' },
-        'sidebar-right': { enabled: true, className: 'absolute top-0 right-0 h-full w-[300px] md:w-[340px] lg:w-[360px] flex flex-col gap-2 md:gap-3 p-3 md:p-4 overflow-y-auto z-40 bg-white/70 dark:bg-slate-900/40 backdrop-blur-md border-l border-black/10', maxPanels: 12, priority: 6 },
+        'sidebar-right': { enabled: true, className: 'absolute top-0 right-0 h-full w-[300px] md:w-[340px] lg:w-[360px] flex flex-col gap-2 md:gap-3 p-3 md:p-4 overflow-y-auto z-40 bg-gray-900/30 backdrop-blur-md border-l border-gray-800', maxPanels: 12, priority: 6 },
         'overlay': { enabled: true, className: 'absolute inset-0 z-50 pointer-events-none', priority: 11 }
       },
       responsive: {
@@ -163,7 +163,7 @@ const DEFAULT_PRESETS: HUDLayoutPreset[] = [
         'bottom-center': { enabled: false, className: '' },
         'bottom-right': { enabled: false, className: '' },
         'sidebar-left': { enabled: false, className: '' },
-        'sidebar-right': { enabled: true, className: 'absolute top-0 right-0 h-full w-[280px] md:w-[300px] lg:w-[320px] flex flex-col gap-2 md:gap-3 p-3 overflow-y-auto z-40 bg-white/60 dark:bg-slate-900/40 backdrop-blur-md border-l border-black/10', maxPanels: 8, priority: 6 },
+        'sidebar-right': { enabled: true, className: 'absolute top-0 right-0 h-full w-[280px] md:w-[300px] lg:w-[320px] flex flex-col gap-2 md:gap-3 p-3 overflow-y-auto z-40 bg-gray-900/30 backdrop-blur-md border-l border-gray-800', maxPanels: 8, priority: 6 },
         'overlay': { enabled: true, className: 'absolute inset-0 z-50 pointer-events-none', priority: 11 }
       },
       responsive: {
@@ -211,7 +211,7 @@ const DEFAULT_PRESETS: HUDLayoutPreset[] = [
         'bottom-center': { enabled: false, className: '' },
         'bottom-right': { enabled: false, className: '' },
         'sidebar-left': { enabled: false, className: '' },
-        'sidebar-right': { enabled: true, className: 'absolute top-0 right-0 h-full w-[280px] md:w-[300px] lg:w-[320px] flex flex-col gap-2 md:gap-3 p-3 overflow-y-auto z-40 bg-white/60 dark:bg-slate-900/40 backdrop-blur-md border-l border-black/10', maxPanels: 6, priority: 6 },
+        'sidebar-right': { enabled: true, className: 'absolute top-0 right-0 h-full w-[280px] md:w-[300px] lg:w-[320px] flex flex-col gap-2 md:gap-3 p-3 overflow-y-auto z-40 bg-gray-900/30 backdrop-blur-md border-l border-gray-800', maxPanels: 6, priority: 6 },
         'overlay': { enabled: true, className: 'absolute inset-0 z-50 pointer-events-none', priority: 11 }
       },
       responsive: {

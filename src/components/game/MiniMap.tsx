@@ -38,9 +38,9 @@ export default function MiniMap({ gridSize, tileWidth = 64, tileHeight = 32, wid
     if (!ctx) return;
     ctx.clearRect(0, 0, width, height);
 
-    // draw background
-    ctx.fillStyle = 'rgba(255,255,255,0.9)';
-    ctx.strokeStyle = 'rgba(203,213,225,1)';
+    // draw background (dark)
+    ctx.fillStyle = 'rgba(17,24,39,0.9)';
+    ctx.strokeStyle = 'rgba(75,85,99,1)';
     ctx.lineWidth = 1;
     ctx.fillRect(0, 0, width, height);
     ctx.strokeRect(0.5, 0.5, width - 1, height - 1);
@@ -56,11 +56,11 @@ export default function MiniMap({ gridSize, tileWidth = 64, tileHeight = 32, wid
     ctx.moveTo(pts[0].x, pts[0].y);
     for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
     ctx.closePath();
-    ctx.strokeStyle = 'rgba(148,163,184,1)';
+    ctx.strokeStyle = 'rgba(100,116,139,1)';
     ctx.stroke();
 
     // cardinal markers
-    ctx.fillStyle = 'rgba(30,41,59,0.7)';
+    ctx.fillStyle = 'rgba(203,213,225,0.9)';
     ctx.font = '10px system-ui, sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText('N', pts[0].x, Math.max(8, pts[0].y - 4));

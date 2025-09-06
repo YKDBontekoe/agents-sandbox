@@ -16,20 +16,20 @@ interface CrisisModalProps {
 
 const CrisisModal: React.FC<CrisisModalProps> = ({ crisis, onResolve }) => (
   <Dialog.Root open>
-    <Dialog.Overlay className="fixed inset-0 bg-black/50 z-[100]" />
+    <Dialog.Overlay className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100]" />
     <Dialog.Content className="fixed inset-0 z-[110] flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
-      <Dialog.Title className="text-xl font-bold mb-2">
+      <div className="bg-gray-800 border border-gray-700 text-gray-200 rounded-lg shadow-xl p-6 w-full max-w-md">
+      <Dialog.Title className="text-xl font-bold mb-2 text-gray-100">
         {crisis.type === 'unrest' ? 'Unrest Boils Over' : 'Threat Escalates'}
       </Dialog.Title>
-      <Dialog.Description className="text-slate-700 mb-4">
+      <Dialog.Description className="text-gray-300 mb-4">
         {crisis.message}
       </Dialog.Description>
       <div className="mb-4">
-        <h3 className="font-semibold text-slate-800 mb-2">Temporary Penalty</h3>
+        <h3 className="font-semibold text-gray-200 mb-2">Temporary Penalty</h3>
         <ul className="space-y-1">
           {Object.entries(crisis.penalty).map(([key, val]) => (
-            <li key={key} className="flex items-center gap-2 text-sm text-slate-700">
+            <li key={key} className="flex items-center gap-2 text-sm text-gray-300">
               <ResourceIcon type={key as ResourceType} value={val} />
               <span>-{Math.abs(val)} {key}</span>
             </li>

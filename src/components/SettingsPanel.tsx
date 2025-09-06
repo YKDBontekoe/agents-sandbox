@@ -15,8 +15,8 @@ export default function SettingsPanel({ preset, onPresetChange }: SettingsPanelP
   };
 
   return (
-    <aside className="h-full border-l border-slate-200 bg-white p-4 overflow-y-auto">
-      <h2 className="text-slate-900 font-semibold mb-4">Settings</h2>
+    <aside className="h-full border-l border-gray-700 bg-gray-800 p-4 overflow-y-auto text-gray-200">
+      <h2 className="text-gray-100 font-semibold mb-4">Settings</h2>
       <div className="space-y-2">
         <label className="flex items-center gap-2">
           <input
@@ -26,7 +26,7 @@ export default function SettingsPanel({ preset, onPresetChange }: SettingsPanelP
             checked={preset === 'compact'}
             onChange={handleChange}
           />
-          <span className="text-sm text-slate-700">Compact</span>
+          <span className="text-sm text-gray-300">Compact</span>
         </label>
         <label className="flex items-center gap-2">
           <input
@@ -36,7 +36,7 @@ export default function SettingsPanel({ preset, onPresetChange }: SettingsPanelP
             checked={preset === 'expanded'}
             onChange={handleChange}
           />
-          <span className="text-sm text-slate-700">Expanded</span>
+          <span className="text-sm text-gray-300">Expanded</span>
         </label>
       </div>
     </aside>

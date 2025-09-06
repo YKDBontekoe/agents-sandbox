@@ -3,6 +3,7 @@ export const TILE_COLORS: Record<string, number> = {
   water: 0x60a5fa,
   mountain: 0x9ca3af,
   forest: 0x16a34a,
+  unknown: 0x475569,
 };
 
 export function gridToWorld(

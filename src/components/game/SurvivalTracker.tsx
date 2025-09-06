@@ -23,11 +23,11 @@ export default function SurvivalTracker({ cycle, unrest, threat }: SurvivalTrack
         : 'bg-emerald-500';
     return (
       <div key={label}>
-        <div className="flex justify-between text-xs text-slate-600 mb-1">
+        <div className="flex justify-between text-xs text-gray-400 mb-1">
           <span>{label}</span>
           <span>{pct}</span>
         </div>
-        <div className="w-full h-2 bg-slate-200 rounded">
+        <div className="w-full h-2 bg-gray-700 rounded">
           <div className={`${base} ${color}`} style={{ width: `${pct}%` }} />
         </div>
       </div>
@@ -35,12 +35,12 @@ export default function SurvivalTracker({ cycle, unrest, threat }: SurvivalTrack
   };
 
   return (
-    <div className="bg-white/95 backdrop-blur-sm border border-slate-200 rounded-lg shadow-lg p-4">
+    <div className="bg-gray-800/90 backdrop-blur-sm border border-gray-700 rounded-lg shadow-lg p-4 text-gray-200">
       <div className="flex items-center justify-between mb-2">
-        <h3 className="text-slate-900 font-semibold">Survival</h3>
-        <div className="text-sm text-slate-700 font-medium">Cycle {cycle}</div>
+        <h3 className="text-gray-100 font-semibold">Survival</h3>
+        <div className="text-sm text-gray-200 font-medium">Cycle {cycle}</div>
       </div>
-      <div className="text-xs text-slate-500 mb-3">Best: {bestCycle}</div>
+      <div className="text-xs text-gray-400 mb-3">Best: {bestCycle}</div>
       <div className="space-y-3">
         {bar('Unrest', unrest)}
         {bar('Threat', threat)}
@@ -48,4 +48,3 @@ export default function SurvivalTracker({ cycle, unrest, threat }: SurvivalTrack
     </div>
   );
 }
-

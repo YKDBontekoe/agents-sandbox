@@ -136,6 +136,27 @@ export default function RoutesLayer({ routes, buildings, tileWidth = 64, tileHei
         container.addChild(txt);
       }
     }
+
+    // Draft handles: pulse ring on endpoints
+    const drawHandle = (gx: number, gy: number) => {
+      const p = gridToWorld(gx, gy, tileWidth, tileHeight);
+      const ring = new PIXI.Graphics();
+      ring.zIndex = 355;
+      ring.position.set(p.worldX, p.worldY);
+      ring.setStrokeStyle({ width: 2, color: 0x0891b2, alpha: 0.9 });
+      const r = Math.max(6, Math.round(tileHeight * 0.28));
+      ring.drawEllipse(0, 0, r, r * 0.6);
+      ring.stroke();
+      container.addChild(ring);
+    };
+    if (draftFromId) {
+      const a = byId.get(draftFromId);
+      if (a) drawHandle(a.x, a.y);
+    }
+    if (draftToId) {
+      const b = byId.get(draftToId);
+      if (b) drawHandle(b.x, b.y);
+    }
   }, [JSON.stringify(routes), JSON.stringify(buildings), tileWidth, tileHeight]);
 
   return null;

@@ -42,6 +42,8 @@ export interface SettingsPanelProps {
   onToggleCitizens?: (value: boolean) => void;
   requireRoadConfirm?: boolean;
   onToggleRoadConfirm?: (value: boolean) => void;
+  edgeScrollEnabled?: boolean;
+  onToggleEdgeScroll?: (value: boolean) => void;
   citizensCount?: number;
   onChangeCitizensCount?: (value: number) => void;
   citizensSeed?: number;
@@ -96,14 +98,14 @@ const SearchBar: React.FC<{
   return (
     <div className="relative mb-6">
       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-        <FontAwesomeIcon icon={faSearch} className="text-muted" />
+        <FontAwesomeIcon icon={faSearch} className="text-gray-400" />
       </div>
       <input
         type="text"
         placeholder="Search settings..."
         value={searchTerm}
         onChange={(e) => onSearchChange(e.target.value)}
-        className="w-full pl-10 pr-4 py-3 bg-panel border border-border rounded-lg text-foreground placeholder-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-200"
+        className="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-gray-200 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
         aria-label="Search settings"
       />
     </div>
@@ -129,23 +131,23 @@ const CategorySection: React.FC<{
   if (searchTerm && filteredSettings.length === 0) return null;
 
   return (
-    <div className="mb-4 bg-panel/50 border border-border rounded-xl overflow-hidden transition-all duration-300 hover:shadow-lg">
+    <div className="mb-4 bg-gray-900/30 border border-gray-700 rounded-xl overflow-hidden transition-all duration-300 hover:shadow-lg">
       <button
         onClick={onToggle}
-        className="w-full px-4 py-3 flex items-center justify-between bg-panel/80 hover:bg-panel transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-inset"
+        className="w-full px-4 py-3 flex items-center justify-between bg-gray-800/80 hover:bg-gray-800 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset text-gray-200"
         aria-expanded={isExpanded}
         aria-controls={`category-${category.id}`}
       >
         <div className="flex items-center gap-3">
           <FontAwesomeIcon icon={category.icon} className="text-primary" />
           <div className="text-left">
-            <h3 className="font-semibold text-foreground">{category.name}</h3>
-            <p className="text-xs text-muted">{category.description}</p>
+            <h3 className="font-semibold text-gray-100">{category.name}</h3>
+            <p className="text-xs text-gray-400">{category.description}</p>
           </div>
         </div>
         <FontAwesomeIcon 
           icon={isExpanded ? faChevronDown : faChevronRight} 
-          className="text-muted transition-transform duration-200"
+          className="text-gray-400 transition-transform duration-200"
         />
       </button>
       
@@ -192,7 +194,7 @@ const SettingControl: React.FC<{ setting: SettingItem }> = ({ setting }) => {
           <select
             value={String(setting.value)}
             onChange={(e) => setting.onChange(e.target.value)}
-            className="bg-panel border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-200"
+            className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
             aria-labelledby={`setting-${setting.id}-label`}
           >
             {setting.options?.map(option => (
@@ -213,10 +215,10 @@ const SettingControl: React.FC<{ setting: SettingItem }> = ({ setting }) => {
               step={setting.step}
               value={Number(setting.value)}
               onChange={(e) => setting.onChange(Number(e.target.value))}
-              className="flex-1 h-2 bg-border rounded-lg appearance-none cursor-pointer slider"
+              className="flex-1 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer slider"
               aria-labelledby={`setting-${setting.id}-label`}
             />
-            <span className="min-w-[3rem] text-sm font-mono text-foreground text-right">
+            <span className="min-w-[3rem] text-sm font-mono text-gray-200 text-right">
               {setting.value}
             </span>
           </div>
@@ -228,7 +230,7 @@ const SettingControl: React.FC<{ setting: SettingItem }> = ({ setting }) => {
             type="number"
             value={Number(setting.value)}
             onChange={(e) => setting.onChange(Number(e.target.value))}
-            className="bg-panel border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-200 w-36"
+            className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 w-36"
             aria-labelledby={`setting-${setting.id}-label`}
           />
         );
@@ -242,8 +244,8 @@ const SettingControl: React.FC<{ setting: SettingItem }> = ({ setting }) => {
                 onClick={() => setting.onChange(option.value)}
                 className={`px-3 py-2 rounded-lg border transition-all duration-200 text-sm font-medium ${
                   setting.value === option.value
-                    ? 'bg-primary text-white border-primary shadow-lg'
-                    : 'bg-panel border-border text-foreground hover:bg-panel/80 hover:border-primary/50'
+                    ? 'bg-blue-600 text-white border-blue-600 shadow-lg'
+                    : 'bg-gray-800 border-gray-700 text-gray-200 hover:bg-gray-700 hover:border-blue-500/50'
                 }`}
                 aria-pressed={setting.value === option.value}
               >
@@ -262,15 +264,15 @@ const SettingControl: React.FC<{ setting: SettingItem }> = ({ setting }) => {
   };
 
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 bg-panel/30 rounded-lg border border-border/50 hover:bg-panel/50 transition-colors duration-200">
+    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 bg-gray-900/20 rounded-lg border border-gray-700 hover:bg-gray-900/30 transition-colors duration-200">
       <div className="flex-1">
         <label 
           id={`setting-${setting.id}-label`}
-          className="block font-medium text-foreground mb-1"
+          className="block font-medium text-gray-200 mb-1"
         >
           {setting.name}
         </label>
-        <p className="text-xs text-muted">{setting.description}</p>
+        <p className="text-xs text-gray-400">{setting.description}</p>
       </div>
       <div className="flex-shrink-0">
         {renderControl()}
@@ -286,10 +288,10 @@ const QuickActions: React.FC<{
   hasChanges: boolean;
 }> = ({ onReset, onSave, hasChanges }) => {
   return (
-    <div className="flex items-center justify-between p-4 bg-panel/80 border-t border-border">
-      <div className="flex items-center gap-2 text-xs text-muted">
+    <div className="flex items-center justify-between p-4 bg-gray-900/40 border-t border-gray-700">
+      <div className="flex items-center gap-2 text-xs text-gray-400">
         <FontAwesomeIcon icon={faInfoCircle} />
-        <span>Changes are saved automatically</span>
+        <span className="text-gray-400">Changes are saved automatically</span>
       </div>
       <div className="flex items-center gap-2">
         <ActionButton
@@ -327,6 +329,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
   onToggleCitizens,
   requireRoadConfirm,
   onToggleRoadConfirm,
+  edgeScrollEnabled,
+  onToggleEdgeScroll,
   citizensCount,
   onChangeCitizensCount,
   citizensSeed,
@@ -387,6 +391,14 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
           type: 'toggle',
           value: Boolean(autoAssignWorkers),
           onChange: (v: SettingValue) => { onToggleAutoAssignWorkers?.(Boolean(v)); setHasChanges(true); }
+        },
+        {
+          id: 'edge-scroll',
+          name: 'Edge Scroll Panning',
+          description: 'Pan camera when cursor nears screen edge',
+          type: 'toggle',
+          value: Boolean(edgeScrollEnabled),
+          onChange: (v: SettingValue) => { onToggleEdgeScroll?.(Boolean(v)); setHasChanges(true); }
         },
         {
           id: 'confirm-roads',
@@ -646,21 +658,21 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
-      <div className="w-full max-w-4xl max-h-[90vh] bg-panel border border-border rounded-2xl shadow-2xl overflow-hidden animate-scale-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+      <div className="w-full max-w-4xl max-h-[90vh] bg-gray-800 border border-gray-700 text-gray-200 rounded-2xl shadow-2xl overflow-hidden animate-scale-in">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 bg-panel/80 border-b border-border">
+        <div className="flex items-center justify-between p-6 bg-gray-900/40 border-b border-gray-700">
           <div className="flex items-center gap-3">
             <FontAwesomeIcon icon={faCog} className="text-primary text-xl" />
             <div>
-              <h2 className="text-xl font-bold text-foreground">Game Settings</h2>
-              <p className="text-sm text-muted">Customize your gaming experience</p>
+              <h2 className="text-xl font-bold text-gray-100">Game Settings</h2>
+              <p className="text-sm text-gray-400">Customize your gaming experience</p>
             </div>
           </div>
           <ActionButton
             onClick={onClose}
             variant="secondary"
-            className="p-2 hover:bg-danger/10 hover:text-danger transition-colors duration-200"
+            className="p-2 hover:bg-gray-700 transition-colors duration-200"
             aria-label="Close settings"
           >
             <FontAwesomeIcon icon={faTimes} />
@@ -686,25 +698,25 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 renderCustom={category.id === 'inbox' ? () => (
                   <div>
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs text-muted">{notifications.length} messages</span>
+                      <span className="text-xs text-gray-400">{notifications.length} messages</span>
                       <div className="flex items-center gap-2">
-                        <button className="px-2 py-0.5 text-xs rounded border border-slate-300" onClick={() => onClearNotifications?.()}>Clear</button>
+                        <button className="px-2 py-0.5 text-xs rounded border border-gray-600 text-gray-200 hover:bg-gray-700" onClick={() => onClearNotifications?.()}>Clear</button>
                       </div>
                     </div>
-                    <div className="divide-y divide-slate-200 rounded-md border border-slate-200 overflow-hidden">
+                    <div className="divide-y divide-gray-700 rounded-md border border-gray-700 overflow-hidden">
                       {notifications.length === 0 && (
-                        <div className="p-3 text-xs text-muted">No messages yet.</div>
+                        <div className="p-3 text-xs text-gray-400">No messages yet.</div>
                       )}
                       {notifications.map(n => (
-                        <div key={n.id} className={`p-3 text-sm flex items-start justify-between gap-2 ${n.read ? 'bg-white' : 'bg-indigo-50'}`}>
+                        <div key={n.id} className={`p-3 text-sm flex items-start justify-between gap-2 ${n.read ? 'bg-gray-900/30' : 'bg-indigo-900/20'} text-gray-200`}>
                           <div>
-                            <div className="font-medium text-slate-800">{n.title}</div>
-                            <div className="text-slate-600 text-xs">{n.message}</div>
-                            <div className="text-[10px] text-slate-400 mt-0.5">{new Date(n.timestamp).toLocaleString()}</div>
+                            <div className="font-medium text-gray-100">{n.title}</div>
+                            <div className="text-gray-300 text-xs">{n.message}</div>
+                            <div className="text-[10px] text-gray-400 mt-0.5">{new Date(n.timestamp).toLocaleString()}</div>
                           </div>
                           <div className="flex items-center gap-1">
-                            {!n.read && (<button className="px-2 py-0.5 text-[10px] rounded border border-slate-300" onClick={() => onMarkNotificationRead?.(n.id)}>Mark read</button>)}
-                            <button className="px-2 py-0.5 text-[10px] rounded border border-slate-300" onClick={() => onDismissNotification?.(n.id)}>Dismiss</button>
+                            {!n.read && (<button className="px-2 py-0.5 text-[10px] rounded border border-gray-600 hover:bg-gray-700" onClick={() => onMarkNotificationRead?.(n.id)}>Mark read</button>)}
+                            <button className="px-2 py-0.5 text-[10px] rounded border border-gray-600 hover:bg-gray-700" onClick={() => onDismissNotification?.(n.id)}>Dismiss</button>
                           </div>
                         </div>
                       ))}
