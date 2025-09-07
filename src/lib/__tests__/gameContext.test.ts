@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildGameContext } from '../gameContext'
-import { generateSkillTree } from '../../components/game/skills/generate'
-import { accumulateEffects } from '../../components/game/skills/progression'
+import { generateSkillTree } from '@arcane/domain/skills/generate'
+import { accumulateEffects } from '@arcane/domain/skills/progression'
 
 describe('buildGameContext', () => {
   it('summarizes buildings, routes, terrain and skills', () => {

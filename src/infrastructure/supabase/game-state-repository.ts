@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { GameState, GameStateRepository } from '@/domain/repositories/game-state-repository'
+import { GameState, GameStateRepository } from '@arcane/domain/repositories/game-state-repository'
 
 export class SupabaseGameStateRepository implements GameStateRepository {
   constructor(private readonly client: SupabaseClient) {}

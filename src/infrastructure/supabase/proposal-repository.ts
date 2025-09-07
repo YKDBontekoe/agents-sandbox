@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { Proposal, ProposalRepository, ProposalStatus } from '@/domain/repositories/proposal-repository'
+import { Proposal, ProposalRepository, ProposalStatus } from '@arcane/domain/repositories/proposal-repository'
 
 export class SupabaseProposalRepository implements ProposalRepository {
   constructor(private readonly client: SupabaseClient) {}

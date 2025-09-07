@@ -1,5 +1,5 @@
-import { generateSkillTree } from '../components/game/skills/generate'
-import { accumulateEffects } from '../components/game/skills/progression'
+import { generateSkillTree } from '@arcane/domain/skills/generate'
+import { accumulateEffects } from '@arcane/domain/skills/progression'
 
 interface RawBuilding {
   typeId?: string

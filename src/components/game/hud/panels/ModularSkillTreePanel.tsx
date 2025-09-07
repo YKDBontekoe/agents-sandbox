@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ResponsivePanel, ResponsiveButton } from '../ResponsiveHUDPanels';
 import { useHUDPanel } from '../HUDPanelRegistry';
-import { generateSkillTree } from '../../skills/generate';
-import type { SkillNode } from '../../skills/types';
-import SkillTreeModal from '../../skills/SkillTreeModal';
+import { generateSkillTree } from '@arcane/domain/skills/generate';
+import type { SkillNode } from '@arcane/domain/skills/types';
+import SkillTreeModal from '@arcane/domain/skills/SkillTreeModal';
 
 interface ModularSkillTreePanelProps {
   seed?: number;

@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { UnitOfWork as UoW } from '@/domain/repositories/unit-of-work'
+import type { UnitOfWork as UoW } from '@arcane/domain/repositories/unit-of-work'
 import { SupabaseGameStateRepository } from './game-state-repository'
 import { SupabaseProposalRepository } from './proposal-repository'
 
