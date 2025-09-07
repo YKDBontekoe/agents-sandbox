@@ -1,5 +1,5 @@
 import type { GameTime } from '../types/gameTime';
-import type { SimulatedBuilding } from './buildingSimulation';
+import type { SimulatedBuilding } from './buildings/types';
 
 export type ZoneType = 'residential' | 'commercial' | 'industrial' | 'office' | 'mixed' | 'special' | 'unzoned';
 

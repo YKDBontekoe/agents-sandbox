@@ -1,13 +1,13 @@
 import type { SimResources } from '../index';
+import { createSimulatedBuilding } from './buildingSimulation';
+import type { SimulatedBuilding } from './buildings/types';
 import {
-  SimulatedBuilding,
   calculateDeterioration,
   calculateUtilityEfficiency,
   performMaintenance,
   getBuildingsNeedingMaintenance,
   calculateTotalUtilityConsumption,
-  createSimulatedBuilding
-} from './buildingSimulation';
+} from './buildings/maintenance';
 import { CitizenBehaviorSystem, Citizen } from './citizenBehavior';
 import { WorkerSimulationSystem } from './workerSimulation';
 import type { WorkerProfile } from './workers/types';

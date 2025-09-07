@@ -1,5 +1,5 @@
 import type { SimResources } from '../index';
-import type { SimulatedBuilding } from './buildingSimulation';
+import type { SimulatedBuilding } from './buildings/types';
 import type { Citizen } from './citizenBehavior';
 import {
   workerSystem,

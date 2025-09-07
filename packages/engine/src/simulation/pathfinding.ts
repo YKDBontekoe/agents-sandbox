@@ -1,5 +1,5 @@
 import type { GameTime } from '../types/gameTime';
-import type { SimulatedBuilding } from './buildingSimulation';
+import type { SimulatedBuilding } from './buildings/types';
 
 // Grid-based pathfinding system
 export interface PathNode {

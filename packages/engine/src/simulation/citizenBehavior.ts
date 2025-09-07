@@ -1,5 +1,5 @@
 import type { SimResources } from '../index';
-import type { SimulatedBuilding } from './buildingSimulation';
+import type { SimulatedBuilding } from './buildings/types';
 import { citizenAI } from './citizenAI';
 import type { PathfindingGoal } from './ai/types';
 import type { GameTime } from '../types/gameTime';

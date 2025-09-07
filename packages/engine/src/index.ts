@@ -240,6 +240,9 @@ export * from './types/gameTime';
 // Export simulation systems
 export * from './simulation/buildingCatalog';
 export * from './simulation/buildingSimulation';
+export * from './simulation/buildings/types';
+export * from './simulation/buildings/catalog';
+export * from './simulation/buildings/maintenance';
 export * from './simulation/citizenBehavior';
 export * from './simulation/workerSimulation';
 export * from './simulation/simulationIntegration';
