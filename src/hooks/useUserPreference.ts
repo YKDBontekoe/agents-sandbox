@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
+import { publicConfig } from '@/infrastructure/config';
 
 export function useUserPreference<T>(key: string, defaultValue: T) {
   const storageKey = `pref_${key}`;
@@ -19,7 +20,7 @@ export function useUserPreference<T>(key: string, defaultValue: T) {
     let mounted = true;
     const load = async () => {
       try {
-        const supabase = createSupabaseBrowserClient();
+        const supabase = createSupabaseBrowserClient(publicConfig);
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
         const { data } = await supabase
@@ -45,7 +46,7 @@ export function useUserPreference<T>(key: string, defaultValue: T) {
     setValue(next);
     try { window.localStorage.setItem(storageKey, JSON.stringify(next)); } catch {}
     try {
-      const supabase = createSupabaseBrowserClient();
+      const supabase = createSupabaseBrowserClient(publicConfig);
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       await supabase

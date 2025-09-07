@@ -2,7 +2,7 @@
 
 This guide defines the agent architecture, prompting standards, safety, and ops practices for the Arcane Dominion Tycoon. It is the canonical reference for building, extending, and operating the AI council. When new systems or knowledge are introduced, update this guide to keep it current. Always run npm run build after writing new code to ensure the changes are reflected in the game.
 
-Related docs: docs/agents/ARCHITECTURE.md, docs/agents/PROMPTS.md, docs/agents/SECURITY.md, docs/agents/OPERATIONS.md, docs/agents/EVALUATION.md, docs/agents/EXTENSIONS.md, docs/agents/CONTRIBUTING.md
+Related docs: docs/agents/ARCHITECTURE.md, docs/agents/PROMPTS.md, docs/agents/SECURITY.md, docs/agents/OPERATIONS.md, docs/agents/EVALUATION.md, docs/agents/EXTENSIONS.md, docs/agents/CONTRIBUTING.md, docs/architecture/overview.md, docs/architecture/packages.md, docs/adr/0001-initial-refactor.md, docs/adr/template.md
 
 ## Core Focus of the Game
 
@@ -59,6 +59,9 @@ Related docs: docs/agents/ARCHITECTURE.md, docs/agents/PROMPTS.md, docs/agents/S
   - `browser.ts` (anon; read-focused)
 - `docs/agents/` — this guide and deep dives
 - `supabase/migrations/` — schema and idempotent updates for `game_state`, `proposals`
+- `src/state/` — global client state management
+  - `slices/` — modular reducers (`notifications`, `session`, `game`) combined in `slices/index.ts`
+  - `persistence.ts` — localStorage hydration/persistence utilities
 - `src/components/game/buildingIcons/` — canvas icon drawers keyed by building type
 - `src/components/game/BuildingsLayer.tsx` — renders building sprites and tooltips
 - `src/components/game/GameLayers.tsx` — centralizes PIXI rendering layers

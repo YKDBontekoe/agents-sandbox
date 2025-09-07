@@ -1,0 +1,8 @@
+{
+  "name": "@arcane/infrastructure",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    "./supabase": "./src/supabase/index.ts"
+  }
+}

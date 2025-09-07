@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
-import { SupabaseUnitOfWork } from '@/infrastructure/supabase/unit-of-work'
+import { SupabaseUnitOfWork } from '@arcane/infrastructure/supabase'
 import { config } from '@/infrastructure/config'
 import { generateText } from 'ai'
 import { createOpenAI } from '@ai-sdk/openai'
@@ -45,7 +45,7 @@ export async function POST(req: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 })
   }
   const params = await context.params
-  const supabase = createSupabaseServerClient()
+  const supabase = createSupabaseServerClient(config)
   const uow = new SupabaseUnitOfWork(supabase)
   const { id } = params
   const body = await req.json().catch(() => ({}))

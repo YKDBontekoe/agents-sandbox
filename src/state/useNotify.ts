@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { useAppDispatch } from './store';
-import { addNotification } from './notifications';
+import { addNotification } from './slices/notifications';
 
 export function useNotify() {
   const dispatch = useAppDispatch();

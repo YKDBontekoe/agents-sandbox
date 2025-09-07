@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useCallback } from 'react';
 import * as PIXI from 'pixi.js';
-import { useGameContext } from './GameContext';
+import { useGameContext } from '@/components/game/GameContext';
 
 export interface Leyline {
   id: string;

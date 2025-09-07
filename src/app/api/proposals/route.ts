@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
-import { SupabaseUnitOfWork } from '@/infrastructure/supabase/unit-of-work'
+import { SupabaseUnitOfWork } from '@arcane/infrastructure/supabase'
 import logger from '@/lib/logger'
+import { config } from '@/infrastructure/config'
 
 export async function GET(req: NextRequest) {
   try {
-    const supabase = createSupabaseServerClient()
+    const supabase = createSupabaseServerClient(config)
     const uow = new SupabaseUnitOfWork(supabase)
 
     const state = await uow.gameStates.getLatest()

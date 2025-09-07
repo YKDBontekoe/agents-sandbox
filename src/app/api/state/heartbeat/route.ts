@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
-import { SupabaseUnitOfWork } from '@/infrastructure/supabase/unit-of-work'
+import { SupabaseUnitOfWork } from '@arcane/infrastructure/supabase'
 import { SIM_BUILDINGS } from '@engine'
 import { processTick } from '@engine'
+import { config } from '@/infrastructure/config'
 
 // Heartbeat: apply due ticks based on last_tick_at and tick_interval_ms
 export async function POST() {
-  const supabase = createSupabaseServerClient()
+  const supabase = createSupabaseServerClient(config)
   const uow = new SupabaseUnitOfWork(supabase)
 
   const state = await uow.gameStates.getLatest()

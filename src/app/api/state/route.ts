@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
-import { SupabaseUnitOfWork } from '@/infrastructure/supabase/unit-of-work'
+import { SupabaseUnitOfWork } from '@arcane/infrastructure/supabase'
 import logger from '@/lib/logger'
 import { z } from 'zod'
 import type { GameState } from '@engine'
+import { config } from '@/infrastructure/config'
 
 export async function GET() {
   try {
-    const supabase = createSupabaseServerClient()
+    const supabase = createSupabaseServerClient(config)
     const uow = new SupabaseUnitOfWork(supabase)
 
     let state = await uow.gameStates.getLatest()
@@ -90,7 +91,7 @@ export async function PATCH(req: NextRequest) {
   if (typeof last_tick_at === 'string') (updates as any).last_tick_at = last_tick_at
   if (typeof map_size === 'number') updates.map_size = map_size
 
-  const supabase = createSupabaseServerClient()
+  const supabase = createSupabaseServerClient(config)
   const uow = new SupabaseUnitOfWork(supabase)
   try {
     const data = await uow.gameStates.update(id, updates as Partial<GameState>)
