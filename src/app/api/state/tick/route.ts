@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { SupabaseUnitOfWork } from '@/infrastructure/supabase/unit-of-work'
-import { SIM_BUILDINGS } from '@/lib/buildingCatalog'
+import { SIM_BUILDINGS } from '@engine'
 import { processTick } from '@engine'
 
 // Advance one cycle: delegate to engine and persist results

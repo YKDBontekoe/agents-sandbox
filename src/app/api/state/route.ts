@@ -62,6 +62,7 @@ const UpdateSchema = z.object({
   auto_ticking: z.boolean().optional(),
   tick_interval_ms: z.number().int().positive().optional(),
   last_tick_at: z.string().optional(),
+  map_size: z.number().int().positive().optional(),
 })
 
 export async function PATCH(req: NextRequest) {
@@ -71,8 +72,8 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.message }, { status: 400 })
   }
 
-  const { id, resources, workers, buildings, routes, roads, citizens_seed, citizens_count, edicts, skills, skill_tree_seed, pinned_skill_targets, auto_ticking, tick_interval_ms, last_tick_at } = parsed.data
-  const updates: Partial<{ resources: Record<string, number>; workers: number; buildings: unknown[]; routes: unknown[]; roads: Array<{x:number;y:number}>; citizens_seed: number; citizens_count: number; edicts: Record<string, number>; skills: string[]; skill_tree_seed: number; pinned_skill_targets: string[]; updated_at: string; auto_ticking: boolean; tick_interval_ms: number; last_tick_at: string }> = { updated_at: new Date().toISOString() }
+  const { id, resources, workers, buildings, routes, roads, citizens_seed, citizens_count, edicts, skills, skill_tree_seed, pinned_skill_targets, auto_ticking, tick_interval_ms, last_tick_at, map_size } = parsed.data
+  const updates: Partial<{ resources: Record<string, number>; workers: number; buildings: unknown[]; routes: unknown[]; roads: Array<{x:number;y:number}>; citizens_seed: number; citizens_count: number; edicts: Record<string, number>; skills: string[]; skill_tree_seed: number; pinned_skill_targets: string[]; updated_at: string; auto_ticking: boolean; tick_interval_ms: number; last_tick_at: string; map_size: number }> = { updated_at: new Date().toISOString() }
   if (resources) updates.resources = resources
   if (typeof workers === 'number') updates.workers = workers
   if (buildings) updates.buildings = buildings
@@ -87,6 +88,7 @@ export async function PATCH(req: NextRequest) {
   if (typeof auto_ticking === 'boolean') (updates as any).auto_ticking = auto_ticking
   if (typeof tick_interval_ms === 'number') (updates as any).tick_interval_ms = tick_interval_ms
   if (typeof last_tick_at === 'string') (updates as any).last_tick_at = last_tick_at
+  if (typeof map_size === 'number') updates.map_size = map_size
 
   const supabase = createSupabaseServerClient()
   const uow = new SupabaseUnitOfWork(supabase)

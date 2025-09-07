@@ -33,6 +33,8 @@ import BuildingsLayer from '@/components/game/BuildingsLayer';
 import RoutesLayer from '@/components/game/RoutesLayer';
 import RoadsLayer from '@/components/game/RoadsLayer';
 import CitizensLayer from '@/components/game/CitizensLayer';
+import EnhancedVisualEffectsLayer from '@/components/game/EnhancedVisualEffectsLayer';
+import AnimatedCitizensLayer from '@/components/game/AnimatedCitizensLayer';
 import AssignmentLinesLayer, { type AssignLine } from '@/components/game/AssignmentLinesLayer';
 import PathHintsLayer, { type PathHint } from '@/components/game/PathHintsLayer';
 import BuildingPulseLayer, { type Pulse } from '@/components/game/BuildingPulseLayer';
@@ -45,10 +47,15 @@ import NotificationHost from '@/components/game/hud/NotificationHost';
 import { useNotify } from '@/state/useNotify';
 import type { Notification } from '@/components/game/hud/types';
 import { useIdGenerator } from '@/hooks/useIdGenerator';
+import CityManagementPanel from '@/components/game/CityManagementPanel';
+import type { CityStats, ManagementTool, ZoneType, ServiceType } from '@/components/game/CityManagementPanel';
 // (settings && other panels are currently not rendered on this page)
 // layout preferences not used on this page
 import type { GameResources, GameTime } from '@/components/game/hud/types';
 import type { CategoryType } from '@/lib/categories';
+import { simulationSystem, EnhancedGameState } from '@engine'
+import { VisualIndicator } from '@engine';
+import { TimeSystem, timeSystem, TIME_SPEEDS, type TimeSpeed, GameTime as SystemGameTime } from '@engine';
 
 type BuildTypeId = keyof typeof SIM_BUILDINGS;
 
@@ -290,12 +297,13 @@ interface StoredBuilding {
 
 interface GameState {
   id: string;
-  cycle: number;
+  cycle: number; // Keep for backward compatibility with server
   resources: Record<string, number>;
   workers: number;
   buildings: StoredBuilding[];
   routes?: TradeRoute[];
   edicts?: Record<string, number>;
+  map_size?: number;
 }
 
 interface TradeRoute {
@@ -361,6 +369,8 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   const [acceptedNotice, setAcceptedNotice] = useState<{ title: string; delta: Record<string, number> } | null>(null);
   const acceptedNoticeKeyRef = useRef<string | null>(null);
   const [markers, setMarkers] = useState<{ id: string; x: number; y: number; label?: string }[]>([]);
+  const [visualIndicators, setVisualIndicators] = useState<VisualIndicator[]>([]);
+  const [enhancedGameState, setEnhancedGameState] = useState<EnhancedGameState | null>(null);
   const notify = useNotify();
   // building hover details disabled in stable mode
   const [gameMode, setGameMode] = useState<'casual' | 'advanced'>('casual');
@@ -372,6 +382,23 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   const [placedBuildings, setPlacedBuildings] = useState<StoredBuilding[]>([]);
   const [routes, setRoutes] = useState<TradeRoute[]>([]);
   const [roads, setRoads] = useState<Array<{x:number;y:number}>>([]);
+  
+  // Initialize TimeSystem
+  const timeSystemRef = useRef<TimeSystem | null>(null);
+  if (!timeSystemRef.current) {
+    timeSystemRef.current = new TimeSystem();
+    timeSystemRef.current.start();
+  }
+  const timeSystem = timeSystemRef.current;
+  
+  // Handle TimeSystem cleanup
+  useEffect(() => {
+    return () => {
+      if (timeSystemRef.current) {
+        timeSystemRef.current.destroy();
+      }
+    };
+  }, []);
   const [showRoads, setShowRoads] = useState(true);
   const [showCitizens, setShowCitizens] = useState(true);
   const [requireRoadConfirm, setRequireRoadConfirm] = useState(true);
@@ -379,6 +406,10 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   const [pendingRoad, setPendingRoad] = useState<{ tiles: {x:number;y:number}[] } | null>(null);
   const [citizensCount, setCitizensCount] = useState<number>(8);
   const [citizensSeed, setCitizensSeed] = useState<number>(() => Math.floor(Math.random()*1e6));
+
+  const [selectedTool, setSelectedTool] = useState<ManagementTool>('select');
+  const [selectedZoneType, setSelectedZoneType] = useState<ZoneType>('residential');
+  const [selectedServiceType, setSelectedServiceType] = useState<ServiceType>('police');
   // simplified: direct tile builds; no separate build selection UI here
   const [districts, _setDistricts] = useState<District[]>([]);
   const [leylines, setLeylines] = useState<Leyline[]>([]);
@@ -386,6 +417,19 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   const [tileTypes, setTileTypes] = useState<string[][]>([]);
   const [mapSizeModalOpen, setMapSizeModalOpen] = useState(true);
   const [pendingMapSize, setPendingMapSize] = useState<number>(32);
+
+  // Chunk fetching for unknown tiles
+  const fetchChunk = useCallback(async (chunkX: number, chunkY: number, chunkSize: number = 16) => {
+    try {
+      const response = await fetch(`/api/map/chunk?x=${chunkX}&y=${chunkY}&size=${chunkSize}&seed=${citizensSeed}`);
+      if (!response.ok) return null;
+      const data = await response.json();
+      return data.tiles as string[][];
+    } catch (error) {
+      console.warn('Failed to fetch chunk:', error);
+      return null;
+    }
+  }, [citizensSeed]);
 
   // Expand map with 'unknown' tiles when interacting near the edges
   const ensureCapacityAround = useCallback((x: number, y: number, margin: number = 2) => {
@@ -406,6 +450,53 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
       return next;
     });
   }, []);
+
+  // Replace unknown tiles with generated terrain
+  const revealUnknownTiles = useCallback(async (centerX: number, centerY: number, radius: number = 8) => {
+    const chunkSize = 16;
+    const chunksToFetch = new Set<string>();
+    
+    // Determine which chunks need fetching
+    for (let dy = -radius; dy <= radius; dy++) {
+      for (let dx = -radius; dx <= radius; dx++) {
+        const tx = centerX + dx;
+        const ty = centerY + dy;
+        if (tx < 0 || ty < 0) continue;
+        
+        const chunkX = Math.floor(tx / chunkSize);
+        const chunkY = Math.floor(ty / chunkSize);
+        chunksToFetch.add(`${chunkX},${chunkY}`);
+      }
+    }
+
+    // Fetch and apply chunks
+    for (const chunkKey of chunksToFetch) {
+      const [chunkX, chunkY] = chunkKey.split(',').map(Number);
+      const chunkData = await fetchChunk(chunkX, chunkY, chunkSize);
+      if (!chunkData) continue;
+
+      setTileTypes(prev => {
+        const next = prev.map(row => [...row]);
+        const startX = chunkX * chunkSize;
+        const startY = chunkY * chunkSize;
+        
+        for (let cy = 0; cy < chunkData.length; cy++) {
+          for (let cx = 0; cx < chunkData[cy].length; cx++) {
+            const worldX = startX + cx;
+            const worldY = startY + cy;
+            
+            if (worldY >= 0 && worldY < next.length && worldX >= 0 && worldX < next[worldY].length) {
+              if (next[worldY][worldX] === 'unknown') {
+                next[worldY][worldX] = chunkData[cy][cx];
+              }
+            }
+          }
+        }
+        
+        return next;
+      });
+    }
+  }, [fetchChunk]);
 
   const [routeDraftFrom, setRouteDraftFrom] = useState<string | null>(null);
   const [edicts, setEdicts] = useState<Record<string, number>>({ tariffs: 50, patrols: 0 });
@@ -449,8 +540,22 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     try { return Object.keys(JSON.parse(localStorage.getItem('ad_skills_unlocked') || '{}')).filter(k => JSON.parse(localStorage.getItem('ad_skills_unlocked') || '{}')[k]); } catch { return []; }
   });
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const saved = localStorage.getItem('ad_map_size');
+      if (saved) {
+        const n = Math.max(8, Math.min(512, Number(saved) || 32));
+        setGridSize(n);
+        setPendingMapSize(n);
+        setMapSizeModalOpen(false);
+      }
+    } catch {}
+  }, []);
+
+  useEffect(() => {
     async function loadMap() {
       try {
+        if (gridSize == null) return;
         const res = await fetch(`/api/map?size=${gridSize}`);
         if (!res.ok) throw new Error('Failed to load map');
         const data = await res.json();
@@ -499,6 +604,55 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   const [pathHints, setPathHints] = useState<PathHint[]>([]);
   const [pulses, setPulses] = useState<Pulse[]>([]);
   const [ctxMenu, setCtxMenu] = useState<{ open: boolean; buildingId: string | null; x: number; y: number }>({ open: false, buildingId: null, x: 0, y: 0 });
+  const [constructionEvents, setConstructionEvents] = useState<Array<{
+    id: string;
+    buildingId: string;
+    position: { x: number; y: number };
+    type: 'building' | 'upgrading' | 'demolishing';
+    timestamp: number;
+  }>>([]);
+
+  // Cleanup old construction events
+  useEffect(() => {
+    const cleanup = setInterval(() => {
+      const now = Date.now();
+      setConstructionEvents(prev => prev.filter(event => now - event.timestamp < 10000)); // Keep for 10 seconds
+    }, 5000);
+    return () => clearInterval(cleanup);
+  }, []);
+
+  const saveState = useCallback(async (partial: { resources?: Record<string, number>; workers?: number; buildings?: StoredBuilding[]; routes?: TradeRoute[]; roads?: Array<{x:number;y:number}>; edicts?: Record<string, number>; map_size?: number }) => {
+    if (!state) return;
+    try {
+      const body: { id: string; resources?: Record<string, number>; workers?: number; buildings?: StoredBuilding[]; routes?: TradeRoute[]; roads?: Array<{x:number;y:number}>; edicts?: Record<string, number>; map_size?: number } = { id: state.id };
+      if (partial.resources) body.resources = partial.resources;
+      if (typeof partial.workers === 'number') body.workers = partial.workers;
+      if (partial.buildings) body.buildings = partial.buildings;
+      if (partial.routes) body.routes = partial.routes;
+      if (partial.roads) body.roads = partial.roads;
+      if (partial.edicts) body.edicts = partial.edicts;
+      if (typeof partial.map_size === 'number') body.map_size = partial.map_size;
+      const res = await fetch('/api/state', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    } catch (err) {
+      console.error('Failed to save state:', err);
+    }
+  }, [state]);
+
+  const confirmMapSize = useCallback(async () => {
+    const n = Math.max(8, Math.min(512, Number(pendingMapSize) || 32));
+    setGridSize(n);
+    try { localStorage.setItem('ad_map_size', String(n)); } catch {}
+    // Save map size to game state for persistence
+    if (state) {
+      await saveState({ map_size: n } as any);
+    }
+    setMapSizeModalOpen(false);
+  }, [pendingMapSize, state, saveState]);
 
   const computeRoadPath = useCallback((sx:number, sy:number, tx:number, ty:number): Array<{x:number;y:number}> => {
     // Lightweight Dijkstra with road preference
@@ -877,6 +1031,15 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     try { setRoads(((json as any).roads as Array<{x:number;y:number}>) ?? []); } catch {}
     try { if ((json as any).citizens_count) setCitizensCount((json as any).citizens_count); } catch {}
     try { if ((json as any).citizens_seed) setCitizensSeed((json as any).citizens_seed); } catch {}
+    // Load saved map size from game state
+    try { 
+      if ((json as any).map_size) {
+        const savedSize = Math.max(8, Math.min(512, Number((json as any).map_size) || 32));
+        setGridSize(savedSize);
+        setPendingMapSize(savedSize);
+        setMapSizeModalOpen(false);
+      }
+    } catch {}
   }, []);
 
   const fetchProposals = useCallback(async () => {
@@ -885,26 +1048,6 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     if (!res.ok) throw new Error(json.error || "Failed to fetch proposals");
     setProposals(json.proposals || []);
   }, []);
-
-  const saveState = useCallback(async (partial: { resources?: Record<string, number>; workers?: number; buildings?: StoredBuilding[]; routes?: TradeRoute[]; roads?: Array<{x:number;y:number}>; edicts?: Record<string, number> }) => {
-    if (!state) return;
-    try {
-      const body: { id: string; resources?: Record<string, number>; workers?: number; buildings?: StoredBuilding[]; routes?: TradeRoute[]; roads?: Array<{x:number;y:number}>; edicts?: Record<string, number> } = { id: state.id };
-      if (partial.resources) body.resources = partial.resources;
-      if (typeof partial.workers === 'number') body.workers = partial.workers;
-      if (partial.buildings) body.buildings = partial.buildings;
-      if (partial.routes) body.routes = partial.routes;
-      if (partial.roads) body.roads = partial.roads;
-      if (partial.edicts) body.edicts = partial.edicts;
-      await fetch('/api/state', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-    } catch (e) {
-      logger.error('Failed to save state', e);
-    }
-  }, [state]);
 
   const tick = useCallback(async () => {
     setLoading(true);
@@ -935,6 +1078,22 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
         setCrisis(json.crisis);
       }
       await fetchProposals();
+      
+      // Update simulation systems
+      try {
+        const simulationInput = {
+          buildings: serverState.buildings,
+          resources: simRes,
+          gameTime: timeSystem.getCurrentTime()
+        };
+        const enhancedState = simulationSystem.updateSimulation(simulationInput, 1.0);
+        setEnhancedGameState(enhancedState);
+        const indicators = simulationSystem.generateVisualIndicators(enhancedState);
+        setVisualIndicators(indicators);
+      } catch (simError) {
+        console.warn('Simulation system update failed:', simError);
+      }
+      
       // Flavor events disabled for stability
       return { simRes, state: serverState };
     } catch (e: unknown) {
@@ -1156,7 +1315,12 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     threat: state.resources.threat || 0
   };
 
-  const gameTime: GameTime = { cycle: state.cycle, season: 'spring', timeRemaining };
+  const currentTime = timeSystem.getCurrentTime();
+  const gameTime: GameTime = { 
+    cycle: Math.floor(currentTime.totalMinutes / 60), // Convert to legacy cycle for HUD compatibility
+    season: 'spring', // TODO: Implement seasons based on currentTime.month
+    timeRemaining 
+  };
   const totalAssigned = placedBuildings.reduce((sum, b) => sum + b.workers, 0);
   const totalWorkers = totalAssigned + (simResources?.workers ?? 0);
   const idleWorkers = simResources?.workers ?? 0;
@@ -1255,20 +1419,96 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
       <div className="relative flex flex-col min-w-0 h-full">
         <GoalBanner />
         <div className="flex-1 relative min-h-0">
-          <GameProvider app={pixiApp} viewport={pixiViewport} setApp={setPixiApp} setViewport={setPixiViewport}>
+        {mapSizeModalOpen && (
+          <div className="absolute inset-0 z-[20000] bg-black/60 flex items-center justify-center">
+            <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 shadow-2xl w-[min(92vw,28rem)]">
+              <h2 className="text-lg font-semibold text-gray-100">Choose starting map size</h2>
+              <p className="text-sm text-gray-400 mt-1">You can expand infinitely by exploring. Pick an initial size:</p>
+              <div className="mt-4 grid grid-cols-4 gap-2">
+                {[16,24,32,48].map(sz => (
+                  <button key={sz} onClick={() => setPendingMapSize(sz)} className={`px-3 py-2 rounded border text-sm ${pendingMapSize===sz ? 'bg-blue-600 border-blue-500 text-white' : 'bg-gray-800 border-gray-700 text-gray-200 hover:bg-gray-750'}`}>{sz}×{sz}</button>
+                ))}
+              </div>
+              <div className="mt-4">
+                <label className="block text-xs text-gray-400 mb-1">Custom size (8 - 512)</label>
+                <input type="number" min={8} max={512} value={pendingMapSize} onChange={e=>setPendingMapSize(Number(e.target.value)||32)} className="w-full px-3 py-2 rounded bg-gray-800 border border-gray-700 text-gray-100 outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div className="mt-5 flex items-center justify-between">
+                <div className="text-xs text-gray-500">Infinite expansion is enabled during play.</div>
+                <button onClick={confirmMapSize} className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-500">Start</button>
+              </div>
+            </div>
+          </div>
+        )}
+        <GameProvider app={pixiApp} viewport={pixiViewport} setApp={setPixiApp} setViewport={setPixiViewport}>
           <GameRenderer
             useExternalProvider
             enableEdgeScroll={edgeScrollEnabled}
             gridSize={Math.max(tileTypes.length, tileTypes[0]?.length ?? 0)}
             tileTypes={tileTypes}
-            onTileHover={(x,y,t)=>{ ensureCapacityAround(x,y,2); setHoverTile({x,y,tileType: t || tileTypes[y]?.[x] || 'unknown'}); }}
+            onTileHover={(x,y,t)=>{ 
+              ensureCapacityAround(x,y,2); 
+              const tileType = t || tileTypes[y]?.[x] || 'unknown';
+              setHoverTile({x,y,tileType});
+              // Reveal unknown tiles around hover position
+              if (tileType === 'unknown' || (tileTypes[y]?.[x] === 'unknown')) {
+                revealUnknownTiles(x, y, 4);
+              }
+            }}
             onTileClick={(x,y,t)=>{
-          ensureCapacityAround(x,y,2);
-          setSelectedTile({x,y,tileType: t || tileTypes[y]?.[x] || 'unknown'});
-          setTooltipLocked(true);
-          setClickEffectKey(`click-${Date.now()}-${x}-${y}`);
-          try { window.dispatchEvent(new CustomEvent('ad_select_tile', { detail: { gridX: x, gridY: y, tileWidth: 64, tileHeight: 32 } })); } catch {}
-        }}
+              ensureCapacityAround(x,y,2);
+              const tileType = t || tileTypes[y]?.[x] || 'unknown';
+              setSelectedTile({x,y,tileType});
+              setTooltipLocked(true);
+              setClickEffectKey(`click-${Date.now()}-${x}-${y}`);
+              // Reveal unknown tiles around click position
+              if (tileType === 'unknown' || (tileTypes[y]?.[x] === 'unknown')) {
+                revealUnknownTiles(x, y, 6);
+              }
+              try { window.dispatchEvent(new CustomEvent('ad_select_tile', { detail: { gridX: x, gridY: y, tileWidth: 64, tileHeight: 32 } })); } catch {}
+            }}
+            onReset={() => {
+              // Reset game state for development
+              if (confirm('Reset all game progress? This cannot be undone.')) {
+                setPlacedBuildings([]);
+                setRoutes([]);
+                setRoads([]);
+                setConstructionEvents([]);
+                setSelectedTile(null);
+                setPreviewTypeId(null);
+                setRouteDraftFrom(null);
+                setRouteHoverToId(null);
+                setCtxMenu({ open: false, buildingId: null, x: 0, y: 0 });
+                setSimResources({
+                  grain: 100,
+                  coin: 50,
+                  mana: 25,
+                  favor: 10,
+                  workers: 5,
+                  wood: 0,
+                  planks: 0
+                });
+                // Reset time system
+                 if (timeSystemRef.current) {
+                   timeSystemRef.current.setTime({
+                     year: 2024,
+                     month: 1,
+                     day: 1,
+                     hour: 8,
+                     minute: 0,
+                     totalMinutes: 0
+                   });
+                 }
+                // Save reset state
+                saveState({
+                  resources: { grain: 100, coin: 50, mana: 25, favor: 10, wood: 0, planks: 0, unrest: 0, threat: 0 },
+                  workers: 5,
+                  buildings: [],
+                  routes: [],
+                  roads: []
+                });
+              }
+            }}
       >
             <PreviewLayer
               hoverTile={hoverTile}
@@ -1345,20 +1585,12 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
             <BuildingPulseLayer pulses={pulses} />
             {showRoads && <RoadsLayer roads={roads} />}
             {showCitizens && (
-            <CitizensLayer
-              buildings={placedBuildings.map(b => ({ id: b.id, typeId: b.typeId, x: b.x, y: b.y, workers: b.workers }))}
+            <AnimatedCitizensLayer
+              buildings={placedBuildings.map(b => ({ id: b.id, typeId: b.typeId, x: b.x, y: b.y, workers: b.workers, level: b.level }))}
               roads={roads}
               tileTypes={tileTypes}
-              onProposeRoads={(tiles)=>{
-                if (requireRoadConfirm) { setPendingRoad({ tiles }); return; }
-                try {
-                  const unique = Array.from(new Set(tiles.map(t=>`${t.x},${t.y}`))).length;
-                  notify({ type: 'info', title: 'Road Proposal', message: `Auto-approved: ${unique} tiles` });
-                } catch {}
-                applyRoads(tiles);
-              }}
               citizensCount={citizensCount}
-              seed={citizensSeed}
+              enableTraffic={true}
             />)}
             {acceptedNotice && (
               <EffectsLayer trigger={{ eventKey: acceptedNoticeKeyRef.current || 'accept', deltas: acceptedNotice.delta || {}, gridX: selectedTile?.x ?? 10, gridY: selectedTile?.y ?? 10 }} />
@@ -1369,6 +1601,14 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
             <AmbientLayer tileTypes={tileTypes} />
             <SeasonalLayer season={((state.cycle ?? 0) % 4 === 0 ? 'spring' : (state.cycle % 4 === 1 ? 'summer' : (state.cycle % 4 === 2 ? 'autumn' : 'winter')))} />
             <MarkersLayer markers={markers.map(m => ({ id: m.id, gridX: m.x, gridY: m.y, label: m.label }))} />
+            <EnhancedVisualEffectsLayer
+              buildings={placedBuildings.map(b => ({ id: b.id, typeId: b.typeId, x: b.x, y: b.y, workers: b.workers, level: b.level }))}
+              citizens={placedBuildings.filter(b => b.workers > 0).map(b => ({ id: b.id, x: b.x, y: b.y, activity: 'working', speed: 1.0 }))}
+              roads={roads}
+              gameTime={{ hour: Math.floor((Date.now() / 60000) % 24), minute: Math.floor((Date.now() / 1000) % 60), day: Math.floor(Date.now() / 86400000) }}
+              cityMetrics={{ population: citizensCount, happiness: 75, pollution: 20, traffic: roads.length * 10 }}
+              constructionEvents={constructionEvents}
+            />
       </GameRenderer>
 
       {/* Route draft chip */}
@@ -1546,19 +1786,64 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
               workforce: { total: totalWorkers, idle: idleWorkers, needed: neededWorkers },
               time: { ...gameTime, isPaused, intervalMs: Number((state as any)?.tick_interval_ms ?? 60000) }
             }}
+            cityManagement={{
+              stats: {
+                population: placedBuildings.reduce((sum, b) => sum + (b.workers || 0), 0),
+                happiness: Math.max(0, 100 - (resources.unrest || 0)),
+                traffic: 45,
+                pollution: 30,
+                crime: 15,
+                education: 75,
+                healthcare: 80,
+                employment: 85,
+                budget: resources.grain || 0,
+                income: 500,
+                expenses: 350
+              } as CityStats,
+              selectedTool,
+              onToolSelect: setSelectedTool,
+              selectedZoneType,
+              onZoneTypeSelect: setSelectedZoneType,
+              selectedServiceType,
+              onServiceTypeSelect: setSelectedServiceType,
+              isSimulationRunning: !isPaused,
+              onToggleSimulation: () => setIsPaused(!isPaused),
+              onResetCity: () => {
+                console.log('Reset city requested');
+                // Add reset logic here
+              },
+              isOpen: true,
+              onClose: () => console.log('City management panel close requested')
+            }}
             onGameAction={(action, payload) => {
               if (action === 'advance-cycle') { tick(); if (onboardingStep < 6) setOnboardingStep(6); }
               if (action === 'pause') { 
+                timeSystem.setSpeed(TIME_SPEEDS.PAUSED);
                 setIsPaused(true);
                 if (state) { void fetch('/api/state', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: state.id, auto_ticking: false }) }); }
               }
               if (action === 'resume') {
+                timeSystem.setSpeed(TIME_SPEEDS.NORMAL);
                 setIsPaused(false);
                 if (state) { void fetch('/api/state', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: state.id, auto_ticking: true, last_tick_at: new Date().toISOString() }) }); }
               }
               if (action === 'set-speed') {
                 if (!state) return;
-                const ms = Number(payload?.ms ?? 60000);
+                // Map speed payload to TIME_SPEEDS constants
+                const speedMap: Record<string, TimeSpeed> = { 
+                  '1': TIME_SPEEDS.NORMAL, 
+                  '2': TIME_SPEEDS.FAST, 
+                  '3': TIME_SPEEDS.VERY_FAST,
+                  '4': TIME_SPEEDS.ULTRA_FAST,
+                  '5': TIME_SPEEDS.HYPER_SPEED
+                };
+                const speed = speedMap[payload?.speed] || TIME_SPEEDS.NORMAL;
+                timeSystem.setSpeed(speed);
+                // Keep backward compatibility with server - faster speeds need shorter intervals
+                const ms = speed === TIME_SPEEDS.NORMAL ? 12000 : 
+                          speed === TIME_SPEEDS.FAST ? 6000 : 
+                          speed === TIME_SPEEDS.VERY_FAST ? 3000 :
+                          speed === TIME_SPEEDS.ULTRA_FAST ? 1500 : 600;
                 void fetch('/api/state', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: state.id, tick_interval_ms: ms }) });
                 setState(prev => prev ? { ...prev, tick_interval_ms: ms } as any : prev);
               }
@@ -1631,6 +1916,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
                 advance: state.cycle > 1,
               }}
             />
+
           </IntegratedHUDSystem>
           <NotificationHost />
           </GameProvider>
@@ -1701,6 +1987,14 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
                 setMarkers(prev => [{ id: `m-${generateId()}`, x: gx, y: gy, label: SIM_BUILDINGS[typeId].name }, ...prev]);
                 // Build effect burst
                 setClickEffectKey(`build-${Date.now()}-${gx}-${gy}`);
+                // Trigger construction animation
+                setConstructionEvents(prev => [{
+                  id: `construction-${newBuilding.id}`,
+                  buildingId: newBuilding.id,
+                  position: { x: gx, y: gy },
+                  type: 'building',
+                  timestamp: Date.now()
+                }, ...prev]);
                 // Tutorial progress + consume freebies
                 if (hasFree) setTutorialFree(prev => ({ ...prev, [typeId as BuildTypeId]: Math.max(0, (prev[typeId as BuildTypeId] || 0) - 1) }));
                 if (onboardingStep === 1 && typeId === 'farm') setOnboardingStep(2);
@@ -1735,6 +2029,14 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
                 setSimResources(newResSim);
                 setState(prev => prev ? { ...prev, resources: newResServer, buildings: updated } : prev);
                 await saveState({ resources: newResServer, buildings: updated });
+                // Trigger upgrade animation
+                setConstructionEvents(prev => [{
+                  id: `upgrade-${buildingId}`,
+                  buildingId: buildingId,
+                  position: { x: b.x, y: b.y },
+                  type: 'upgrading',
+                  timestamp: Date.now()
+                }, ...prev]);
               }}
               onDismantle={async (buildingId) => {
                 if (!confirm('Dismantle this building? You will receive a partial refund.')) return;
@@ -1762,6 +2064,14 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
                 setRoutes(keptRoutes);
                 setState(prev => prev ? { ...prev, resources: newResServer, buildings: updated, routes: keptRoutes } : prev);
                 await saveState({ resources: newResServer, buildings: updated, routes: keptRoutes });
+                // Trigger demolition animation
+                setConstructionEvents(prev => [{
+                  id: `demolish-${buildingId}`,
+                  buildingId: buildingId,
+                  position: { x: b.x, y: b.y },
+                  type: 'demolishing',
+                  timestamp: Date.now()
+                }, ...prev]);
               }}
               onRemoveRoute={async (routeId) => {
                 const newRoutes = (routes || []).filter(r => r.id !== routeId);

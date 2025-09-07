@@ -8,5 +8,9 @@
   "scripts": {
     "build": "npx tsup src/index.ts --format cjs,esm --dts",
     "build:wasm": "npx asc assembly/index.ts --outFile dist/engine.wasm --optimize"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.0",
+    "typescript": "^5.9.2"
   }
 }

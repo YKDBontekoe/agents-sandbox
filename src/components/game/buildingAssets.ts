@@ -33,22 +33,11 @@ export function getBuildingSpriteUrl(typeId: string): string | null {
   return vector[typeId] || null;
 }
 
-// Return a prioritized list of candidate sprite URLs for a building at a given level.
-// This lets the renderer try level-specific art first and fall back to the base icon if not present.
+// Return sprite URL for a building. Since we don't have level-specific sprites,
+// just return the base sprite to avoid 404 requests.
 export function getBuildingSpriteCandidates(typeId: string, level: number = 1): string[] {
   const base = getBuildingSpriteUrl(typeId);
   if (!base) return [];
-  const safeLevel = Math.max(1, Math.floor(level || 1));
-  // split extension
-  const match = base.match(/^(.*)\.(svg|png)$/i);
-  if (!match) return [base];
-  const prefix = match[1];
-  const ext = match[2];
-  const candidates = [
-    `${prefix}-lv${safeLevel}.${ext}`,
-    `${prefix}-l${safeLevel}.${ext}`,
-    `${prefix}-${safeLevel}.${ext}`,
-    base,
-  ];
-  return candidates;
+  // Only return the base sprite to avoid 404s for non-existent level variants
+  return [base];
 }

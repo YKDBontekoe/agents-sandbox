@@ -7,6 +7,7 @@ import { useGameContext } from "./GameContext";
 import logger from "@/lib/logger";
 import { publicConfig as config } from "@/infrastructure/config";
 import { AdaptiveQualityManager } from "@/utils/performance";
+import EnhancedVisualEffectsLayer from "./EnhancedVisualEffectsLayer";
 
 interface GameCanvasProps {
   width?: number;
@@ -191,6 +192,8 @@ export default function GameCanvas({
         // Share references through context
         setApp(app);
         setViewport(viewport);
+
+       // Enhanced visual effects will be added via React component in JSX
 
         // Mark initialized immediately once app and viewport are ready to avoid loading overlay mismatch
         setIsInitialized(true);

@@ -20,6 +20,7 @@ interface GameRendererProps {
   children?: React.ReactNode;
   useExternalProvider?: boolean;
   enableEdgeScroll?: boolean;
+  onReset?: () => void;
 }
 
 function GameRendererContent({
@@ -30,6 +31,7 @@ function GameRendererContent({
   onTileHover,
   onTileClick,
   enableEdgeScroll = true,
+  onReset,
 }: GameRendererProps) {
   logger.debug("GameRendererContent rendering with:", { width, height, gridSize });
   const [showHelp, setShowHelp] = useState(true);
@@ -164,8 +166,8 @@ function GameRendererContent({
         </div>
       )}
 
-      {/* Recenter button */}
-      <div className="absolute top-2 left-2 pointer-events-auto">
+      {/* Control buttons */}
+      <div className="absolute top-2 left-2 pointer-events-auto flex gap-2">
         <button
           onClick={() => {
             if (!viewport) return;
@@ -177,6 +179,15 @@ function GameRendererContent({
         >
           Recenter
         </button>
+        {onReset && (
+          <button
+            onClick={onReset}
+            className="px-2 py-1 rounded bg-red-700 hover:bg-red-600 text-gray-100 text-xs border border-red-600 shadow-sm"
+            title="Reset game state (Development)"
+          >
+            Reset
+          </button>
+        )}
       </div>
     </div>
   );

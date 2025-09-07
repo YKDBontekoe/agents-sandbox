@@ -1,4 +1,4 @@
-import { SIM_BUILDINGS, type SimBuildingType } from '@/lib/buildingCatalog';
+import { SIM_BUILDINGS, type SimBuildingType } from '@engine';
 export { SIM_BUILDINGS };
 export type { SimBuildingType };
 

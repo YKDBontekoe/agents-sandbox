@@ -8,10 +8,11 @@ import './hud-accessibility.css';
 
 // Import modular panels
 import { ModularResourcePanel } from './panels/ModularResourcePanel';
-import { ModularTimePanel } from './panels/ModularTimePanel';
+import { TimeControlPanel } from '../TimeControlPanel';
 import { ModularActionPanel } from './panels/ModularActionPanel';
 import { ModularMiniMapPanel } from './panels/ModularMiniMapPanel';
 import { ModularSkillTreePanel } from './panels/ModularSkillTreePanel';
+import CityManagementPanel, { CityStats, ManagementTool, ZoneType, ServiceType } from '../CityManagementPanel';
 
 // Integrated HUD System Props
 interface IntegratedHUDSystemProps {
@@ -51,6 +52,20 @@ interface IntegratedHUDSystemProps {
       intervalMs?: number;
     };
   };
+  cityManagement?: {
+    stats: CityStats;
+    selectedTool: ManagementTool;
+    onToolSelect: (tool: ManagementTool) => void;
+    selectedZoneType: ZoneType;
+    onZoneTypeSelect: (zoneType: ZoneType) => void;
+    selectedServiceType: ServiceType;
+    onServiceTypeSelect: (serviceType: ServiceType) => void;
+    isSimulationRunning: boolean;
+    onToggleSimulation: () => void;
+    onResetCity?: () => void;
+    isOpen?: boolean;
+    onClose?: () => void;
+  };
   onGameAction: (action: string, data?: any) => void;
   className?: string;
 }
@@ -59,7 +74,8 @@ interface IntegratedHUDSystemProps {
 function HUDSystemCore({ 
   children, 
   gameData, 
-  onGameAction, 
+  onGameAction,
+  cityManagement,
   className = '' 
 }: Omit<IntegratedHUDSystemProps, 'defaultPreset'>) {
   const { currentPreset } = useHUDLayoutPresets();
@@ -101,23 +117,31 @@ function HUDSystemCore({
             </div>
             {/* Smart, uncluttered sidebar: no manual density buttons; panels self-adapt */}
             <div className="mt-1" />
-            <ModularResourcePanel
-              resources={gameData.resources}
-              changes={gameData.resourceChanges}
-              workforce={gameData.workforce}
-              variant={currentPreset.panelVariants.resources || 'default'}
-            />
+            {cityManagement ? (
+              <CityManagementPanel
+                isOpen={cityManagement.isOpen ?? true}
+                onClose={cityManagement.onClose ?? (() => {})}
+                stats={cityManagement.stats}
+                selectedTool={cityManagement.selectedTool}
+                onToolSelect={cityManagement.onToolSelect}
+                selectedZoneType={cityManagement.selectedZoneType}
+                onZoneTypeSelect={cityManagement.onZoneTypeSelect}
+                selectedServiceType={cityManagement.selectedServiceType}
+                onServiceTypeSelect={cityManagement.onServiceTypeSelect}
+                isSimulationRunning={cityManagement.isSimulationRunning}
+                onToggleSimulation={cityManagement.onToggleSimulation}
+                onResetCity={cityManagement.onResetCity}
+              />
+            ) : (
+              <ModularResourcePanel
+                resources={gameData.resources}
+                changes={gameData.resourceChanges}
+                workforce={gameData.workforce}
+                variant={currentPreset.panelVariants.resources || 'default'}
+              />
+            )}
             <div className="mt-2" />
-            <ModularTimePanel
-              time={gameData.time}
-              isPaused={gameData.time.isPaused}
-              onPause={() => onGameAction('pause')}
-              onResume={() => onGameAction('resume')}
-              onAdvanceCycle={() => onGameAction('advance-cycle')}
-              intervalMs={gameData.time.intervalMs}
-              onChangeIntervalMs={(ms) => onGameAction('set-speed', { ms })}
-              variant={currentPreset.panelVariants['time-panel'] || 'default'}
-            />
+            <TimeControlPanel className="w-full" />
             <div className="mt-2" />
             <ModularMiniMapPanel gridSize={20} />
             <div className="mt-2" />
@@ -155,14 +179,16 @@ export function IntegratedHUDSystem({
   defaultPreset = 'default',
   gameData,
   onGameAction,
+  cityManagement,
   className
 }: IntegratedHUDSystemProps) {
   return (
     <HUDAccessibilityProvider>
       <HUDLayoutPresetProvider defaultPreset={defaultPreset}>
-        <HUDSystemCore
-          gameData={gameData}
+        <HUDSystemCore 
+          gameData={gameData} 
           onGameAction={onGameAction}
+          cityManagement={cityManagement}
           className={className}
         >
           {children}

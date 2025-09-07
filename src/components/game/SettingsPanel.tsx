@@ -16,7 +16,9 @@ import {
   faChevronRight,
   faCheck,
   faUndo,
-  faSave
+  faSave,
+  faPlay,
+  faPause
 } from '@/lib/icons';
 import { ActionButton } from '../ui';
 import '../../styles/design-tokens.css';
@@ -56,14 +58,18 @@ export interface SettingsPanelProps {
   onDismissNotification?: (id: string) => void;
   onMarkNotificationRead?: (id: string) => void;
   onClearNotifications?: () => void;
-  // Game speed (server tick interval)
+  // Legacy time control props (deprecated - use TimeControlPanel instead)
+  // These are kept for backward compatibility but should not be used
   simTickIntervalMs?: number;
   onChangeSimTickInterval?: (ms: number) => void;
-  // Time control
   isAutoTicking?: boolean;
   timeRemainingSec?: number;
   onToggleAutoTicking?: (auto: boolean) => void;
   onTickNow?: () => void;
+  gameSpeedMultiplier?: string;
+  onChangeGameSpeed?: (speed: string) => void;
+  isPaused?: boolean;
+  onTogglePause?: (paused: boolean) => void;
 }
 
 // Settings categories for better organization
@@ -341,15 +347,20 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
   onDismissNotification,
   onMarkNotificationRead,
   onClearNotifications,
+  // Legacy time control props (not used - TimeControlPanel handles time management)
   simTickIntervalMs,
   onChangeSimTickInterval,
   isAutoTicking,
   timeRemainingSec,
   onToggleAutoTicking,
   onTickNow,
+  gameSpeedMultiplier,
+  onChangeGameSpeed,
+  isPaused,
+  onTogglePause,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(['display', 'gameplay']));
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(['display', 'gameplay', 'time']));
   const [hasChanges, setHasChanges] = useState(false);
 
   // Mock settings data - in a real app, this would come from props or context
@@ -361,6 +372,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
       description: 'Notifications & history',
       settings: []
     },
+    // Time Control category removed - now handled by dedicated TimeControlPanel component
     // World category (game UI controls)
     {
       id: 'world',

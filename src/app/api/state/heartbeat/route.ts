@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { SupabaseUnitOfWork } from '@/infrastructure/supabase/unit-of-work'
-import { SIM_BUILDINGS } from '@/lib/buildingCatalog'
+import { SIM_BUILDINGS } from '@engine'
 import { processTick } from '@engine'
 
 // Heartbeat: apply due ticks based on last_tick_at and tick_interval_ms

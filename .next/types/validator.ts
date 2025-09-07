@@ -95,6 +95,12 @@ type RouteHandlerConfig<Route extends AppRouteHandlerRoutes = AppRouteHandlerRou
   handler satisfies RouteHandlerConfig<"/api/health/db">
 }
 
+// Validate ../../src/app/api/map/chunk/route.ts
+{
+  const handler = {} as typeof import("../../src/app/api/map/chunk/route.js")
+  handler satisfies RouteHandlerConfig<"/api/map/chunk">
+}
+
 // Validate ../../src/app/api/map/route.ts
 {
   const handler = {} as typeof import("../../src/app/api/map/route.js")

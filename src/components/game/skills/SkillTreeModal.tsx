@@ -216,7 +216,7 @@ export default function SkillTreeModal({ isOpen, onClose, resources }: SkillTree
                 const nearFrontier = selected.tier >= (tree.layout.maxTier - 2);
                 if (nearFrontier) {
                   // Expand deterministically
-                  setTimeout(() => { setTree(prev => expandSkillTree({ ...prev, nodes: [...prev.nodes], edges: [...prev.edges], layout: { ...prev.layout, tiers: { ...prev.layout!.tiers }, categoryDistribution: { ...prev.layout!.categoryDistribution } } }, seed, 4)); }, 0);
+                  setTimeout(() => { setTree(prev => expandSkillTree({ ...prev, nodes: [...prev.nodes], edges: [...prev.edges], layout: { ...prev.layout, tiers: { ...prev.layout!.tiers }, categoryDistribution: { ...prev.layout!.categoryDistribution }, maxTier: prev.layout!.maxTier || 0 } }, seed, 4)); }, 0);
                 }
                 return null;
               })()}

@@ -4,6 +4,21 @@ export const TILE_COLORS: Record<string, number> = {
   mountain: 0x9ca3af,
   forest: 0x16a34a,
   unknown: 0x475569,
+  // Enhanced terrain types
+  desert: 0xfbbf24,
+  tundra: 0xe5e7eb,
+  swamp: 0x059669,
+  village: 0x92400e,
+  ruins: 0x6b7280,
+  deep_water: 0x1e40af,
+  hills: 0xa3a3a3,
+  plains: 0x65a30d,
+  iron_ore: 0x78716c,
+  gold_ore: 0xf59e0b,
+  crystal: 0x8b5cf6,
+  ancient_tree: 0x166534,
+  hot_spring: 0x06b6d4,
+  sacred_grove: 0x7c3aed,
 };
 
 export function gridToWorld(

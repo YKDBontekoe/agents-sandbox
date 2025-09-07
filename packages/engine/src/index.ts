@@ -233,3 +233,17 @@ export function processTick(state: GameState, proposals: Proposal[], catalog: Re
   const nextState: GameState = { ...afterProps, resources, workers, cycle: newCycle, max_cycle: newMax };
   return { state: nextState, crisis };
 }
+
+// Export shared types
+export * from './types/gameTime';
+
+// Export simulation systems
+export * from './simulation/buildingCatalog';
+export * from './simulation/buildingSimulation';
+export * from './simulation/citizenBehavior';
+export * from './simulation/workerSimulation';
+export * from './simulation/simulationIntegration';
+export * from './simulation/gameplayEvents';
+
+// Export time system
+export * from './systems/timeSystem';
