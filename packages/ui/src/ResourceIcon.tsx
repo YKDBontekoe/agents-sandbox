@@ -1,7 +1,7 @@
 import React from 'react';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { ICONS, COLORS, type ResourceType } from '@/lib/resources';
+import { ICONS, COLORS, type ResourceType } from './resources';
 
 export interface ResourceIconProps {
   type: ResourceType;

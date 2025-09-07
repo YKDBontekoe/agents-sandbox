@@ -1,6 +1,6 @@
 import React from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { CATEGORY_ICONS, CategoryType } from '@/lib/categories';
+import { CATEGORY_ICONS, CategoryType } from './categories';
 
 export interface CategoryIconProps {
   category: CategoryType;

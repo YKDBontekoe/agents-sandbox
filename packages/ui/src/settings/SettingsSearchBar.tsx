@@ -1,6 +1,6 @@
 import React from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faSearch } from '@/lib/icons';
+import { faSearch } from '@fortawesome/free-solid-svg-icons';
 
 interface SettingsSearchBarProps {
   searchTerm: string;

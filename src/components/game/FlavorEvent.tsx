@@ -1,6 +1,6 @@
 import { FlavorEventDef } from './flavorEvents';
-import { ResourceIcon } from '../ui';
-import type { ResourceType } from '@/lib/resources';
+import { ResourceIcon } from '@arcane/ui';
+import type { ResourceType } from '@arcane/ui';
 
 interface Props {
   event: FlavorEventDef;
