@@ -61,6 +61,9 @@ Related docs: docs/agents/ARCHITECTURE.md, docs/agents/PROMPTS.md, docs/agents/S
 - `supabase/migrations/` — schema and idempotent updates for `game_state`, `proposals`
 - `src/components/game/buildingIcons/` — canvas icon drawers keyed by building type
 - `src/components/game/BuildingsLayer.tsx` — renders building sprites and tooltips
+- `src/components/game/GameLayers.tsx` — centralizes PIXI rendering layers
+- `src/components/game/hud/` — heads-up display panels (Worker, Council, Edicts, etc.)
+- `src/components/game/panels/TileInfoPanel.tsx` — tile selection details and build actions
 - `src/components/settings/` — reusable settings panel components and configuration
 - `packages/engine/src/simulation/traffic/` — modular traffic simulation system (vehicle, pedestrian, and light managers). Run `npm test` and `npm run lint packages/engine/src/simulation/traffic` when modifying
 - `src/components/game/skills/` — skill tree modules

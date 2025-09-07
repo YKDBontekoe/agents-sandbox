@@ -5,7 +5,7 @@ import * as Toggle from '@radix-ui/react-toggle';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faCrown, faScroll, faXmark, faLock } from '@/lib/icons';
-import { CategoryIcon } from '../ui';
+import { CategoryIcon } from '../../ui';
 import { CategoryType, CATEGORY_TYPES } from '@/lib/categories';
 
 export interface EdictSetting {

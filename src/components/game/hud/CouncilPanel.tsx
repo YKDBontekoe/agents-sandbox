@@ -1,10 +1,10 @@
 import React from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
-import { GameResources } from './hud/types';
-import { ResourceIcon } from '../ui';
+import { GameResources } from './types';
+import { ResourceIcon } from '../../ui';
 import type { ResourceType } from '@/lib/resources';
-import { getResourceIcon, getResourceColor } from './resourceUtils';
-import { CategoryIcon } from '../ui';
+import { getResourceIcon, getResourceColor } from '../resourceUtils';
+import { CategoryIcon } from '../../ui';
 import { CategoryType } from '@/lib/categories';
 
 export interface ProposalDelta {
