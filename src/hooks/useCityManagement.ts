@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 
 // Define types locally since they're not exported from @engine
 export interface CityStats {
@@ -18,16 +18,23 @@ export interface CityStats {
 export interface ManagementAction {
   type: 'zone' | 'build_road' | 'build_service' | 'demolish' | 'upgrade';
   position: { x: number; y: number };
-  data: any;
+  data: Record<string, unknown>;
   cost: number;
 }
 
 // Mock CityManagementInterface for now since it's not exported from @engine
+interface CityManagementConfig {
+  gridWidth: number;
+  gridHeight: number;
+  initialBudget?: number;
+  difficulty: 'easy' | 'normal' | 'hard';
+}
+
 class CityManagementInterface {
-  private config: any;
+  private config: CityManagementConfig;
   private stats: CityStats;
-  
-  constructor(config: any) {
+
+  constructor(config: CityManagementConfig) {
     this.config = config;
     this.stats = {
       population: 0,
@@ -48,7 +55,7 @@ class CityManagementInterface {
     // Mock initialization
   }
   
-  update(deltaTime: number): void {
+  update(): void {
     // Mock update logic
     this.stats.population += Math.random() * 0.1;
     this.stats.happiness = Math.max(0, Math.min(100, this.stats.happiness + (Math.random() - 0.5) * 2));
@@ -118,7 +125,7 @@ const DEFAULT_OPTIONS: Required<UseCityManagementOptions> = {
 };
 
 export function useCityManagement(options: UseCityManagementOptions = {}): UseCityManagementReturn {
-  const opts = { ...DEFAULT_OPTIONS, ...options };
+  const opts = useMemo(() => ({ ...DEFAULT_OPTIONS, ...options }), [options]);
   const cityManagementRef = useRef<CityManagementInterface | null>(null);
   const updateIntervalRef = useRef<NodeJS.Timeout | null>(null);
   
@@ -141,10 +148,49 @@ export function useCityManagement(options: UseCityManagementOptions = {}): UseCi
     lastUpdate: Date.now()
   });
 
+  // Update simulation
+  const updateSimulation = useCallback(() => {
+    if (!cityManagementRef.current || !state.isInitialized) return;
+
+    setState(prev => ({ ...prev, isSimulating: true }));
+
+    try {
+      // Update the simulation
+      cityManagementRef.current.update();
+
+      // Get updated stats
+      const updatedStats = cityManagementRef.current.getStats();
+
+      setState(prev => ({
+        ...prev,
+        stats: updatedStats,
+        isSimulating: false,
+        lastUpdate: Date.now()
+      }));
+
+    } catch (error) {
+      console.error('Simulation update failed:', error);
+      setState(prev => ({ ...prev, isSimulating: false }));
+    }
+  }, [state.isInitialized]);
+
+  // Start automatic simulation updates
+  const startAutoUpdate = useCallback((interval: number) => {
+    if (updateIntervalRef.current) {
+      clearInterval(updateIntervalRef.current);
+    }
+
+    updateIntervalRef.current = setInterval(() => {
+      if (cityManagementRef.current && state.isInitialized) {
+        updateSimulation();
+      }
+    }, interval);
+  }, [state.isInitialized, updateSimulation]);
+
   // Initialize city management system
   const initialize = useCallback(async (initOptions?: UseCityManagementOptions) => {
     const finalOptions = { ...opts, ...initOptions };
-    
+
     try {
       // Create city management interface
       cityManagementRef.current = new CityManagementInterface({
@@ -153,71 +199,30 @@ export function useCityManagement(options: UseCityManagementOptions = {}): UseCi
         initialBudget: finalOptions.initialBudget,
         difficulty: finalOptions.difficulty
       });
-      
+
       // Initialize the system
       await cityManagementRef.current.initialize();
-      
+
       // Get initial stats
       const initialStats = cityManagementRef.current.getStats();
-      
+
       setState(prev => ({
         ...prev,
         stats: initialStats,
         isInitialized: true,
         lastUpdate: Date.now()
       }));
-      
+
       // Start auto-update if enabled
       if (finalOptions.autoUpdate) {
         startAutoUpdate(finalOptions.updateInterval);
       }
-      
+
     } catch (error) {
       console.error('Failed to initialize city management:', error);
       throw error;
     }
-  }, [opts]);
-
-  // Start automatic simulation updates
-  const startAutoUpdate = useCallback((interval: number) => {
-    if (updateIntervalRef.current) {
-      clearInterval(updateIntervalRef.current);
-    }
-    
-    updateIntervalRef.current = setInterval(() => {
-      if (cityManagementRef.current && state.isInitialized) {
-        const now = Date.now();
-        const deltaTime = (now - state.lastUpdate) / 1000; // Convert to seconds
-        updateSimulation(deltaTime);
-      }
-    }, interval);
-  }, [state.isInitialized, state.lastUpdate]);
-
-  // Update simulation
-  const updateSimulation = useCallback((deltaTime: number) => {
-    if (!cityManagementRef.current || !state.isInitialized) return;
-    
-    setState(prev => ({ ...prev, isSimulating: true }));
-    
-    try {
-      // Update the simulation
-      cityManagementRef.current.update(deltaTime);
-      
-      // Get updated stats
-      const updatedStats = cityManagementRef.current.getStats();
-      
-      setState(prev => ({
-        ...prev,
-        stats: updatedStats,
-        isSimulating: false,
-        lastUpdate: Date.now()
-      }));
-      
-    } catch (error) {
-      console.error('Simulation update failed:', error);
-      setState(prev => ({ ...prev, isSimulating: false }));
-    }
-  }, [state.isInitialized]);
+  }, [opts, startAutoUpdate]);
 
   // Execute a management action
   const executeAction = useCallback(async (action: ManagementAction): Promise<boolean> => {

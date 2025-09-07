@@ -78,7 +78,7 @@ export const tokens: Record<string, unknown> = {
 
 const config: Config = {
   content: [],
-  theme: { extend: tokens as any },
+  theme: { extend: tokens as Record<string, unknown> },
   plugins: [],
 };
 
