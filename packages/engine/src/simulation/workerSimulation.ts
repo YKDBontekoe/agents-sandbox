@@ -1,7 +1,8 @@
 import type { SimResources } from '../index';
 import type { SimulatedBuilding } from './buildingSimulation';
 import type { Citizen } from './citizenBehavior';
-import { workerSystem, type WorkerProfile as SystemWorkerProfile, type JobAssignment } from './workerSystem';
+import { workerSystem } from './workerSystem';
+import type { WorkerProfile as SystemWorkerProfile, JobAssignment } from './workers/types';
 import type { GameTime } from '../types/gameTime';
 
 // Job specializations and skill requirements

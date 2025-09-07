@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ResponsivePanel, ResponsiveButton } from '../ResponsiveHUDPanels';
 import { useHUDPanel } from '../HUDPanelRegistry';
-import { generateSkillTree, SkillNode } from '../../skills/procgen';
+import { generateSkillTree } from '../../skills/generate';
+import type { SkillNode } from '../../skills/types';
 import SkillTreeModal from '../../skills/SkillTreeModal';
 
 interface ModularSkillTreePanelProps {
@@ -15,9 +16,13 @@ export function ModularSkillTreePanel({ seed = 12345, onUnlock, variant = 'compa
   const [open, setOpen] = useState(false);
   const [trend, setTrend] = useState<SkillNode['category'] | null>(null);
   useEffect(() => {
-    const fn = (e: any) => { const c = e?.detail?.category as any; if (c) setTrend(c); };
-    window.addEventListener('ad_skill_trend', fn as any);
-    return () => window.removeEventListener('ad_skill_trend', fn as any);
+    const fn = (e: Event) => {
+      const detail = (e as CustomEvent<{ category?: SkillNode['category'] }>).detail;
+      const c = detail?.category;
+      if (c) setTrend(c);
+    };
+    window.addEventListener('ad_skill_trend', fn as EventListener);
+    return () => window.removeEventListener('ad_skill_trend', fn as EventListener);
   }, []);
   useHUDPanel({
     config: { id: 'skill-tree', zone: 'sidebar-right', priority: 5, persistent: true },
@@ -52,7 +57,7 @@ export function ModularSkillTreePanel({ seed = 12345, onUnlock, variant = 'compa
     // extra conditions
     if (n.unlockConditions && n.unlockConditions.length) {
       const unlockedIds = Object.keys(unlocked).filter(k => unlocked[k]);
-      const byCat: Record<SkillNode['category'], number> = { economic:0,military:0,mystical:0,infrastructure:0,diplomatic:0,social:0 } as any;
+      const byCat: Record<SkillNode['category'], number> = { economic:0,military:0,mystical:0,infrastructure:0,diplomatic:0,social:0 };
       unlockedIds.forEach(id => {
         const node = tree.nodes.find(nn => nn.id === id);
         if (node) byCat[node.category] = (byCat[node.category] || 0) + 1;
@@ -83,7 +88,7 @@ export function ModularSkillTreePanel({ seed = 12345, onUnlock, variant = 'compa
     const base = available.filter(n => categoryFilter[n.category]);
     if (!query) return base;
     const q = query.toLowerCase();
-    return base.filter(n => n.title.toLowerCase().includes(q) || n.category.toLowerCase().includes(q) || (n as any).tags?.some((t:string)=>String(t).toLowerCase().includes(q)));
+    return base.filter(n => n.title.toLowerCase().includes(q) || n.category.toLowerCase().includes(q) || n.tags.some((t) => t.toLowerCase().includes(q)));
   }, [available, query, categoryFilter]);
   const shortlist = showAll ? filtered : filtered.slice(0, 6);
 
