@@ -144,15 +144,15 @@ export function produceBuildings(state: GameState, catalog: Record<string, SimBu
     for (const [k, v] of Object.entries(def.outputs)) {
       let out = (Number(v ?? 0)) * ratio * levelOutScale;
       if (typeId === 'trade_post' && k === 'coin') {
-        const waterAdj = Math.min(2, Number((traits as any).waterAdj ?? 0));
+        const waterAdj = Math.min(2, Number((traits as Record<string, number>).waterAdj ?? 0));
         out += 2 * waterAdj;
       }
       if (typeId === 'farm' && k === 'grain') {
-        const waterAdj = Math.min(2, Number((traits as any).waterAdj ?? 0));
+        const waterAdj = Math.min(2, Number((traits as Record<string, number>).waterAdj ?? 0));
         out += 3 * waterAdj;
       }
       if (typeId === 'lumber_camp' && k === 'wood') {
-        const forestAdj = Math.min(3, Number((traits as any).forestAdj ?? 0));
+        const forestAdj = Math.min(3, Number((traits as Record<string, number>).forestAdj ?? 0));
         out += 2 * forestAdj;
       }
       if (typeId === 'sawmill' && k === 'planks' && b.recipe === 'fine') {
@@ -162,7 +162,7 @@ export function produceBuildings(state: GameState, catalog: Record<string, SimBu
         out *= 1.15;
       }
       if (typeId === 'shrine' && k === 'favor') {
-        const mountainAdj = Math.min(2, Number((traits as any).mountainAdj ?? 0));
+        const mountainAdj = Math.min(2, Number((traits as Record<string, number>).mountainAdj ?? 0));
         out += 1 * mountainAdj;
       }
       out = Math.max(0, Math.round(out));
@@ -244,6 +244,9 @@ export * from './simulation/citizenBehavior';
 export * from './simulation/workerSimulation';
 export * from './simulation/simulationIntegration';
 export * from './simulation/gameplayEvents';
+export * from './simulation/integration/types';
+export * from './simulation/integration/visualFeedback';
+export * from './simulation/integration/performance';
 
 // Export time system
 export * from './systems/timeSystem';

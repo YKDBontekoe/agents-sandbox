@@ -4,8 +4,6 @@ import {
   calculateDeterioration,
   calculateUtilityEfficiency,
   performMaintenance,
-  getBuildingsNeedingMaintenance,
-  calculateTotalUtilityConsumption,
   createSimulatedBuilding
 } from './buildingSimulation';
 import { CitizenBehaviorSystem, Citizen } from './citizenBehavior';
@@ -17,52 +15,13 @@ import {
   GameplayEventsSystem
 } from './gameplayEvents';
 import type { GameTime } from '../types/gameTime';
-
-// Enhanced game state interface
-export interface EnhancedGameState {
-  // Core game state
-  buildings: Array<{
-    id: string;
-    typeId: string;
-    x: number;
-    y: number;
-    level: number;
-    workers: number;
-    traits?: Record<string, number>;
-  }>;
-  resources: SimResources;
-  gameTime: GameTime;
-  
-  // Enhanced simulation data
-  simulatedBuildings: SimulatedBuilding[];
-  citizens: Citizen[];
-  workers: WorkerProfile[];
-  activeEvents: ActiveEvent[];
-  
-  // System metrics
-  systemHealth: {
-    economicHealth: number;
-    publicSafety: number;
-    socialCohesion: number;
-  };
-}
-
-// Visual feedback configuration
-export interface VisualFeedbackConfig {
-  showBuildingStatus: boolean;
-  showCitizenMood: boolean;
-  showResourceFlow: boolean;
-  showEventImpacts: boolean;
-  showSystemHealth: boolean;
-}
-
-// Performance metrics
-export interface PerformanceMetrics {
-  totalUpdates: number;
-  averageUpdateTime: number;
-  systemLoad: number;
-  memoryUsage: number;
-}
+import { VisualFeedbackSystem } from './integration/visualFeedback';
+import { PerformanceTracker } from './integration/performance';
+import type {
+  EnhancedGameState,
+  VisualFeedbackConfig,
+  PerformanceMetrics
+} from './integration/types';
 
 // Main simulation integration system
 export class SimulationIntegrationSystem {
@@ -70,26 +29,17 @@ export class SimulationIntegrationSystem {
   private citizenSystem = new CitizenBehaviorSystem();
   private workerSystem = new WorkerSimulationSystem();
   private eventSystem = new GameplayEventsSystem();
-  
-  private visualConfig: VisualFeedbackConfig;
-  private performanceMetrics: PerformanceMetrics;
-  
+
+  private visualFeedback: VisualFeedbackSystem;
+  private performanceTracker: PerformanceTracker;
+
   constructor(config: Partial<VisualFeedbackConfig> = {}) {
-    this.visualConfig = {
-      showBuildingStatus: true,
-      showCitizenMood: true,
-      showResourceFlow: true,
-      showEventImpacts: true,
-      showSystemHealth: true,
-      ...config
-    };
-    
-    this.performanceMetrics = {
-      totalUpdates: 0,
-      averageUpdateTime: 0,
-      systemLoad: 0,
-      memoryUsage: 0
-    };
+    this.visualFeedback = new VisualFeedbackSystem(
+      this.citizenSystem,
+      this.eventSystem,
+      config
+    );
+    this.performanceTracker = new PerformanceTracker();
   }
   
   // Main update loop for all simulation systems
@@ -105,8 +55,9 @@ export class SimulationIntegrationSystem {
     }>;
     resources: SimResources;
     gameTime: GameTime;
-  }, deltaTime: number): EnhancedGameState {
+  }, _deltaTime: number): EnhancedGameState {
     const startTime = performance.now();
+    void _deltaTime;
     
     try {
       // Convert buildings to simulated buildings
@@ -132,7 +83,7 @@ export class SimulationIntegrationSystem {
           buildings: updatedBuildings,
           resources: gameState.resources,
           threatLevel: this.calculateThreatLevel(gameState),
-          cityEvents: this.eventSystem.getActiveEvents().map((e: any) => e.type)
+          cityEvents: this.eventSystem.getActiveEvents().map((e: ActiveEvent) => e.type)
         });
       });
       
@@ -162,7 +113,7 @@ export class SimulationIntegrationSystem {
       });
       
       // Update performance metrics
-      this.updatePerformanceMetrics(startTime);
+      this.performanceTracker.track(startTime);
       
       return {
         buildings: gameState.buildings,
@@ -197,53 +148,7 @@ export class SimulationIntegrationSystem {
   
   // Generate visual indicators for the UI
   generateVisualIndicators(gameState: EnhancedGameState): VisualIndicator[] {
-    const indicators: VisualIndicator[] = [];
-    
-    // Add building status indicators
-    if (this.visualConfig.showBuildingStatus) {
-      gameState.simulatedBuildings.forEach(building => {
-        if (building.condition === 'poor' || building.condition === 'critical') {
-          indicators.push({
-            id: `building_${building.id}`,
-            type: 'building_status',
-            position: { x: building.x, y: building.y },
-            value: this.getConditionValue(building.condition),
-            change: -1,
-            color: building.condition === 'critical' ? '#ff4444' : '#ffaa44',
-            icon: 'warning',
-            animation: 'pulse',
-            duration: 3000,
-            priority: building.condition === 'critical' ? 'critical' : 'medium'
-          });
-        }
-      });
-    }
-    
-    // Add citizen mood indicators
-    if (this.visualConfig.showCitizenMood) {
-      const communityMood = this.citizenSystem.getCommunityMood();
-      if (communityMood.happiness < 30 || communityMood.stress > 70) {
-        indicators.push({
-          id: 'community_mood',
-          type: 'citizen_mood',
-          position: { x: 0, y: 0 },
-          value: communityMood.happiness,
-          change: communityMood.stress > 70 ? -1 : 0,
-          color: communityMood.happiness < 30 ? '#ff6666' : '#ffaa66',
-          icon: 'mood',
-          animation: 'bounce',
-          duration: 2000,
-          priority: 'medium'
-        });
-      }
-    }
-    
-    // Add event-based indicators
-    if (this.visualConfig.showEventImpacts) {
-      indicators.push(...this.eventSystem.getVisualIndicators());
-    }
-    
-    return indicators;
+    return this.visualFeedback.generateIndicators(gameState);
   }
   
   // Generate a new citizen
@@ -267,8 +172,8 @@ export class SimulationIntegrationSystem {
   // Handle player actions
   handlePlayerAction(action: {
     type: string;
-    params: any;
-  }, gameState: EnhancedGameState): { success: boolean; message: string; effects?: any } {
+    params: Record<string, unknown>;
+  }, gameState: EnhancedGameState): { success: boolean; message: string; effects?: unknown } {
     switch (action.type) {
       case 'respond_to_event':
         return this.eventSystem.respondToEvent(
@@ -321,7 +226,10 @@ export class SimulationIntegrationSystem {
   
   // Helper methods
   private calculateThreatLevel(gameState: { resources: SimResources }): number {
-    const resourceScore = Object.values(gameState.resources).reduce((sum: number, val: any) => sum + (val || 0), 0) / 100;
+    const resourceScore = Object.values(gameState.resources).reduce(
+      (sum: number, val: number) => sum + (val || 0),
+      0
+    ) / 100;
     return Math.max(0, Math.min(100, 50 - resourceScore));
   }
   
@@ -338,7 +246,10 @@ export class SimulationIntegrationSystem {
     const communityMood = this.citizenSystem.getCommunityMood();
     const socialCohesion = communityMood.happiness;
     
-    const resourceHealth = Object.values(gameState.resources).reduce((sum: number, val: any) => sum + (val || 0), 0) / 4;
+    const resourceHealth = Object.values(gameState.resources).reduce(
+      (sum: number, val: number) => sum + (val || 0),
+      0
+    ) / 4;
     
     return {
       economicHealth: Math.min(100, resourceHealth),
@@ -358,14 +269,6 @@ export class SimulationIntegrationSystem {
     }
   }
   
-  private updatePerformanceMetrics(startTime: number): void {
-    const updateTime = performance.now() - startTime;
-    this.performanceMetrics.totalUpdates++;
-    this.performanceMetrics.averageUpdateTime = 
-      (this.performanceMetrics.averageUpdateTime + updateTime) / 2;
-    this.performanceMetrics.systemLoad = Math.min(100, updateTime / 16.67 * 100); // 60fps target
-  }
-  
   // Getters for accessing simulation data
   getCitizens(): Citizen[] {
     return this.citizenSystem.getAllCitizens();
@@ -380,7 +283,7 @@ export class SimulationIntegrationSystem {
   }
   
   getPerformanceMetrics(): PerformanceMetrics {
-    return { ...this.performanceMetrics };
+    return this.performanceTracker.getMetrics();
   }
 }
 
