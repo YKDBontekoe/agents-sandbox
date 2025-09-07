@@ -59,6 +59,10 @@ Related docs: docs/agents/ARCHITECTURE.md, docs/agents/PROMPTS.md, docs/agents/S
   - `browser.ts` (anon; read-focused)
 - `docs/agents/` — this guide and deep dives
 - `supabase/migrations/` — schema and idempotent updates for `game_state`, `proposals`
+- `src/components/game/skills/` — skill tree modules
+  - `types.ts` — shared skill interfaces
+  - `generate.ts` — procedural tree generation
+  - `progression.ts` — achievement and challenge evaluation
 
 ## Design Canon
 
@@ -179,6 +183,7 @@ See docs/agents/EXTENSIONS.md for patterns and pitfalls
 - Validation: zod schemas pass; clamp resource floors to 0
 - Safety: no secrets client-side; writes via server routes only
 - Ops: timeouts, retries, minimal logs with redaction
+- Lint: run `npm run lint <paths>` and avoid `any` types
 
 
 ## Building Catalog (client-visible)
