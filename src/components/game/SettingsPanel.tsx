@@ -3,17 +3,11 @@
 import React, { useState, useMemo } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faTimes, faCog, faInfoCircle, faUndo, faSave } from '@/lib/icons';
-import { ActionButton } from '../ui';
 import '../../styles/design-tokens.css';
 import '../../styles/animations.css';
 
-import SettingsSearchBar from '@/components/settings/SettingsSearchBar';
-import SettingCategory from '@/components/settings/components/SettingCategory';
-import { createSettingsConfig } from '@/components/settings/config';
-import type {
-  LayoutPreset,
-  SettingCategory as SettingCategoryType,
-} from '@/components/settings/config';
+import { ActionButton, SettingsSearchBar, SettingCategory, createSettingsConfig } from '@arcane/ui';
+import type { LayoutPreset, SettingCategory as UISettingCategory } from '@arcane/ui/settings/config';
 
 export interface SettingsPanelProps {
   isOpen: boolean;
@@ -121,7 +115,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(['display', 'gameplay', 'time']));
   const [hasChanges, setHasChanges] = useState(false);
 
-  const categories: SettingCategoryType[] = useMemo(
+  const categories: UISettingCategory[] = useMemo(
     () =>
       createSettingsConfig({
         layoutPresets,

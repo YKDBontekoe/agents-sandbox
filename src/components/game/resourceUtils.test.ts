@@ -9,7 +9,7 @@ import {
   type SimResources,
   type SimBuildingDef
 } from './resourceUtils';
-import { ICONS, COLORS, type ResourceType } from '../../lib/resources';
+import { ICONS, COLORS, type ResourceType } from '@arcane/ui';
 import { SIM_BUILDINGS } from '../../lib/buildingCatalog';
 
 describe('resourceUtils', () => {

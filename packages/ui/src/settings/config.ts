@@ -5,7 +5,7 @@ import {
   faVolumeUp,
   faUniversalAccess,
   faInfoCircle,
-} from '@/lib/icons';
+} from '@fortawesome/free-solid-svg-icons';
 
 export interface LayoutPreset {
   id: string;

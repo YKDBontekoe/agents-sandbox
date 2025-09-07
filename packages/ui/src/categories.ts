@@ -5,8 +5,8 @@ import {
   faUsers,
   faHatWizard,
   faHandshake,
-  faLandmark
-} from '@/lib/icons';
+  faLandmark,
+} from '@fortawesome/free-solid-svg-icons';
 
 export type CategoryType =
   | 'economic'

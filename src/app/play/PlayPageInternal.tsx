@@ -44,7 +44,7 @@ import type { CityStats, ManagementTool, ZoneType, ServiceType } from '@/compone
 // (settings && other panels are currently not rendered on this page)
 // layout preferences not used on this page
 import type { GameResources, GameTime } from '@/components/game/hud/types';
-import type { CategoryType } from '@/lib/categories';
+import type { CategoryType } from '@arcane/ui';
 import { simulationSystem, EnhancedGameState } from '@engine'
 import { VisualIndicator } from '@engine';
 import { TimeSystem, timeSystem, TIME_SPEEDS, type TimeSpeed, GameTime as SystemGameTime } from '@engine';

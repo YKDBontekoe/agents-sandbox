@@ -1,7 +1,7 @@
 import React from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faCheck } from '@/lib/icons';
-import type { SettingItem as SettingItemType } from '../config';
+import { faCheck } from '@fortawesome/free-solid-svg-icons';
+import type { SettingItem as SettingItemType } from './config';
 
 interface SettingItemProps {
   setting: SettingItemType;

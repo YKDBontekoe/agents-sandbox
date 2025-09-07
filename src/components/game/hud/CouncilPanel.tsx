@@ -1,11 +1,8 @@
 import React from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { GameResources } from './types';
-import { ResourceIcon } from '../../ui';
-import type { ResourceType } from '@/lib/resources';
+import { ResourceIcon, CategoryIcon, type ResourceType, type CategoryType } from '@arcane/ui';
 import { getResourceIcon, getResourceColor } from '../resourceUtils';
-import { CategoryIcon } from '../../ui';
-import { CategoryType } from '@/lib/categories';
 
 export interface ProposalDelta {
   grain?: number;

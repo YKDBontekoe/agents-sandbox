@@ -1,4 +1,4 @@
-import type { ResourceType } from '@/lib/resources';
+import type { ResourceType } from '@arcane/ui';
 
 export interface FlavorEventDef {
   message: string;

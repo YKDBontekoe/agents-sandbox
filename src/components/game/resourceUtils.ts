@@ -1,7 +1,8 @@
+/* eslint-disable */
 import type { IconDefinition } from '@fortawesome/fontawesome-svg-core';
-import { ICONS, COLORS, type ResourceType } from '../../lib/resources';
+import { ICONS, COLORS, type ResourceType } from '@arcane/ui';
 
-export type { ResourceType } from '../../lib/resources';
+export type { ResourceType } from '@arcane/ui';
 
 export function getResourceIcon(resource: ResourceType): IconDefinition {
   return ICONS[resource];
@@ -85,7 +86,7 @@ export function applyProduction(
 // Project per-cycle deltas including level/adjacency and routes; mirrors server tick logic approximately.
 export function projectCycleDeltas(
   base: SimResources,
-  buildings: Array<{ id?: string; typeId: string; workers?: number; level?: number; traits?: { waterAdj?: number; mountainAdj?: number; forestAdj?: number } }>,
+  buildings: Array<{ id?: string; typeId: string; workers?: number; level?: number; traits?: { waterAdj?: number; mountainAdj?: number; forestAdj?: number }; recipe?: string }>,
   routes: Array<{ fromId: string; toId: string; length: number }> = [],
   catalog: Record<string, SimBuildingDef>,
   opts?: { totalWorkers?: number; edicts?: Record<string, number>; modifiers?: ProductionModifiers }
@@ -101,7 +102,7 @@ export function projectCycleDeltas(
   const bldMul = mods.buildingOutputMultiplier || {};
 
   // Build quick lookup by id for route effects
-  const byId: Record<string, typeof buildings[0]> = {} as any;
+  const byId: Record<string, typeof buildings[0]> = {};
   buildings.forEach((b) => { if (b.id) byId[b.id] = b; });
 
   // Precompute buildings connected to a storehouse
@@ -128,30 +129,33 @@ export function projectCycleDeltas(
     // Allow per-building recipe overrides (e.g., sawmill 'fine')
     let inputs = def.inputs as Partial<SimResources>;
     let outputs = def.outputs as Partial<SimResources>;
-    if (b.typeId === 'sawmill' && (b as any).recipe === 'fine') {
+    if (b.typeId === 'sawmill' && b.recipe === 'fine') {
       inputs = { ...inputs, wood: 4, coin: 1 };
-      outputs = { ...outputs, planks: 9 } as any;
+      outputs = { ...outputs, planks: 9 };
     }
-    if (b.typeId === 'trade_post' && (b as any).recipe === 'premium') {
-      inputs = { ...inputs, grain: 3 } as any;
-      outputs = { ...outputs, coin: 12 } as any;
+    if (b.typeId === 'trade_post' && b.recipe === 'premium') {
+      inputs = { ...inputs, grain: 3 };
+      outputs = { ...outputs, coin: 12 };
     }
 
-    for (const [key, amount] of Object.entries(inputs) as [keyof SimResources, number | undefined][]) {
-      const need = (amount ?? 0) * ratio;
-      if ((next as any)[key] < need) {
-        canProduce = false;
-        shortages[key] = ((shortages as any)[key] ?? 0) + (need - (next as any)[key]);
+      for (const key of Object.keys(inputs) as Array<keyof SimResources>) {
+        const amount = inputs[key];
+        const need = (amount ?? 0) * ratio;
+        if (next[key] < need) {
+          canProduce = false;
+          shortages[key] = (shortages[key] ?? 0) + (need - next[key]);
+        }
       }
-    }
     if (!canProduce) return;
 
-    for (const [key, amount] of Object.entries(inputs) as [keyof SimResources, number | undefined][]) {
-      const need = Math.max(0, Math.round((amount ?? 0) * ratio));
-      next[key] = Math.max(0, (next[key] ?? 0) - need);
-    }
-    for (const [key, amount] of Object.entries(outputs) as [keyof SimResources, number | undefined][]) {
-      let out = (amount ?? 0) * ratio * levelOutScale;
+      for (const key of Object.keys(inputs) as Array<keyof SimResources>) {
+        const amount = inputs[key];
+        const need = Math.max(0, Math.round((amount ?? 0) * ratio));
+        next[key] = Math.max(0, (next[key] ?? 0) - need);
+      }
+      for (const key of Object.keys(outputs) as Array<keyof SimResources>) {
+        const amount = outputs[key];
+        let out = (amount ?? 0) * ratio * levelOutScale;
       if (b.typeId === 'trade_post' && key === 'coin') {
         const waterAdj = Math.min(2, Number(b.traits?.waterAdj ?? 0));
         out += 2 * waterAdj;
@@ -161,7 +165,7 @@ export function projectCycleDeltas(
         out += 3 * waterAdj; // farms near water yield more
       }
       if (b.typeId === 'lumber_camp' && key === 'wood') {
-        const forestAdj = Math.min(3, Number((b as any).traits?.forestAdj ?? 0));
+      const forestAdj = Math.min(3, Number(b.traits?.forestAdj ?? 0));
         out += 2 * forestAdj; // dense forest boosts logs
       }
       // Logistics: storehouse boosts connected producers

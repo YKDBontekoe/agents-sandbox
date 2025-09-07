@@ -6,7 +6,7 @@ import {
   faCrown,
   faBolt,
   faSkullCrossbones,
-} from './icons';
+} from '@fortawesome/free-solid-svg-icons';
 
 export type ResourceType =
   | 'grain'
