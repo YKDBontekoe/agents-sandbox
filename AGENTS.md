@@ -61,7 +61,8 @@ Related docs: docs/agents/ARCHITECTURE.md, docs/agents/PROMPTS.md, docs/agents/S
 - `supabase/migrations/` — schema and idempotent updates for `game_state`, `proposals`
 - `src/components/game/buildingIcons/` — canvas icon drawers keyed by building type
 - `src/components/game/BuildingsLayer.tsx` — renders building sprites and tooltips
-- `src/components/game/citizens/` — animated citizen/vehicle helpers (types, pathfinding, renderers). Run `npm run lint src/components/game/AnimatedCitizensLayer.tsx src/components/game/citizens/*.ts` and `npm test` when modifying
+- `src/components/game/effects/` — PIXI visual effect hooks (traffic, construction, activity, day-night).
+- `src/components/game/citizens/` — animated citizen/vehicle helpers (types, pathfinding, renderers).
 - `src/components/settings/` — reusable settings panel components and configuration
 - `packages/engine/src/simulation/traffic/` — modular traffic simulation system (vehicle, pedestrian, and light managers).
 - `packages/engine/src/simulation/zoning/` — zoning simulation components.
