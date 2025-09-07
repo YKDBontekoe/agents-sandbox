@@ -1,6 +1,7 @@
 import type { SimResources } from '../index';
 import type { SimulatedBuilding } from './buildingSimulation';
-import { citizenAI, type PathfindingGoal } from './citizenAI';
+import { citizenAI } from './citizenAI';
+import type { PathfindingGoal } from './ai/types';
 import type { GameTime } from '../types/gameTime';
 
 // Personality traits that influence citizen behavior
