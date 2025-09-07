@@ -64,6 +64,7 @@ Related docs: docs/agents/ARCHITECTURE.md, docs/agents/PROMPTS.md, docs/agents/S
 - `src/components/game/effects/` — PIXI visual effect hooks (traffic, construction, activity, day-night).
 - `src/components/game/citizens/` — animated citizen/vehicle helpers (types, pathfinding, renderers).
 - `src/components/settings/` — reusable settings panel components and configuration
+- `src/components/game/hud/accessibility/` — HUD accessibility utilities (config, focus, announcer).
 - `src/components/game/city/` — city management panel subcomponents and config.
 - `packages/engine/src/simulation/traffic/` — modular traffic simulation system (vehicle, pedestrian, and light managers).
 - `packages/engine/src/simulation/zoning/` — zoning simulation components.
