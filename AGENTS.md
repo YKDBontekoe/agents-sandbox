@@ -1,6 +1,6 @@
 # Arcane Dominion Agents Guide
 
-This guide defines the agent architecture, prompting standards, safety, and ops practices for the Arcane Dominion Tycoon. It is the canonical reference for building, extending, and operating the AI council.
+This guide defines the agent architecture, prompting standards, safety, and ops practices for the Arcane Dominion Tycoon. It is the canonical reference for building, extending, and operating the AI council. When new systems or knowledge are introduced, update this guide to keep it current.
 
 Related docs: docs/agents/ARCHITECTURE.md, docs/agents/PROMPTS.md, docs/agents/SECURITY.md, docs/agents/OPERATIONS.md, docs/agents/EVALUATION.md, docs/agents/EXTENSIONS.md, docs/agents/CONTRIBUTING.md
 
@@ -64,6 +64,7 @@ Related docs: docs/agents/ARCHITECTURE.md, docs/agents/PROMPTS.md, docs/agents/S
 - `src/components/game/effects/` — PIXI visual effect hooks (traffic, construction, activity, day-night).
 - `src/components/game/citizens/` — animated citizen/vehicle helpers (types, pathfinding, renderers).
 - `src/components/settings/` — reusable settings panel components and configuration
+- `src/components/game/city/` — city management panel subcomponents and config.
 - `packages/engine/src/simulation/traffic/` — modular traffic simulation system (vehicle, pedestrian, and light managers).
 - `packages/engine/src/simulation/zoning/` — zoning simulation components.
 - `packages/engine/src/simulation/transport/` — public transport simulation system (route and vehicle managers).
