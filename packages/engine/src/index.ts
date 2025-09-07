@@ -246,4 +246,4 @@ export * from './simulation/simulationIntegration';
 export * from './simulation/events';
 
 // Export time system
-export * from './systems/timeSystem';
+export * from './systems/time';
