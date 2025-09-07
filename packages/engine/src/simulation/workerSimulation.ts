@@ -1,85 +1,17 @@
 import type { SimResources } from '../index';
 import type { SimulatedBuilding } from './buildingSimulation';
 import type { Citizen } from './citizenBehavior';
-import { workerSystem, type WorkerProfile as SystemWorkerProfile, type JobAssignment } from './workerSystem';
+import {
+  workerSystem,
+  type WorkerProfile as SystemWorkerProfile,
+  type JobAssignment,
+} from './workerSystem';
 import type { GameTime } from '../types/gameTime';
-
-// Job specializations and skill requirements
-export interface JobRole {
-  id: string;
-  title: string;
-  category: 'production' | 'service' | 'management' | 'research' | 'maintenance';
-  requiredSkills: Record<string, number>; // skill name -> minimum level
-  baseWage: number;
-  maxLevel: number; // career progression levels
-  responsibilities: string[];
-  workload: number; // 0-100, affects stress and efficiency
-  prestige: number; // 0-100, affects citizen satisfaction
-}
-
-// Worker specialization and career data
-export interface WorkerProfile {
-  citizenId: string;
-  currentRole: JobRole;
-  experienceLevel: number; // 0-100 within current role
-  careerLevel: number; // 1-maxLevel for the role
-  specializations: string[]; // areas of expertise
-  certifications: string[]; // earned qualifications
-  
-  // Performance metrics
-  efficiency: number; // 0-100, work output quality
-  reliability: number; // 0-100, attendance and consistency
-  teamwork: number; // 0-100, collaboration skills
-  innovation: number; // 0-100, problem-solving and creativity
-  
-  // Work satisfaction
-  jobSatisfaction: number; // 0-100
-  workplaceRelationships: Array<{
-    coworkerId: string;
-    relationship: 'mentor' | 'peer' | 'subordinate' | 'rival';
-    quality: number; // 0-100
-  }>;
-  
-  // Career progression
-  promotionReadiness: number; // 0-100
-  trainingProgress: Record<string, number>; // skill -> progress
-  careerGoals: {
-    targetRole?: string;
-    targetLevel: number;
-    timeframe: number; // cycles to achieve
-  };
-  
-  // Work schedule and conditions
-  shiftType: 'day' | 'night' | 'rotating' | 'flexible';
-  hoursPerWeek: number;
-  overtimeHours: number;
-  vacationDays: number;
-  sickDays: number;
-  
-  // Compensation and benefits
-  currentWage: number;
-  bonuses: number;
-  benefits: {
-    healthcare: boolean;
-    retirement: boolean;
-    training: boolean;
-    flexibleHours: boolean;
-  };
-  
-  // Performance history
-  performanceReviews: Array<{
-    cycle: number;
-    overallRating: number;
-    strengths: string[];
-    improvements: string[];
-    wageAdjustment: number;
-  }>;
-  
-  // Work-life balance
-  burnoutRisk: number; // 0-100
-  workLifeBalance: number; // 0-100
-  stressLevel: number; // 0-100
-}
+import type { JobRole, WorkerProfile } from './workers/types';
+import {
+  calculateWageAdjustment,
+  checkCareerProgression,
+} from './workers/career';
 
 // Workplace and team dynamics
 export interface Workplace {
@@ -378,27 +310,26 @@ export class WorkerSimulationSystem {
     workerSystem.updateWorkerPerformance(workerId, currentCycle);
     
     // Update experience and skills
-    this.updateExperience(worker, gameTime);
+    this.updateExperience(worker);
     
     // Update performance metrics
-    this.updatePerformance(worker, gameState);
+    this.updatePerformance(worker);
     
     // Update job satisfaction
     this.updateJobSatisfaction(worker, gameState);
     
     // Check for career progression
-    this.checkCareerProgression(worker, gameTime);
+    checkCareerProgression(worker, gameTime, this.jobRoles);
     
     // Update work-life balance
     this.updateWorkLifeBalance(worker);
     
     // Handle workplace interactions
-    this.handleWorkplaceInteractions(worker, gameTime);
+    this.handleWorkplaceInteractions(worker);
   }
 
   // Update worker experience and skill development
-  private updateExperience(worker: WorkerProfile, gameTime: GameTime): void {
-    const currentCycle = Math.floor(gameTime.totalMinutes / 60);
+  private updateExperience(worker: WorkerProfile): void {
     const baseGain = 1;
     const efficiencyBonus = worker.efficiency / 100;
     const experienceGain = baseGain * (1 + efficiencyBonus);
@@ -414,10 +345,7 @@ export class WorkerSimulationSystem {
   }
 
   // Update performance metrics
-  private updatePerformance(worker: WorkerProfile, gameState: {
-    buildings: SimulatedBuilding[];
-    resources: SimResources;
-  }): void {
+  private updatePerformance(worker: WorkerProfile): void {
     // Efficiency affected by experience, tools, and conditions
     const experienceBonus = worker.experienceLevel * 0.2;
     const stressPenalty = worker.stressLevel * 0.3;
@@ -446,12 +374,7 @@ export class WorkerSimulationSystem {
     
     // Wage satisfaction
     const marketWage = this.laborMarket.averageWages[worker.currentRole.category];
-    const wageRatio = worker.currentWage / marketWage;
-    if (wageRatio < 0.8) {
-      satisfaction -= 2;
-    } else if (wageRatio > 1.2) {
-      satisfaction += 1;
-    }
+    satisfaction += calculateWageAdjustment(worker, marketWage);
     
     // Work-life balance impact
     if (worker.workLifeBalance < 40) {
@@ -475,77 +398,6 @@ export class WorkerSimulationSystem {
     worker.jobSatisfaction = Math.max(0, Math.min(100, satisfaction));
   }
 
-  // Check for career progression opportunities
-  private checkCareerProgression(worker: WorkerProfile, gameTime: GameTime): void {
-    const currentCycle = Math.floor(gameTime.totalMinutes / 60);
-    // Update promotion readiness
-    if (worker.experienceLevel > 70 && worker.efficiency > 60) {
-      worker.promotionReadiness = Math.min(100, worker.promotionReadiness + 2);
-    }
-    
-    // Check for promotion
-    if (worker.promotionReadiness > 80 && 
-        worker.careerLevel < worker.currentRole.maxLevel &&
-        Math.random() < 0.05) { // 5% chance per cycle when ready
-      
-      this.promoteWorker(worker, gameTime);
-    }
-    
-    // Check for role change desires
-    if (worker.jobSatisfaction < 30 && Math.random() < 0.02) {
-      this.considerJobChange(worker);
-    }
-  }
-
-  // Promote worker to next level
-  private promoteWorker(worker: WorkerProfile, gameTimeOrCycle: GameTime | number): void {
-    const currentCycle = typeof gameTimeOrCycle === 'number' ? gameTimeOrCycle : Math.floor(gameTimeOrCycle.totalMinutes / 60);
-    worker.careerLevel++;
-    worker.experienceLevel = 0; // Reset for new level
-    worker.promotionReadiness = 0;
-    
-    // Wage increase
-    const wageIncrease = worker.currentRole.baseWage * 0.2;
-    worker.currentWage += wageIncrease;
-    
-    // Improved benefits
-    if (worker.careerLevel >= 3) {
-      worker.benefits.healthcare = true;
-      worker.benefits.training = true;
-    }
-    if (worker.careerLevel >= 4) {
-      worker.benefits.retirement = true;
-      worker.benefits.flexibleHours = true;
-    }
-    
-    // Record performance review
-    worker.performanceReviews.push({
-      cycle: currentCycle,
-      overallRating: 85,
-      strengths: ['Leadership potential', 'Consistent performance'],
-      improvements: ['Continue skill development'],
-      wageAdjustment: wageIncrease
-    });
-    
-    // Boost satisfaction
-    worker.jobSatisfaction = Math.min(100, worker.jobSatisfaction + 15);
-  }
-
-  // Consider job change for unsatisfied worker
-  private considerJobChange(worker: WorkerProfile): void {
-    // Look for better opportunities
-    const availableRoles = Array.from(this.jobRoles.values())
-      .filter(role => role.id !== worker.currentRole.id);
-    
-    for (const role of availableRoles) {
-      if (role.baseWage > worker.currentWage * 1.1 || 
-          role.prestige > worker.currentRole.prestige + 10) {
-        // Found better opportunity
-        worker.careerGoals.targetRole = role.id;
-        break;
-      }
-    }
-  }
 
   // Update work-life balance
   private updateWorkLifeBalance(worker: WorkerProfile): void {
@@ -565,8 +417,7 @@ export class WorkerSimulationSystem {
   }
 
   // Handle workplace social interactions
-  private handleWorkplaceInteractions(worker: WorkerProfile, gameTime: GameTime): void {
-    const currentCycle = Math.floor(gameTime.totalMinutes / 60);
+  private handleWorkplaceInteractions(worker: WorkerProfile): void {
     // Find workplace
     const workplace = Array.from(this.workplaces.values())
       .find(w => w.workers.includes(worker.citizenId));
