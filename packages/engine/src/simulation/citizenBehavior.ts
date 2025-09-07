@@ -1,63 +1,20 @@
 import type { SimResources } from '../index';
 import type { SimulatedBuilding } from './buildingSimulation';
-import { citizenAI, type PathfindingGoal } from './citizenAI';
+import { citizenAI } from './citizenAI';
+import type { PathfindingGoal } from './ai/types';
 import type { GameTime } from '../types/gameTime';
-
-// Personality traits that influence citizen behavior
-export interface PersonalityTraits {
-  ambition: number; // 0-1, affects career progression desire
-  sociability: number; // 0-1, affects social interaction frequency
-  industriousness: number; // 0-1, affects work efficiency and overtime willingness
-  contentment: number; // 0-1, affects happiness baseline and needs sensitivity
-  curiosity: number; // 0-1, affects exploration and learning behaviors
-}
-
-// Basic needs that citizens must fulfill
-export interface CitizenNeeds {
-  food: number; // 0-100, decreases over time, fulfilled by grain access
-  shelter: number; // 0-100, decreases slowly, fulfilled by housing quality
-  social: number; // 0-100, decreases over time, fulfilled by interactions
-  purpose: number; // 0-100, decreases over time, fulfilled by meaningful work
-  safety: number; // 0-100, affected by city threat level and crime
-}
-
-// Citizen mood and satisfaction
-export interface CitizenMood {
-  happiness: number; // 0-100, overall life satisfaction
-  stress: number; // 0-100, work and life pressure
-  energy: number; // 0-100, physical and mental energy
-  motivation: number; // 0-100, drive to work and contribute
-}
-
-// Social relationships between citizens
-export interface SocialRelationship {
-  targetId: string;
-  type: 'family' | 'friend' | 'colleague' | 'rival' | 'romantic';
-  strength: number; // 0-100, relationship closeness
-  lastInteraction: number; // cycle of last interaction
-  interactionHistory: Array<{
-    cycle: number;
-    type: 'positive' | 'negative' | 'neutral';
-    context: string;
-  }>;
-}
-
-// Daily activity schedule
-export interface DailySchedule {
-  sleep: { start: number; end: number }; // hours 0-24
-  work: { start: number; end: number };
-  meals: Array<{ time: number; duration: number }>;
-  leisure: Array<{ start: number; end: number; activity: string }>;
-  social: Array<{ start: number; end: number; targetId?: string }>;
-}
-
-// Citizen life goals and aspirations
-export interface LifeGoals {
-  careerAspiration: string; // desired job type
-  socialGoals: Array<{ type: string; target?: string; priority: number }>;
-  materialGoals: Array<{ item: string; priority: number }>;
-  personalGrowth: Array<{ skill: string; currentLevel: number; targetLevel: number }>;
-}
+import type {
+  PersonalityTraits,
+  CitizenNeeds,
+  CitizenMood,
+  SocialRelationship,
+} from './citizens/types';
+import {
+  generateDailySchedule,
+  generateLifeGoals,
+  type DailySchedule,
+  type LifeGoals,
+} from './citizens/schedule';
 
 // Complete citizen definition
 export interface Citizen {
@@ -148,8 +105,8 @@ export class CitizenBehaviorSystem {
       motivation: 60 + rng() * 40
     };
 
-    const schedule = this.generateDailySchedule(personality, rng);
-    const goals = this.generateLifeGoals(personality, age, rng);
+    const schedule = generateDailySchedule(personality, rng);
+    const goals = generateLifeGoals(personality, age, rng);
 
     const citizen: Citizen = {
       id,
@@ -464,51 +421,6 @@ export class CitizenBehaviorSystem {
     }
   }
 
-  // Generate daily schedule based on personality
-  private generateDailySchedule(personality: PersonalityTraits, rng: () => number): DailySchedule {
-    const sleepStart = 22 + rng() * 2; // 22-24
-    const sleepEnd = 6 + rng() * 2; // 6-8
-    const workStart = 8 + rng() * 2; // 8-10
-    const workEnd = 16 + rng() * 2; // 16-18
-    
-    return {
-      sleep: { start: sleepStart, end: sleepEnd },
-      work: { start: workStart, end: workEnd },
-      meals: [
-        { time: 7, duration: 1 },
-        { time: 12, duration: 1 },
-        { time: 19, duration: 1 }
-      ],
-      leisure: [
-        { start: workEnd + 1, end: 19, activity: 'relaxing' },
-        { start: 20, end: sleepStart, activity: 'entertainment' }
-      ],
-      social: personality.sociability > 0.6 ? [
-        { start: 18, end: 20 }
-      ] : []
-    };
-  }
-
-  // Generate life goals based on personality and age
-  private generateLifeGoals(personality: PersonalityTraits, age: number, rng: () => number): LifeGoals {
-    const careerAmbition = personality.ambition > 0.7 ? 'leadership' : 
-                          personality.industriousness > 0.6 ? 'specialist' : 'stable_work';
-    
-    return {
-      careerAspiration: careerAmbition,
-      socialGoals: personality.sociability > 0.5 ? [
-        { type: 'make_friends', priority: 70 },
-        { type: 'find_romance', priority: age < 30 ? 80 : 40 }
-      ] : [],
-      materialGoals: [
-        { item: 'better_housing', priority: 60 },
-        { item: 'savings', priority: 50 }
-      ],
-      personalGrowth: [
-        { skill: 'work_efficiency', currentLevel: 30, targetLevel: 70 }
-      ]
-    };
-  }
 
   // Generate skills based on personality and age
   private generateSkills(personality: PersonalityTraits, age: number, rng: () => number): Record<string, number> {

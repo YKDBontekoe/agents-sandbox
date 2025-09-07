@@ -1,7 +1,6 @@
 "use client";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { SkillNode, SkillTree, accumulateEffects } from './procgen';
-import type { UnlockCondition } from './procgen';
+import type { SkillNode, SkillTree } from './types';
 
 type Vec2 = { x: number; y: number };
 
@@ -464,13 +463,15 @@ export default function ConstellationSkillTree({ tree, unlocked, onUnlock, color
         }
       });
     }
-    if ((node as any).exclusiveGroup) {
-      const group = (node as any).exclusiveGroup as string;
-      const taken = tree.nodes.find(n => (n as any).exclusiveGroup === group && n.id !== node.id && unlocked[n.id]);
+    if (node.exclusiveGroup) {
+      const group = node.exclusiveGroup;
+      const taken = tree.nodes.find(
+        n => n.exclusiveGroup === group && n.id !== node.id && unlocked[n.id],
+      );
       if (taken) reasons.push(`Path chosen: ${taken.title}`);
     }
-    if ((node as any).unlockConditions && (node as any).unlockConditions.length > 0) {
-      const unlockConditions = (node as any).unlockConditions as UnlockCondition[];
+    if (node.unlockConditions && node.unlockConditions.length > 0) {
+      const unlockConditions = node.unlockConditions;
       const unlockedIds = Object.keys(unlocked).filter(k => unlocked[k]);
       const byCat: Record<SkillNode['category'], number> = { economic:0,military:0,mystical:0,infrastructure:0,diplomatic:0,social:0 };
       unlockedIds.forEach(id => { const n = tree.nodes.find(nn => nn.id === id); if (n) byCat[n.category] = (byCat[n.category]||0)+1; });
@@ -488,7 +489,7 @@ export default function ConstellationSkillTree({ tree, unlocked, onUnlock, color
   // Affordability check
   const canAfford = useCallback((node: SkillNode) => {
     if (!resources) return true;
-    const c = node.cost || {} as any;
+    const c: SkillNode['cost'] = node.cost ?? {};
     const r = resources;
     if (typeof c.coin === 'number' && (r.coin || 0) < c.coin) return false;
     if (typeof c.mana === 'number' && (r.mana || 0) < c.mana) return false;

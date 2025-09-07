@@ -6,6 +6,7 @@ import {
   type WorkerProfile as SystemWorkerProfile,
   type JobAssignment,
 } from './workerSystem';
+import type { WorkerProfile as SystemWorkerProfile, JobAssignment } from './workers/types';
 import type { GameTime } from '../types/gameTime';
 import type { JobRole, WorkerProfile } from './workers/types';
 import {

@@ -1,146 +1,14 @@
 import type { SimResources } from '../index';
 import type { SimulatedBuilding } from './buildingSimulation';
 import type { Citizen } from './citizenBehavior';
-
-// GameTime interface for worker system
-interface GameTime {
-  totalMinutes: number;
-  day: number;
-  hour: number;
-  minute: number;
-  season: string;
-}
-
-// Worker specialization and skills
-export interface WorkerSpecialization {
-  id: string;
-  name: string;
-  requiredSkills: Record<string, number>; // skill -> minimum level
-  efficiency: number; // base efficiency multiplier
-  preferredBuildings: string[]; // building types this specialization works best in
-  trainingTime: number; // cycles needed to train
-  prerequisites?: string[]; // other specializations needed first
-}
-
-// Job assignment with priority and requirements
-export interface JobAssignment {
-  id: string;
-  buildingId: string;
-  buildingType: string;
-  position: { x: number; y: number };
-  requiredWorkers: number;
-  currentWorkers: string[]; // citizen IDs
-  priority: number; // 0-100, higher = more urgent
-  skillRequirements: Record<string, number>;
-  workConditions: {
-    safety: number; // 0-100
-    comfort: number; // 0-100
-    socialInteraction: number; // 0-100
-    autonomy: number; // 0-100
-  };
-  shifts: Array<{
-    startHour: number;
-    endHour: number;
-    workersNeeded: number;
-    currentWorkers: string[];
-  }>;
-  productivity: number; // current productivity level
-  lastUpdated: number;
-}
-
-// Worker profile with preferences and performance
-export interface WorkerProfile {
-  citizenId: string;
-  specializations: string[];
-  currentJob?: string; // job assignment ID
-  workHistory: Array<{
-    jobId: string;
-    buildingType: string;
-    startCycle: number;
-    endCycle?: number;
-    performance: number; // 0-100
-    satisfaction: number; // 0-100
-  }>;
-  preferences: {
-    preferredShift: 'morning' | 'afternoon' | 'evening' | 'night' | 'flexible';
-    maxCommute: number; // maximum distance willing to travel
-    workStyle: 'independent' | 'collaborative' | 'leadership' | 'support';
-    riskTolerance: number; // 0-100, willingness to work dangerous jobs
-  };
-  performance: {
-    reliability: number; // 0-100, shows up consistently
-    efficiency: number; // 0-100, work output quality
-    adaptability: number; // 0-100, handles change well
-    teamwork: number; // 0-100, works well with others
-  };
-  availability: {
-    currentShift?: { start: number; end: number };
-    daysOff: number[]; // day of week (0-6)
-    vacationDays: number; // remaining vacation time
-    sickDays: number; // remaining sick time
-  };
-  trainingProgress: Record<string, {
-    specializationId: string;
-    progress: number; // 0-100
-    trainer?: string; // citizen ID of trainer
-    estimatedCompletion: number; // cycle when training completes
-  }>;
-}
-
-// Available worker specializations
-const WORKER_SPECIALIZATIONS: WorkerSpecialization[] = [
-  {
-    id: 'farmer',
-    name: 'Farmer',
-    requiredSkills: { agriculture: 20, endurance: 15 },
-    efficiency: 1.2,
-    preferredBuildings: ['farm'],
-    trainingTime: 20
-  },
-  {
-    id: 'lumberjack',
-    name: 'Lumberjack',
-    requiredSkills: { forestry: 25, strength: 30 },
-    efficiency: 1.3,
-    preferredBuildings: ['lumber_camp'],
-    trainingTime: 25
-  },
-  {
-    id: 'carpenter',
-    name: 'Carpenter',
-    requiredSkills: { crafting: 35, precision: 25 },
-    efficiency: 1.4,
-    preferredBuildings: ['sawmill', 'house'],
-    trainingTime: 40,
-    prerequisites: ['lumberjack']
-  },
-  {
-    id: 'foreman',
-    name: 'Foreman',
-    requiredSkills: { leadership: 40, organization: 35 },
-    efficiency: 1.1, // lower personal efficiency but boosts team
-    preferredBuildings: ['farm', 'lumber_camp', 'sawmill'],
-    trainingTime: 60,
-    prerequisites: ['farmer', 'lumberjack']
-  },
-  {
-    id: 'apprentice',
-    name: 'Apprentice',
-    requiredSkills: { learning: 20 },
-    efficiency: 0.7,
-    preferredBuildings: ['farm', 'lumber_camp', 'sawmill'],
-    trainingTime: 10
-  },
-  {
-    id: 'specialist',
-    name: 'Specialist',
-    requiredSkills: { expertise: 50, innovation: 30 },
-    efficiency: 1.6,
-    preferredBuildings: ['sawmill'],
-    trainingTime: 80,
-    prerequisites: ['carpenter']
-  }
-];
+import type { GameTime } from '../types/gameTime';
+import type {
+  WorkerSpecialization,
+  JobAssignment,
+  WorkerProfile
+} from './workers/types';
+import { WORKER_SPECIALIZATIONS } from './workers/types';
+import { generateShifts, findBestShift } from './workers/scheduling';
 
 // Enhanced Worker Assignment System
 export class WorkerSystem {
@@ -229,7 +97,7 @@ export class WorkerSystem {
       priority,
       skillRequirements: this.getSkillRequirements(building.typeId),
       workConditions: this.getWorkConditions(building.typeId),
-      shifts: this.generateShifts(building.typeId, requiredWorkers),
+      shifts: generateShifts(building.typeId, requiredWorkers),
       productivity: 0,
       lastUpdated: Date.now()
     };
@@ -264,65 +132,6 @@ export class WorkerSystem {
       default:
         return { safety: 70, comfort: 60, socialInteraction: 60, autonomy: 60 };
     }
-  }
-
-  // Generate work shifts for building type
-  private generateShifts(buildingType: string, totalWorkers: number) {
-    const shifts = [];
-    
-    switch (buildingType) {
-      case 'farm':
-        // Farms work during daylight
-        shifts.push({
-          startHour: 6,
-          endHour: 14,
-          workersNeeded: Math.ceil(totalWorkers * 0.7),
-          currentWorkers: []
-        });
-        shifts.push({
-          startHour: 14,
-          endHour: 18,
-          workersNeeded: Math.ceil(totalWorkers * 0.3),
-          currentWorkers: []
-        });
-        break;
-        
-      case 'lumber_camp':
-        // Lumber camps work early morning
-        shifts.push({
-          startHour: 5,
-          endHour: 13,
-          workersNeeded: totalWorkers,
-          currentWorkers: []
-        });
-        break;
-        
-      case 'sawmill':
-        // Sawmills can work multiple shifts
-        shifts.push({
-          startHour: 7,
-          endHour: 15,
-          workersNeeded: Math.ceil(totalWorkers * 0.6),
-          currentWorkers: []
-        });
-        shifts.push({
-          startHour: 15,
-          endHour: 23,
-          workersNeeded: Math.ceil(totalWorkers * 0.4),
-          currentWorkers: []
-        });
-        break;
-        
-      default:
-        shifts.push({
-          startHour: 8,
-          endHour: 16,
-          workersNeeded: totalWorkers,
-          currentWorkers: []
-        });
-    }
-    
-    return shifts;
   }
 
   // Assign workers to jobs using intelligent matching
@@ -427,9 +236,9 @@ export class WorkerSystem {
     
     // Add to job assignment
     job.currentWorkers.push(worker.citizenId);
-    
+
     // Assign to appropriate shift based on preferences
-    const preferredShift = this.findBestShift(worker, job);
+    const preferredShift = findBestShift(worker, job);
     if (preferredShift) {
       preferredShift.currentWorkers.push(worker.citizenId);
     }
@@ -445,45 +254,6 @@ export class WorkerSystem {
     
     // Update job productivity
     this.updateJobProductivity(job);
-  }
-
-  // Find best shift for worker based on preferences
-  private findBestShift(worker: WorkerProfile, job: JobAssignment) {
-    const availableShifts = job.shifts.filter(shift => 
-      shift.currentWorkers.length < shift.workersNeeded
-    );
-    
-    if (availableShifts.length === 0) return null;
-    
-    // Score shifts based on worker preferences
-    const scoredShifts = availableShifts.map(shift => {
-      let score = 50;
-      
-      // Prefer shifts that match worker's preferred time
-      switch (worker.preferences.preferredShift) {
-        case 'morning':
-          if (shift.startHour >= 5 && shift.startHour <= 8) score += 30;
-          break;
-        case 'afternoon':
-          if (shift.startHour >= 12 && shift.startHour <= 16) score += 30;
-          break;
-        case 'evening':
-          if (shift.startHour >= 16 && shift.startHour <= 20) score += 30;
-          break;
-        case 'night':
-          if (shift.startHour >= 20 || shift.startHour <= 4) score += 30;
-          break;
-        case 'flexible':
-          score += 10; // Flexible workers get small bonus for any shift
-          break;
-      }
-      
-      return { shift, score };
-    });
-    
-    return scoredShifts.reduce((best, current) => 
-      current.score > best.score ? current : best
-    ).shift;
   }
 
   // Update job productivity based on assigned workers
