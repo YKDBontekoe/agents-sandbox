@@ -2,11 +2,11 @@
 
 import { useEffect, useRef } from "react";
 import * as PIXI from "pixi.js";
-import { useGameContext } from "./GameContext";
-import { gridToWorld } from "@/lib/isometric";
-import { getBuildingSpriteUrl, getBuildingSpriteCandidates } from "./buildingAssets";
-import { SIM_BUILDINGS } from "./simCatalog";
-import type { SimpleBuilding } from "./types";
+import { useGameContext } from '@/components/game/GameContext';
+import { gridToWorld } from '@/lib/isometric';
+import { getBuildingSpriteUrl, getBuildingSpriteCandidates } from './buildingAssets';
+import { SIM_BUILDINGS } from '@/components/game/simCatalog';
+import type { SimpleBuilding } from '@/components/game/types';
 import drawCouncilHall from "./buildingIcons/councilHall";
 import drawTradePost from "./buildingIcons/tradePost";
 import drawAutomationWorkshop from "./buildingIcons/automationWorkshop";

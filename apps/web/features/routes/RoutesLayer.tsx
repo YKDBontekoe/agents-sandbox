@@ -2,8 +2,8 @@
 
 import { useEffect, useRef } from "react";
 import * as PIXI from "pixi.js";
-import { useGameContext } from "./GameContext";
-import { gridToWorld } from "@/lib/isometric";
+import { useGameContext } from '@/components/game/GameContext';
+import { gridToWorld } from '@/lib/isometric';
 
 export interface RouteDef {
   id: string;
