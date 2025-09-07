@@ -1,15 +1,7 @@
 import { NextResponse } from 'next/server'
-import { config } from '@/infrastructure/config'
+import { getEnvStatus } from '@application'
 
 export async function GET() {
-  const envStatus = {
-    hasSupabaseUrl: !!config.supabaseUrl && !config.supabaseUrl.includes('placeholder'),
-    hasSupabaseServiceKey: !!config.supabaseServiceRoleKey && !config.supabaseServiceRoleKey.includes('placeholder'),
-    hasSupabaseJwtSecret: !!config.supabaseJwtSecret && !config.supabaseJwtSecret.includes('placeholder'),
-    hasOpenAiKey: !!config.openAiApiKey && !config.openAiApiKey.includes('placeholder'),
-    environment: config.nodeEnv || 'unknown',
-    vercelEnv: config.vercelEnv || 'local'
-  }
-
+  const envStatus = getEnvStatus()
   return NextResponse.json(envStatus)
 }
