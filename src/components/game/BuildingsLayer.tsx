@@ -6,15 +6,17 @@ import { useGameContext } from "./GameContext";
 import { gridToWorld } from "@/lib/isometric";
 import { getBuildingSpriteUrl, getBuildingSpriteCandidates } from "./buildingAssets";
 import { SIM_BUILDINGS } from "./simCatalog";
-
-export interface SimpleBuilding {
-  id: string;
-  typeId: string;
-  x: number;
-  y: number;
-  workers?: number;
-  level?: number;
-}
+import type { SimpleBuilding } from "./types";
+import drawCouncilHall from "./buildingIcons/councilHall";
+import drawTradePost from "./buildingIcons/tradePost";
+import drawAutomationWorkshop from "./buildingIcons/automationWorkshop";
+import drawFarm from "./buildingIcons/farm";
+import drawLumberCamp from "./buildingIcons/lumberCamp";
+import drawSawmill from "./buildingIcons/sawmill";
+import drawStorehouse from "./buildingIcons/storehouse";
+import drawShrine from "./buildingIcons/shrine";
+import drawHouse from "./buildingIcons/house";
+import drawDefaultIcon from "./buildingIcons/default";
 
 interface BuildingsLayerProps {
   buildings: SimpleBuilding[];
@@ -23,6 +25,18 @@ interface BuildingsLayerProps {
   storeConnectedIds?: string[];
   selected?: { x: number; y: number } | null;
 }
+
+const ICON_DRAWERS: Record<string, (g: PIXI.Graphics, tw: number, th: number) => void> = {
+  council_hall: drawCouncilHall,
+  trade_post: drawTradePost,
+  automation_workshop: drawAutomationWorkshop,
+  farm: drawFarm,
+  lumber_camp: drawLumberCamp,
+  sawmill: drawSawmill,
+  storehouse: drawStorehouse,
+  shrine: drawShrine,
+  house: drawHouse,
+};
 
 function drawIcon(g: PIXI.Graphics, typeId: string, tw: number, th: number) {
   g.clear();
@@ -36,107 +50,8 @@ function drawIcon(g: PIXI.Graphics, typeId: string, tw: number, th: number) {
   ]);
   g.endFill();
 
-  switch (typeId) {
-    case 'council_hall': {
-      // stone hall with roof
-      g.beginFill(0x9ca3af);
-      g.drawRect(-tw * 0.22, -th * 0.05, tw * 0.44, th * 0.28);
-      g.endFill();
-      g.beginFill(0xb45309);
-      g.moveTo(0, -th * 0.22);
-      g.lineTo(tw * 0.26, -th * 0.05);
-      g.lineTo(-tw * 0.26, -th * 0.05);
-      g.closePath();
-      g.endFill();
-      break;
-    }
-    case 'trade_post': {
-      // tent + banner
-      g.beginFill(0xf59e0b);
-      g.moveTo(-tw * 0.18, 0);
-      g.lineTo(0, -th * 0.18);
-      g.lineTo(tw * 0.18, 0);
-      g.lineTo(-tw * 0.18, 0);
-      g.endFill();
-      g.lineStyle(2, 0x92400e, 1);
-      g.moveTo(0, -th * 0.18);
-      g.lineTo(0, -th * 0.32);
-      g.beginFill(0x2563eb);
-      g.drawPolygon([
-        0, -th * 0.32,
-        tw * 0.12, -th * 0.28,
-        0, -th * 0.24,
-      ]);
-      g.endFill();
-      break;
-    }
-    case 'automation_workshop': {
-      // cog-like gear
-      g.beginFill(0x6b7280);
-      const r = Math.min(tw, th) * 0.18;
-      for (let i = 0; i < 8; i++) {
-        const a = (i / 8) * Math.PI * 2;
-        const x = Math.cos(a) * (r * 1.2);
-        const y = Math.sin(a) * (r * 1.2);
-        g.drawRect(x - 2, y - 2, 4, 4);
-      }
-      g.drawCircle(0, 0, r);
-      g.endFill();
-      g.beginFill(0xfcd34d);
-      g.drawCircle(0, 0, r * 0.35);
-      g.endFill();
-      break;
-    }
-    case 'farm': {
-      g.beginFill(0x16a34a);
-      g.drawRect(-tw * 0.2, -th * 0.02, tw * 0.4, th * 0.18);
-      g.endFill();
-      break;
-    }
-    case 'lumber_camp': {
-      // log pile
-      g.beginFill(0x92400e);
-      g.drawRect(-tw * 0.22, -th * 0.02, tw * 0.44, th * 0.06);
-      g.drawRect(-tw * 0.18, th * 0.04, tw * 0.36, th * 0.06);
-      g.endFill();
-      break;
-    }
-    case 'sawmill': {
-      // small mill blade + plank stack
-      g.beginFill(0x6b7280);
-      g.drawCircle(-tw * 0.1, 0, Math.min(tw, th) * 0.12);
-      g.endFill();
-      g.beginFill(0xf59e0b);
-      g.drawRect(tw * 0.02, -th * 0.02, tw * 0.28, th * 0.1);
-      g.endFill();
-      break;
-    }
-    case 'storehouse': {
-      // warehouse box
-      g.beginFill(0x334155);
-      g.drawRect(-tw * 0.18, -th * 0.04, tw * 0.36, th * 0.2);
-      g.endFill();
-      break;
-    }
-    case 'shrine': {
-      g.beginFill(0x7c3aed);
-      g.drawCircle(0, 0, Math.min(tw, th) * 0.18);
-      g.endFill();
-      break;
-    }
-    case 'house': {
-      g.beginFill(0x9f1239);
-      g.drawRect(-tw * 0.16, -th * 0.02, tw * 0.32, th * 0.16);
-      g.endFill();
-      break;
-    }
-    default: {
-      g.beginFill(0x334155);
-      g.drawCircle(0, 0, Math.min(tw, th) * 0.12);
-      g.endFill();
-      break;
-    }
-  }
+  const drawer = ICON_DRAWERS[typeId] ?? drawDefaultIcon;
+  drawer(g, tw, th);
 }
 
 function getPipColor(typeId: string): number {
@@ -254,7 +169,7 @@ export default function BuildingsLayer({ buildings, tileWidth = 64, tileHeight =
       txt.position.set(padX, padY - 2);
       if (dotColor) {
         const dot = new PIXI.Graphics();
-        (dot as any).name = 'res-dot';
+        dot.name = 'res-dot';
         dot.beginFill(dotColor, 0.95);
         dot.drawCircle(0, 0, 3);
         dot.endFill();
@@ -269,6 +184,7 @@ export default function BuildingsLayer({ buildings, tileWidth = 64, tileHeight =
     // Create or update buildings incrementally (now rebuilding container content each run to avoid stacking)
     buildings.forEach((b) => {
       const { worldX, worldY } = gridToWorld(b.x, b.y, tileWidth, tileHeight);
+      const simDef = SIM_BUILDINGS[b.typeId as keyof typeof SIM_BUILDINGS];
       
       // Fetch or create building container
       let buildingContainer = buildingSpritesRef.current.get(b.id);
@@ -321,13 +237,13 @@ export default function BuildingsLayer({ buildings, tileWidth = 64, tileHeight =
         spr.anchor.set(0.5);
         spr.position.set(worldX, worldY - tileHeight * 0.06);
         spr.zIndex = 520;
-        (spr as any).eventMode = 'static';
-        (spr as any).cursor = 'pointer';
+        spr.eventMode = 'static';
+        spr.cursor = 'pointer';
         spr.visible = false;
         // Prevent viewport drag from swallowing clicks on sprites
-        spr.on('pointerdown', (e: any) => { if (e?.stopPropagation) e.stopPropagation(); });
-        spr.on('pointerup', (e: any) => { if (e?.stopPropagation) e.stopPropagation(); });
-        spr.on('pointerupoutside', (e: any) => { if (e?.stopPropagation) e.stopPropagation(); });
+        spr.on('pointerdown', (e: PIXI.FederatedPointerEvent) => { e.stopPropagation(); });
+        spr.on('pointerup', (e: PIXI.FederatedPointerEvent) => { e.stopPropagation(); });
+        spr.on('pointerupoutside', (e: PIXI.FederatedPointerEvent) => { e.stopPropagation(); });
         // Scale to roughly fit within a tile diamond
         const targetW = tileWidth * 0.7;
         const targetH = tileHeight * 1.05;
@@ -372,14 +288,14 @@ export default function BuildingsLayer({ buildings, tileWidth = 64, tileHeight =
             if (buildingContainer) buildingContainer.addChild(fallbackIcon);
           }
         })();
-        spr.on('pointerover', (ev: any) => {
+        spr.on('pointerover', () => {
           const nm = SIM_BUILDINGS[b.typeId]?.name || b.typeId;
           const lvl = Math.max(1, Number(b.level ?? 1));
           const workers = Number(b.workers ?? 0);
           const capBase = SIM_BUILDINGS[b.typeId]?.workCapacity ?? 0;
           const cap = Math.round(capBase * (1 + 0.25 * (lvl - 1)));
           // predicted output
-          const outs = (SIM_BUILDINGS as any)[b.typeId]?.outputs || {};
+          const outs = simDef?.outputs || {};
           const pairs = Object.entries(outs).filter(([,v]) => (v as number) > 0) as Array<[string, number]>;
           let extra = '';
           let color: number | undefined = undefined;
@@ -399,14 +315,14 @@ export default function BuildingsLayer({ buildings, tileWidth = 64, tileHeight =
         spr.on('pointerout', () => { hideTooltip(); try { window.dispatchEvent(new CustomEvent('ad_hover_building', { detail: { buildingId: null } })); } catch {} });
         // double-click to start route for storehouse/trade_post
         let lastTap = 0;
-        spr.on('pointerdown', (e: any) => {
+        spr.on('pointerdown', (e: PIXI.FederatedPointerEvent) => {
           // right-click context
           if (e && typeof e.button === 'number' && e.button === 2) {
             try { window.dispatchEvent(new CustomEvent('ad_show_building_menu', { detail: { buildingId: b.id, screenX: e.globalX, screenY: e.globalY } })); } catch {}
             return;
           }
         });
-        spr.on('pointertap', (e: any) => {
+        spr.on('pointertap', () => {
           const now = Date.now();
           try { window.dispatchEvent(new CustomEvent('ad_building_tap', { detail: { buildingId: b.id } })); } catch {}
           if (now - lastTap < 300 && (b.typeId === 'storehouse' || b.typeId === 'trade_post')) {
@@ -425,8 +341,8 @@ export default function BuildingsLayer({ buildings, tileWidth = 64, tileHeight =
         const hit = new PIXI.Graphics();
         hit.position.set(worldX, worldY);
         hit.zIndex = 540; // above label, but transparent
-        (hit as any).eventMode = 'static';
-        (hit as any).cursor = 'pointer';
+        hit.eventMode = 'static';
+        hit.cursor = 'pointer';
         hit.alpha = 0.001; // keep in scene graph but visually invisible
         hit.beginFill(0x000000, 1);
         hit.moveTo(0, -tileHeight/2);
@@ -435,9 +351,9 @@ export default function BuildingsLayer({ buildings, tileWidth = 64, tileHeight =
         hit.lineTo(-tileWidth/2, 0);
         hit.lineTo(0, -tileHeight/2);
         hit.endFill();
-        hit.on('pointerdown', (e: any) => { if (e?.stopPropagation) e.stopPropagation(); });
-        hit.on('pointerup', (e: any) => { if (e?.stopPropagation) e.stopPropagation(); });
-        hit.on('pointerupoutside', (e: any) => { if (e?.stopPropagation) e.stopPropagation(); });
+        hit.on('pointerdown', (e: PIXI.FederatedPointerEvent) => { e.stopPropagation(); });
+        hit.on('pointerup', (e: PIXI.FederatedPointerEvent) => { e.stopPropagation(); });
+        hit.on('pointerupoutside', (e: PIXI.FederatedPointerEvent) => { e.stopPropagation(); });
         hit.on('pointertap', () => {
           try { window.dispatchEvent(new CustomEvent('ad_building_tap', { detail: { buildingId: b.id } })); } catch {}
           try { window.dispatchEvent(new CustomEvent('ad_select_tile', { detail: { gridX: b.x, gridY: b.y, tileWidth, tileHeight } })); } catch {}
@@ -448,7 +364,7 @@ export default function BuildingsLayer({ buildings, tileWidth = 64, tileHeight =
           const workers = Number(b.workers ?? 0);
           const capBase = SIM_BUILDINGS[b.typeId]?.workCapacity ?? 0;
           const cap = Math.round(capBase * (1 + 0.25 * (lvl - 1)));
-          const outs = (SIM_BUILDINGS as any)[b.typeId]?.outputs || {};
+          const outs = simDef?.outputs || {};
           const pairs = Object.entries(outs).filter(([,v]) => (v as number) > 0) as Array<[string, number]>;
           let extra = '';
           let color: number | undefined = undefined;
@@ -465,7 +381,7 @@ export default function BuildingsLayer({ buildings, tileWidth = 64, tileHeight =
           showTooltip(`${nm} • Lv.${lvl}\nWorkers ${workers}/${cap}${extra}`, worldX, worldY - tileHeight * 0.9, color);
         });
         hit.on('pointerout', () => { if (tooltipRef.current) tooltipRef.current.visible = false; });
-        hit.on('rightdown', (e: any) => {
+        hit.on('rightdown', (e: PIXI.FederatedPointerEvent) => {
           try { window.dispatchEvent(new CustomEvent('ad_show_building_menu', { detail: { buildingId: b.id, screenX: e.globalX, screenY: e.globalY } })); } catch {}
         });
         if (buildingContainer) buildingContainer.addChild(hit);
@@ -484,11 +400,11 @@ export default function BuildingsLayer({ buildings, tileWidth = 64, tileHeight =
         lbl.anchor.set(0.5, 0);
         lbl.position.set(worldX, worldY - tileHeight * 0.9);
         lbl.zIndex = 530;
-        (lbl as any).eventMode = 'static';
-        (lbl as any).cursor = 'pointer';
-        lbl.on('pointerdown', (e: any) => { if (e?.stopPropagation) e.stopPropagation(); });
-        lbl.on('pointerup', (e: any) => { if (e?.stopPropagation) e.stopPropagation(); });
-        lbl.on('pointerupoutside', (e: any) => { if (e?.stopPropagation) e.stopPropagation(); });
+        lbl.eventMode = 'static';
+        lbl.cursor = 'pointer';
+        lbl.on('pointerdown', (e: PIXI.FederatedPointerEvent) => { e.stopPropagation(); });
+        lbl.on('pointerup', (e: PIXI.FederatedPointerEvent) => { e.stopPropagation(); });
+        lbl.on('pointerupoutside', (e: PIXI.FederatedPointerEvent) => { e.stopPropagation(); });
         lbl.on('pointertap', () => {
           try {
             window.dispatchEvent(new CustomEvent('ad_select_tile', { detail: { gridX: b.x, gridY: b.y, tileWidth, tileHeight } }));
@@ -500,7 +416,7 @@ export default function BuildingsLayer({ buildings, tileWidth = 64, tileHeight =
           const workers = Number(b.workers ?? 0);
           const capBase = SIM_BUILDINGS[b.typeId]?.workCapacity ?? 0;
           const cap = Math.round(capBase * (1 + 0.25 * (lvl - 1)));
-          const outs = (SIM_BUILDINGS as any)[b.typeId]?.outputs || {};
+          const outs = simDef?.outputs || {};
           const pairs = Object.entries(outs).filter(([,v]) => (v as number) > 0) as Array<[string, number]>;
           let extra = '';
           let color: number | undefined = undefined;
@@ -520,7 +436,7 @@ export default function BuildingsLayer({ buildings, tileWidth = 64, tileHeight =
         lbl.on('pointerout', () => { hideTooltip(); try { window.dispatchEvent(new CustomEvent('ad_hover_building', { detail: { buildingId: null } })); } catch {} });
         // double-click on label
         let lastTapLbl = 0;
-        lbl.on('pointertap', (e: any) => {
+        lbl.on('pointertap', () => {
           const now = Date.now();
           try { window.dispatchEvent(new CustomEvent('ad_building_tap', { detail: { buildingId: b.id } })); } catch {}
           if (now - lastTapLbl < 300 && (b.typeId === 'storehouse' || b.typeId === 'trade_post')) {
@@ -528,7 +444,7 @@ export default function BuildingsLayer({ buildings, tileWidth = 64, tileHeight =
           }
           lastTapLbl = now;
         });
-        lbl.on('rightdown', (e: any) => {
+        lbl.on('rightdown', (e: PIXI.FederatedPointerEvent) => {
           try { window.dispatchEvent(new CustomEvent('ad_show_building_menu', { detail: { buildingId: b.id, screenX: e.globalX, screenY: e.globalY } })); } catch {}
         });
         if (buildingContainer) buildingContainer.addChild(lbl);
@@ -537,8 +453,8 @@ export default function BuildingsLayer({ buildings, tileWidth = 64, tileHeight =
         // Logistics badge
         if (storeLinked.current.has(b.id) && (b.typeId === 'farm' || b.typeId === 'lumber_camp' || b.typeId === 'sawmill')) {
           const badge = new PIXI.Container();
-          (badge as any).eventMode = 'static';
-          (badge as any).cursor = 'help';
+          badge.eventMode = 'static';
+          badge.cursor = 'help';
           badge.position.set(worldX + tileWidth * 0.32, worldY - tileHeight * 0.95);
           badge.zIndex = 531;
           const bg2 = new PIXI.Graphics();
@@ -563,12 +479,12 @@ export default function BuildingsLayer({ buildings, tileWidth = 64, tileHeight =
 
         // Mini output (approx) below label
         try {
-          const defOut = (SIM_BUILDINGS as any)[b.typeId]?.outputs || {};
+          const defOut = simDef?.outputs || {};
           const pairs = Object.entries(defOut).filter(([,v]) => (v as number) > 0) as Array<[string, number]>;
           if (pairs.length) {
             pairs.sort((a,b)=> (b[1]||0) - (a[1]||0));
             const base = pairs[0][1] as number;
-            const capBase = (SIM_BUILDINGS as any)[b.typeId]?.workCapacity ?? 0;
+            const capBase = simDef?.workCapacity ?? 0;
             const lvl = Math.max(1, Number(b.level ?? 1));
             const cap = Math.round(capBase * (1 + 0.25 * (lvl - 1)));
             const ratio = cap > 0 ? Math.min(1, (Number(b.workers || 0)) / cap) : 1;
@@ -647,8 +563,8 @@ export default function BuildingsLayer({ buildings, tileWidth = 64, tileHeight =
         lbl.anchor.set(0.5, 0);
         lbl.position.set(worldX, worldY - tileHeight * 0.9);
         lbl.zIndex = 516;
-        (lbl as any).eventMode = 'static';
-        (lbl as any).cursor = 'pointer';
+        lbl.eventMode = 'static';
+        lbl.cursor = 'pointer';
         lbl.on('pointertap', () => {
           try {
             window.dispatchEvent(new CustomEvent('ad_select_tile', { detail: { gridX: b.x, gridY: b.y, tileWidth, tileHeight } }));
@@ -659,8 +575,8 @@ export default function BuildingsLayer({ buildings, tileWidth = 64, tileHeight =
 
         if (storeLinked.current.has(b.id) && (b.typeId === 'farm' || b.typeId === 'lumber_camp' || b.typeId === 'sawmill')) {
           const badge = new PIXI.Container();
-          (badge as any).eventMode = 'static';
-          (badge as any).cursor = 'help';
+          badge.eventMode = 'static';
+          badge.cursor = 'help';
           badge.position.set(worldX + tileWidth * 0.32, worldY - tileHeight * 0.95);
           badge.zIndex = 517;
           const bg2 = new PIXI.Graphics();
@@ -687,12 +603,12 @@ export default function BuildingsLayer({ buildings, tileWidth = 64, tileHeight =
 
         // Mini output for vector-drawn variant
         try {
-          const defOut2 = (SIM_BUILDINGS as any)[b.typeId]?.outputs || {};
+          const defOut2 = simDef?.outputs || {};
           const pairs2 = Object.entries(defOut2).filter(([,v]) => (v as number) > 0) as Array<[string, number]>;
           if (pairs2.length) {
             pairs2.sort((a,b)=> (b[1]||0) - (a[1]||0));
             const base2 = pairs2[0][1] as number;
-            const capBase2 = (SIM_BUILDINGS as any)[b.typeId]?.workCapacity ?? 0;
+            const capBase2 = simDef?.workCapacity ?? 0;
             const lvl2 = Math.max(1, Number(b.level ?? 1));
             const cap2 = Math.round(capBase2 * (1 + 0.25 * (lvl2 - 1)));
             const ratio2 = cap2 > 0 ? Math.min(1, (Number(b.workers || 0)) / cap2) : 1;
