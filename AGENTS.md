@@ -67,6 +67,9 @@ Related docs: docs/agents/ARCHITECTURE.md, docs/agents/PROMPTS.md, docs/agents/S
   - `types.ts` — shared skill interfaces
   - `generate.ts` — procedural tree generation
   - `progression.ts` — achievement and challenge evaluation
+  - `hooks.ts` — animation and utility hooks
+  - `canvasPool.ts` — canvas pooling utility
+  - `effects.ts` — particle and connection render helpers
 
 ## Design Canon
 
