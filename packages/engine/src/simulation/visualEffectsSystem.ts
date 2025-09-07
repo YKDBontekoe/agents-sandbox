@@ -2,7 +2,7 @@ import type { SimResources } from '../index';
 import type { SimulatedBuilding } from './buildingSimulation';
 import type { Citizen } from './citizenBehavior';
 import type { WorkerProfile } from './workerSimulation';
-import type { VisualIndicator } from './gameplayEvents';
+import type { VisualIndicator } from './events/types';
 
 export interface TrafficFlow {
   id: string;
