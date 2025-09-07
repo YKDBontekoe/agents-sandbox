@@ -179,6 +179,7 @@ See docs/agents/EXTENSIONS.md for patterns and pitfalls
 - Validation: zod schemas pass; clamp resource floors to 0
 - Safety: no secrets client-side; writes via server routes only
 - Ops: timeouts, retries, minimal logs with redaction
+- TypeScript: avoid `any`; prefer explicit types so lint passes
 
 
 ## Building Catalog (client-visible)
