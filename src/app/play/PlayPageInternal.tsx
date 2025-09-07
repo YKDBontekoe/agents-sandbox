@@ -18,7 +18,7 @@ import WorkerPanel from '@/components/game/hud/WorkerPanel';
 import { CouncilPanel, CouncilProposal } from '@/components/game/hud/CouncilPanel';
 import { EdictsPanel, EdictSetting } from '@/components/game/hud/EdictsPanel';
 import type { District } from '@/components/game/districts';
-import type { Leyline } from '@/components/game/LeylineSystem';
+import type { Leyline } from '../../../apps/web/features/leylines';
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
 import { generateSkillTree } from '@/components/game/skills/generate';
 import { accumulateEffects } from '@/components/game/skills/progression';
