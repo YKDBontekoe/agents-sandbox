@@ -22,11 +22,11 @@ export interface GameContext {
   }
 }
 
-export function buildGameContext(state: any): GameContext {
+export function buildGameContext(state: GameState | null): GameContext {
   const buildings: RawBuilding[] = Array.isArray(state?.buildings)
     ? (state!.buildings! as RawBuilding[])
     : []
-  const routes: unknown[] = Array.isArray(state?.routes) ? state!.routes! : []
+  const routes: unknown[] = Array.isArray(state?.routes) ? (state!.routes as unknown[]) : []
 
   const byType: Record<string, number> = {}
   let farmsNearWater = 0

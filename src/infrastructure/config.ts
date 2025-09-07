@@ -47,7 +47,7 @@ const ClientSchema = ConfigSchema.partial({
 });
 
 export function loadConfig(overrides: Partial<Config> = {}): Config {
-  const base = { ...defaults, ...fromEnv, ...overrides } as any;
+  const base: Partial<Config> = { ...defaults, ...fromEnv, ...overrides };
   const isBrowser = typeof window !== 'undefined';
   const parsed = isBrowser ? ClientSchema.parse(base) : ConfigSchema.parse(base);
   return parsed as Config;

@@ -1,9 +1,8 @@
 import React from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
-import { GameResources } from './hud/types';
+import { GameResources } from './types';
 import { ResourceIcon } from '../ui';
 import type { ResourceType } from '@/lib/resources';
-import { getResourceIcon, getResourceColor } from './resourceUtils';
 import { CategoryIcon } from '../ui';
 import { CategoryType } from '@/lib/categories';
 
@@ -46,8 +45,8 @@ export interface CouncilPanelProps {
   canGenerateProposals: boolean;
 }
 
-const ResourceDelta: React.FC<{ delta: ProposalDelta; type: 'cost' | 'benefit' }> = ({ delta, type: _type }) => {
-  const entries = Object.entries(delta).filter(([_, value]) => value !== 0 && value !== undefined);
+const ResourceDelta: React.FC<{ delta: ProposalDelta; type: 'cost' | 'benefit' }> = ({ delta }) => {
+  const entries = Object.entries(delta).filter(([, value]) => value !== 0 && value !== undefined);
 
   if (entries.length === 0) return null;
 

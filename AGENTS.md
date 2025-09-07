@@ -29,6 +29,10 @@ Related docs: docs/agents/ARCHITECTURE.md, docs/agents/PROMPTS.md, docs/agents/S
   - `NEXT_PUBLIC_DISABLE_REALTIME` (default `false`)
 - DB: apply migrations via `supabase link` then `supabase db push --include-all`, or run SQL in `supabase/migrations/` in order
 
+## Linting
+
+- Run `npm run lint` before committing. Resolve warnings in touched files and avoid using `any`; prefer explicit or `unknown` types.
+
 ## Architecture Overview
 
 - App: Next.js App Router (`src/app`)

@@ -1,14 +1,14 @@
 import React from 'react';
-import '../../styles/design-tokens.css';
-import '../../styles/animations.css';
-import type { GameHUDProps, Notification } from './hud/types';
-import { useResourceDeltas } from './hud/useResourceDeltas';
-import { NotificationCenter } from './hud/NotificationCenter';
-import { ResourcePanel } from './hud/ResourcePanel';
-import { TimePanel } from './hud/TimePanel';
-import { ActionPanel } from './hud/ActionPanel';
-import { StatusBar } from './hud/StatusBar';
-import { TopBar } from './hud/TopBar';
+import '../../../styles/design-tokens.css';
+import '../../../styles/animations.css';
+import type { GameHUDProps, Notification } from './types';
+import { useResourceDeltas } from './useResourceDeltas';
+import { NotificationCenter } from './NotificationCenter';
+import { ResourcePanel } from './ResourcePanel';
+import { TimePanel } from './TimePanel';
+import { ActionPanel } from './ActionPanel';
+import { StatusBar } from './StatusBar';
+import { TopBar } from './TopBar';
 
 export const GameHUD: React.FC<GameHUDProps> = (props) => {
   const {
@@ -23,7 +23,6 @@ export const GameHUD: React.FC<GameHUDProps> = (props) => {
     onOpenEdicts,
     onOpenOmens,
     onOpenSettings,
-    highlightAdvance = false, // currently unused with simplified TopBar
     shortages = {},
     fps = 60,
     quality = 'High',
