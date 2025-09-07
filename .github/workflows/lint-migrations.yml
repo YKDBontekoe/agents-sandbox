@@ -1,0 +1,26 @@
+name: Lint migration filenames
+
+on:
+  pull_request:
+    paths:
+      - 'supabase/migrations/**'
+  push:
+    paths:
+      - 'supabase/migrations/**'
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check migration filenames
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          for file in supabase/migrations/*.sql; do
+            base=$(basename "$file")
+            if [[ ! $base =~ ^[0-9]{12}_[a-z0-9_]+\.sql$ ]]; then
+              echo "Invalid migration filename: $base" >&2
+              exit 1
+            fi
+          done
