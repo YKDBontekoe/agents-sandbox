@@ -1,7 +1,8 @@
 import { AdvancedPathfinding } from './pathfinding';
 import { RoadNetworkSystem } from './roadNetwork';
 import { TrafficSimulationSystem } from './trafficSimulation';
-import { ZoningSystem, ZoneType } from './zoningSystem';
+import { ZoningSystem, ZoneType } from './zoning';
+import { createGameTime } from '../types/gameTime';
 import { CityServicesSystem, ServiceType } from './cityServices';
 import { PublicTransportSystem } from './transport/transportSystem';
 
@@ -141,11 +142,15 @@ export class CitySimulationEngine {
   private updateSystems(deltaTime: number): void {
     // Update road network and traffic
     this.trafficSimulation.update(deltaTime);
-    
+
     // Update pathfinding with current traffic data
     const trafficData = this.trafficSimulation.getTrafficStats();
-    
+
     // Update zoning and services
+    this.zoningSystem.update(
+      createGameTime(Math.floor(this.gameTime / 60000)),
+      Array.from(this.buildings.values())
+    );
     this.cityServices.update(deltaTime);
     this.publicTransport.update(deltaTime);
     

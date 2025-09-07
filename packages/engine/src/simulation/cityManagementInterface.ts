@@ -2,7 +2,7 @@ import type { GameTime } from '../types/gameTime';
 import { AdvancedPathfinding } from './pathfinding';
 import { RoadNetworkSystem } from './roadNetwork';
 import { TrafficSimulationSystem } from './trafficSimulation';
-import { ZoningSystem, ZoneType } from './zoningSystem';
+import { ZoningSystem, ZoneType } from './zoning';
 import { CityServicesSystem, ServiceType } from './cityServices';
 import { PublicTransportSystem } from './transport/transportSystem';
 
