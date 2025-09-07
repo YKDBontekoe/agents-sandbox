@@ -63,6 +63,7 @@ Related docs: docs/agents/ARCHITECTURE.md, docs/agents/PROMPTS.md, docs/agents/S
 - `src/components/game/BuildingsLayer.tsx` — renders building sprites and tooltips
 - `src/components/settings/` — reusable settings panel components and configuration
 - `packages/engine/src/simulation/traffic/` — modular traffic simulation system (vehicle, pedestrian, and light managers). Run `npm test` and `npm run lint packages/engine/src/simulation/traffic` when modifying
+- `packages/engine/src/simulation/city/` — city simulation engine (systems, metrics, events). Run `npm test`, `npm run lint packages/engine/src/simulation/city/*.ts`, and `npm run lint packages/engine/src/simulation/citySimulationEngine.ts` when modifying
 - `src/components/game/skills/` — skill tree modules
   - `types.ts` — shared skill interfaces
   - `generate.ts` — procedural tree generation
