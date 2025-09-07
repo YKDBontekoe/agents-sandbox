@@ -1,6 +1,6 @@
 # Arcane Dominion Agents Guide
 
-This guide defines the agent architecture, prompting standards, safety, and ops practices for the Arcane Dominion Tycoon. It is the canonical reference for building, extending, and operating the AI council.
+This guide defines the agent architecture, prompting standards, safety, and ops practices for the Arcane Dominion Tycoon. It is the canonical reference for building, extending, and operating the AI council. When new systems or knowledge are introduced, update this guide to keep it current.
 
 Related docs: docs/agents/ARCHITECTURE.md, docs/agents/PROMPTS.md, docs/agents/SECURITY.md, docs/agents/OPERATIONS.md, docs/agents/EVALUATION.md, docs/agents/EXTENSIONS.md, docs/agents/CONTRIBUTING.md
 
@@ -63,6 +63,7 @@ Related docs: docs/agents/ARCHITECTURE.md, docs/agents/PROMPTS.md, docs/agents/S
 - `src/components/game/BuildingsLayer.tsx` — renders building sprites and tooltips
 - `src/components/settings/` — reusable settings panel components and configuration
 - `packages/engine/src/simulation/traffic/` — modular traffic simulation system (vehicle, pedestrian, and light managers). Run `npm test` and `npm run lint packages/engine/src/simulation/traffic` when modifying
+- `packages/engine/src/simulation/visualEffects/` — modular visual effect managers (traffic, construction, activity, weather). Run `npm run lint packages/engine/src/simulation/visualEffectsSystem.ts packages/engine/src/simulation/visualEffects` and `npm test` when modifying
 - `src/components/game/skills/` — skill tree modules
   - `types.ts` — shared skill interfaces
   - `generate.ts` — procedural tree generation
