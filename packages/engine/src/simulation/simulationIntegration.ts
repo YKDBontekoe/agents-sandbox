@@ -10,11 +10,8 @@ import {
 } from './buildingSimulation';
 import { CitizenBehaviorSystem, Citizen } from './citizenBehavior';
 import { WorkerSimulationSystem, WorkerProfile } from './workerSimulation';
-import {
-  ActiveEvent,
-  VisualIndicator,
-  GameplayEventsSystem
-} from './gameplayEvents';
+import type { ActiveEvent, VisualIndicator } from './events/types';
+import { EventManager } from './events/EventManager';
 import type { GameTime } from '../types/gameTime';
 
 // Enhanced game state interface
@@ -68,7 +65,7 @@ export class SimulationIntegrationSystem {
   // Initialize simulation systems
   private citizenSystem = new CitizenBehaviorSystem();
   private workerSystem = new WorkerSimulationSystem();
-  private eventSystem = new GameplayEventsSystem();
+  private eventSystem = new EventManager();
   
   private visualConfig: VisualFeedbackConfig;
   private performanceMetrics: PerformanceMetrics;
