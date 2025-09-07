@@ -1,92 +1,12 @@
-export type SkillEffect =
-  | { kind: 'resource_multiplier'; resource: 'grain' | 'coin' | 'mana' | 'favor' | 'wood' | 'planks'; factor: number }
-  | { kind: 'building_multiplier'; typeId: string; factor: number }
-  | { kind: 'upkeep_delta'; grainPerWorkerDelta: number }
-  | { kind: 'route_bonus'; percent: number }
-  | { kind: 'logistics_bonus'; percent: number }
-  | { kind: 'special_ability'; abilityId: string; power: number; description: string };
-
-export type NodeQuality = 'common' | 'rare' | 'epic' | 'legendary';
-
-export interface SpecialAbility {
-  id: string;
-  name: string;
-  description: string;
-  power: number;
-  quality: NodeQuality;
-}
-
-export interface SkillNode {
-  id: string;
-  title: string;
-  description: string;
-  category: 'economic' | 'military' | 'mystical' | 'infrastructure' | 'diplomatic' | 'social';
-  rarity: 'common' | 'uncommon' | 'rare' | 'legendary';
-  quality: NodeQuality;
-  tags: string[];
-  cost: { coin?: number; mana?: number; favor?: number };
-  baseCost: { coin?: number; mana?: number; favor?: number };
-  effects: SkillEffect[];
-  requires?: string[];
-  tier?: number;
-  importance?: number;
-  unlockCount?: number; // Track how many nodes have been unlocked before this one
-  isRevealed?: boolean; // Whether this node is visible to the player
-  specialAbility?: SpecialAbility;
-  statMultiplier?: number; // Quality-based stat scaling
-  // New: optional exclusivity path grouping and additional unlock conditions
-  exclusiveGroup?: string; // if set, only one node within the same group can be unlocked
-  unlockConditions?: UnlockCondition[]; // extra conditions beyond requires
-}
-
-export interface SkillTree {
-  nodes: SkillNode[];
-  edges: Array<{ from: string; to: string }>; // prerequisites
-  layout?: {
-    tiers: Record<number, SkillNode[]>;
-    maxTier: number;
-    categoryDistribution: Record<string, number[]>;
-  };
-  progressionData?: {
-    totalUnlocked: number;
-    qualityDistribution: Record<NodeQuality, number>;
-    achievements: Achievement[];
-    challenges: QualityChallenge[];
-  };
-}
-
-export interface Achievement {
-  id: string;
-  name: string;
-  description: string;
-  condition: (tree: SkillTree, unlocked: string[]) => boolean;
-  reward?: SkillEffect;
-  unlocked?: boolean;
-}
-
-export interface QualityChallenge {
-  id: string;
-  name: string;
-  description: string;
-  targetNodeId: string;
-  requirements: {
-    type: 'unlock_count' | 'category_mastery' | 'tier_completion' | 'resource_threshold';
-    value: number;
-    category?: SkillNode['category'];
-    tier?: number;
-  }[];
-  qualityBoost: 1 | 2 | 3; // How many quality levels to boost (1 = common->rare, 2 = common->epic, etc.)
-  timeLimit?: number; // Optional time limit in seconds
-  completed?: boolean;
-  active?: boolean;
-}
-
-// Additional unlock conditions for added challenge without relying on external game state
-export type UnlockCondition =
-  | { type: 'min_unlocked'; value: number }
-  | { type: 'category_unlocked_at_least'; category: SkillNode['category']; value: number }
-  | { type: 'max_unlocked_in_category'; category: SkillNode['category']; value: number } // encourages branching
-  | { type: 'tier_before_required'; tier: number }; // cannot unlock before reaching tier
+import type {
+  Achievement,
+  NodeQuality,
+  SkillEffect,
+  SkillNode,
+  SkillTree,
+  UnlockCondition,
+  SpecialAbility,
+} from './types';
 
 // Simple seeded RNG (mulberry32)
 function mulberry32(a: number) {
@@ -242,7 +162,7 @@ export function generateSkillTree(seed = 42, tiers: number = 8): SkillTree {
       const tags = [cat, rarity, rng() < 0.5 ? 'economy' : 'growth'];
       
       // Enhanced prerequisite logic
-      let requires: string[] = [];
+      const requires: string[] = [];
       if (t > 0 && prevTier.length) {
         // Primary prerequisite from previous tier
         const primaryReq = pick(rng, prevTier);
@@ -565,7 +485,6 @@ export function expandSkillTree(tree: SkillTree, seed: number, moreTiers: number
   for (let t = nextStartTier; t < nextStartTier + moreTiers; t++) {
     const count = 6 + Math.floor(rng() * 5);
     const current: string[] = [];
-    const currentByCat: Record<SkillNode['category'], string[]> = { economic: [], military: [], mystical: [], infrastructure: [], diplomatic: [], social: [] };
     for (let i = 0; i < count; i++) {
       const cat = pick(categories);
       const rarity = pickRarity();
@@ -606,61 +525,4 @@ export function expandSkillTree(tree: SkillTree, seed: number, moreTiers: number
     tree.layout!.maxTier = t;
   }
   return tree;
-}
-
-export function accumulateEffects(unlocked: SkillNode[]): { resMul: Record<string, number>; bldMul: Record<string, number>; upkeepDelta: number } {
-  const resMul: Record<string, number> = {};
-  const bldMul: Record<string, number> = {};
-  let upkeepDelta = 0;
-  unlocked.forEach((s) => {
-    s.effects.forEach((e) => {
-      if (e.kind === 'resource_multiplier') {
-        resMul[e.resource] = (resMul[e.resource] ?? 1) * e.factor;
-      } else if (e.kind === 'building_multiplier') {
-        bldMul[e.typeId] = (bldMul[e.typeId] ?? 1) * e.factor;
-      } else if (e.kind === 'upkeep_delta') {
-        upkeepDelta += e.grainPerWorkerDelta;
-      } else if (e.kind === 'route_bonus') {
-        // treat as coin resource tilt (simplification for agents)
-        resMul['coin'] = (resMul['coin'] ?? 1) * (1 + e.percent / 100);
-      } else if (e.kind === 'logistics_bonus') {
-        // treat as building multipliers for core producers
-        ['farm', 'lumber_camp', 'sawmill', 'storehouse'].forEach(t => {
-          bldMul[t] = (bldMul[t] ?? 1) * (1 + e.percent / 100);
-        })
-      }
-    });
-  });
-
-  // Lightweight, conservative set-bonus synergies to make builds more fun
-  // Category synergies
-  const byCat: Record<SkillNode['category'], number> = {
-    economic: 0, military: 0, mystical: 0, infrastructure: 0, diplomatic: 0, social: 0
-  };
-  unlocked.forEach(n => { byCat[n.category] = (byCat[n.category] || 0) + 1; });
-
-  // Econ + Infra synergy: small boost to trade and processing
-  const econInfra = (byCat.economic > 0 && byCat.infrastructure > 0) ? (byCat.economic + byCat.infrastructure) : 0;
-  if (econInfra >= 4) {
-    ['trade_post', 'sawmill'].forEach(t => { bldMul[t] = (bldMul[t] ?? 1) * 1.05; });
-  }
-
-  // Mystical + Infra synergy: storage and mana alignment
-  const mystInfra = (byCat.mystical > 0 && byCat.infrastructure > 0) ? (byCat.mystical + byCat.infrastructure) : 0;
-  if (mystInfra >= 4) {
-    resMul['mana'] = (resMul['mana'] ?? 1) * 1.05;
-    bldMul['storehouse'] = (bldMul['storehouse'] ?? 1) * 1.05;
-  }
-
-  // Military + Social synergy: slight upkeep reduction via discipline & morale
-  const milSoc = (byCat.military > 0 && byCat.social > 0) ? (byCat.military + byCat.social) : 0;
-  if (milSoc >= 3) {
-    upkeepDelta += -0.05; // very modest reduction
-  }
-
-  // Quality set bonus: any legendary unlocked grants a tiny coin tilt
-  if (unlocked.some(n => n.quality === 'legendary')) {
-    resMul['coin'] = (resMul['coin'] ?? 1) * 1.02;
-  }
-  return { resMul, bldMul, upkeepDelta };
 }
