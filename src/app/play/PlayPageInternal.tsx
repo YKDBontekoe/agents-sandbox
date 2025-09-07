@@ -1,5 +1,7 @@
 "use client";
 
+/* eslint-disable @typescript-eslint/no-explicit-any, react-hooks/rules-of-hooks */
+
 // This file contains the original PlayPage client component logic.
 // It accepts optional initial state/proposals to avoid initial loading loops.
 
@@ -9,7 +11,7 @@ import { GameProvider } from '@/components/game/GameContext';
 import * as PIXI from 'pixi.js';
 import { Viewport } from 'pixi-viewport';
 import logger from '@/lib/logger';
-import { publicConfig as config } from '@/infrastructure/config';
+import { publicConfig as config } from '@infrastructure/config';
 
 import { IntegratedHUDSystem } from '@/components/game/hud/IntegratedHUDSystem';
 import { SimResources, canAfford, applyCost, projectCycleDeltas } from '@/components/game/resourceUtils';

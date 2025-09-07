@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { config } from '@/infrastructure/config'
+import { config } from '@infrastructure/config'
 
 export async function GET() {
   const envStatus = {

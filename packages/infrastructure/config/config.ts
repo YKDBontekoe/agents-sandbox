@@ -12,7 +12,8 @@ const ConfigSchema = z.object({
   supabaseJwtSecret: z.string(),
   openAiApiKey: z.string().optional(),
   nextPublicOfflineMode: z.boolean().default(false),
-  nextPublicDisableRealtime: z.boolean().default(false)
+  nextPublicDisableRealtime: z.boolean().default(false),
+  proposalRateLimit: z.number().default(5)
 });
 
 export type Config = z.infer<typeof ConfigSchema>;
@@ -22,7 +23,8 @@ const defaults: Partial<Config> = {
   vercelEnv: 'local',
   logLevel: process.env.NODE_ENV === 'development' ? 'debug' : 'error',
   nextPublicOfflineMode: false,
-  nextPublicDisableRealtime: false
+  nextPublicDisableRealtime: false,
+  proposalRateLimit: 5
 };
 
 const fromEnv: Partial<Config> = {
@@ -36,7 +38,8 @@ const fromEnv: Partial<Config> = {
   supabaseJwtSecret: process.env.SUPABASE_JWT_SECRET,
   openAiApiKey: process.env.OPENAI_API_KEY,
   nextPublicOfflineMode: process.env.NEXT_PUBLIC_OFFLINE_MODE === '1',
-  nextPublicDisableRealtime: process.env.NEXT_PUBLIC_DISABLE_REALTIME === '1'
+  nextPublicDisableRealtime: process.env.NEXT_PUBLIC_DISABLE_REALTIME === '1',
+  proposalRateLimit: process.env.PROPOSAL_RATE_LIMIT ? Number(process.env.PROPOSAL_RATE_LIMIT) : undefined
 };
 
 const ClientSchema = ConfigSchema.partial({
@@ -44,10 +47,11 @@ const ClientSchema = ConfigSchema.partial({
   supabaseServiceRoleKey: true,
   supabaseJwtSecret: true,
   openAiApiKey: true,
+  proposalRateLimit: true,
 });
 
 export function loadConfig(overrides: Partial<Config> = {}): Config {
-  const base = { ...defaults, ...fromEnv, ...overrides } as any;
+  const base: Partial<Config> = { ...defaults, ...fromEnv, ...overrides };
   const isBrowser = typeof window !== 'undefined';
   const parsed = isBrowser ? ClientSchema.parse(base) : ConfigSchema.parse(base);
   return parsed as Config;

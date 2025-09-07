@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { config } from '@/infrastructure/config'
+import { config } from '@infrastructure/config'
 
 export async function GET() {
   // Only expose booleans and sanitized error messages

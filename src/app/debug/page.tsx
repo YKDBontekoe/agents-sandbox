@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { publicConfig as config } from "@/infrastructure/config"
+import { publicConfig as config } from "@infrastructure/config"
 
 interface EnvStatus {
   hasSupabaseUrl: boolean

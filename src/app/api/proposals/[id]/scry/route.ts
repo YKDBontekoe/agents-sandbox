@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { SupabaseUnitOfWork } from '@/infrastructure/supabase/unit-of-work'
-import { config } from '@/infrastructure/config'
+import { config } from '@infrastructure/config'
 import { generateText } from 'ai'
 import { createOpenAI } from '@ai-sdk/openai'
 import { z } from 'zod'
@@ -40,7 +40,7 @@ interface ProposalRow {
 
 export async function POST(req: NextRequest, context: RouteContext) {
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown'
-  const limit = Number(process.env.PROPOSAL_RATE_LIMIT ?? '5')
+  const limit = config.proposalRateLimit
   if (!rateLimit(ip, { limit })) {
     return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 })
   }

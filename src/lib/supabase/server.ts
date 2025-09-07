@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import logger from '@/lib/logger'
-import { config } from '@/infrastructure/config'
+import { config } from '@infrastructure/config'
 
 // Server-side Supabase client using the service role key (never sent to the browser)
 // Ensure these env vars are set in your environment (e.g., .env.local)

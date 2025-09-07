@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
-import { config } from '@/infrastructure/config'
+import { config } from '@infrastructure/config'
 
 // Client-side Supabase (anon key). Only use for non-sensitive data if needed.
 // Prefer server routes for DB writes in this project.

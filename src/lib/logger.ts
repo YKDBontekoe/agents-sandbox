@@ -1,5 +1,5 @@
 import log from 'loglevel';
-import { config } from '@/infrastructure/config';
+import { config } from '@infrastructure/config';
 
 const logger = log.getLogger('arcane-dominion');
 

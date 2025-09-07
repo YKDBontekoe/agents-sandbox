@@ -22,7 +22,7 @@ This project uses [`next/font`](https://nextjs.org/docs/app/building-your-applic
 
 ## Configuration
 
-Environment variables are validated and layered in `src/infrastructure/config.ts`. Provide values via `.env.local`.
+Environment variables are validated and layered in `packages/infrastructure/config/config.ts`. Provide values via `.env.local`.
 
 | Key | Description | Default |
 | --- | --- | --- |

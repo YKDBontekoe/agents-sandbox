@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import logger from "@/lib/logger";
-import { publicConfig as config } from "@/infrastructure/config";
+import { publicConfig as config } from "@infrastructure/config";
 import { usePixiApplication } from "@/hooks/usePixiApplication";
 import { useAdaptiveQuality } from "@/hooks/useAdaptiveQuality";
 import { attachCanvasEvents } from "./CanvasEvents";
