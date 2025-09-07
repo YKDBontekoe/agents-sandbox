@@ -4,7 +4,7 @@ import { RoadNetworkSystem } from './roadNetwork';
 import { TrafficSimulationSystem } from './trafficSimulation';
 import { ZoningSystem, ZoneType } from './zoningSystem';
 import { CityServicesSystem, ServiceType } from './cityServices';
-import { PublicTransportSystem } from './publicTransport';
+import { PublicTransportSystem } from './transport/transportSystem';
 
 export interface CityManagementConfig {
   gridWidth: number;
