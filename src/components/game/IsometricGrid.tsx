@@ -1,19 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 import * as PIXI from "pixi.js";
 import { useGameContext } from "./GameContext";
 import logger from "@/lib/logger";
 import { gridToWorld, TILE_COLORS } from "@/lib/isometric";
-
-interface GridTile {
-  x: number;
-  y: number;
-  worldX: number;
-  worldY: number;
-  tileType: string;
-  sprite: PIXI.Graphics;
-}
+import { createTileSprite, type GridTile } from "./grid/TileRenderer";
+import { TileOverlay } from "./grid/TileOverlay";
 
 interface IsometricGridProps {
   gridSize: number;
@@ -35,127 +28,14 @@ export default function IsometricGrid({
   const { viewport } = useGameContext();
   const gridContainerRef = useRef<PIXI.Container | null>(null);
   const tilesRef = useRef<Map<string, GridTile>>(new Map());
-  const hoveredTileRef = useRef<GridTile | null>(null);
-  const selectedTileRef = useRef<GridTile | null>(null);
   const centeredRef = useRef<boolean>(false);
   const initializedRef = useRef<boolean>(false);
-  const hoverOverlayRef = useRef<PIXI.Graphics | null>(null);
-  const selectOverlayRef = useRef<PIXI.Graphics | null>(null);
-  const lastHoverIndexRef = useRef<{ x: number; y: number } | null>(null);
-  const hoverDebounceRef = useRef<number | null>(null);
+  const overlayManagerRef = useRef<TileOverlay | null>(null);
+  const tileTypesRef = useRef<string[][]>(tileTypes);
+  useEffect(() => {
+    tileTypesRef.current = tileTypes;
+  }, [tileTypes]);
   // no extra refs needed for min zoom snapping; we prevent underflow by clamping minScale to fit
-
-  // Create a tile sprite
-  const createTileSprite = useCallback((gridX: number, gridY: number) => {
-    const { worldX, worldY } = gridToWorld(gridX, gridY, tileWidth, tileHeight);
-    const tileType = tileTypes[gridY]?.[gridX] || "unknown";
-    
-    const tile = new PIXI.Graphics();
-    const base = TILE_COLORS[tileType] ?? 0xdde7f7;
-    const shade = (hex: number, factor: number) => {
-      const r = Math.max(0, Math.min(255, Math.round(((hex >> 16) & 0xff) * factor)));
-      const g = Math.max(0, Math.min(255, Math.round(((hex >> 8) & 0xff) * factor)));
-      const b = Math.max(0, Math.min(255, Math.round((hex & 0xff) * factor)));
-      return (r << 16) | (g << 8) | b;
-    };
-    const lighter = shade(base, 1.08);
-    const darker = shade(base, 0.85);
-
-    // Base diamond with subtle center light and beveled edges
-    // Base fill
-    tile.fill({ color: base, alpha: 0.96 });
-    tile.moveTo(0, -tileHeight / 2);
-    tile.lineTo(tileWidth / 2, 0);
-    tile.lineTo(0, tileHeight / 2);
-    tile.lineTo(-tileWidth / 2, 0);
-    tile.closePath();
-    tile.fill();
-
-    // Inner highlight diamond
-    tile.fill({ color: lighter, alpha: 0.12 });
-    tile.moveTo(0, -tileHeight * 0.36);
-    tile.lineTo(tileWidth * 0.36, 0);
-    tile.lineTo(0, tileHeight * 0.36);
-    tile.lineTo(-tileWidth * 0.36, 0);
-    tile.closePath();
-    tile.fill();
-
-    // Bevel: darker stroke on right/bottom edges
-    tile.setStrokeStyle({ width: 1.5, color: darker, alpha: 0.55 });
-    tile.moveTo(0, tileHeight / 2);
-    tile.lineTo(tileWidth / 2, 0);
-    tile.lineTo(0, -tileHeight / 2);
-    tile.stroke();
-    // Fine outline
-    tile.setStrokeStyle({ width: 1, color: 0x334155, alpha: 0.35 });
-    tile.moveTo(0, -tileHeight / 2);
-    tile.lineTo(tileWidth / 2, 0);
-    tile.lineTo(0, tileHeight / 2);
-    tile.lineTo(-tileWidth / 2, 0);
-    tile.lineTo(0, -tileHeight / 2);
-    tile.stroke();
-
-    // Subtle terrain micro-textures
-    const tex = new PIXI.Graphics();
-    tex.zIndex = 3;
-    tex.position.set(worldX, worldY);
-    (tex as any).eventMode = 'none';
-    if (tileType === 'water') {
-      tex.setStrokeStyle({ width: 1, color: 0x93c5fd, alpha: 0.35 });
-      const y0 = -tileHeight * 0.12, y1 = 0, y2 = tileHeight * 0.12;
-      tex.moveTo(-tileWidth * 0.25, y0); tex.quadraticCurveTo(0, y0 + 2, tileWidth * 0.25, y0);
-      tex.moveTo(-tileWidth * 0.3, y1); tex.quadraticCurveTo(0, y1 + 2, tileWidth * 0.3, y1);
-      tex.moveTo(-tileWidth * 0.2, y2); tex.quadraticCurveTo(0, y2 + 2, tileWidth * 0.2, y2);
-      tex.stroke();
-    } else if (tileType === 'forest') {
-      tex.fill({ color: 0x166534, alpha: 0.12 });
-      const s = Math.max(2, Math.floor(tileHeight * 0.08));
-      tex.drawPolygon([ -s, 0, 0, -s, s, 0, -s, 0 ]);
-      tex.endFill();
-    } else if (tileType === 'mountain') {
-      tex.setStrokeStyle({ width: 1, color: 0x64748b, alpha: 0.35 });
-      tex.moveTo(-tileWidth * 0.2, tileHeight * 0.05);
-      tex.lineTo(0, -tileHeight * 0.15);
-      tex.lineTo(tileWidth * 0.2, tileHeight * 0.05);
-      tex.stroke();
-    } else if (tileType === 'grass') {
-      tex.setStrokeStyle({ width: 1, color: 0x16a34a, alpha: 0.15 });
-      tex.moveTo(-tileWidth * 0.1, tileHeight * 0.04);
-      tex.lineTo(-tileWidth * 0.02, tileHeight * 0.01);
-      tex.moveTo(tileWidth * 0.1, -tileHeight * 0.04);
-      tex.lineTo(tileWidth * 0.02, -tileHeight * 0.01);
-      tex.stroke();
-    }
-    gridContainerRef.current?.addChild(tex);
-    (tile as any).__tex = tex;
-    
-    tile.x = worldX;
-    tile.y = worldY;
-    // Enable pointer events on v8
-    (tile as any).eventMode = 'static';
-    // Shrink hit area slightly to avoid edge flicker when moving across tile borders
-    const hx = (tileWidth / 2) * 0.95;
-    const hy = (tileHeight / 2) * 0.95;
-    tile.hitArea = new PIXI.Polygon([
-      0, -hy,
-      hx, 0,
-      0, hy,
-      -hx, 0,
-    ]);
-    tile.cursor = 'pointer';
-    
-    // Per-tile hover/selection handled centrally on the grid container to avoid flicker
-
-    // Optional animated overlays per tile type
-    const overlay = new PIXI.Graphics();
-    overlay.zIndex = 5;
-    (overlay as any).eventMode = 'none';
-    overlay.position.set(worldX, worldY);
-    gridContainerRef.current?.addChild(overlay);
-    (tile as any).__overlay = overlay; // attach for animation tick
-
-    return { x: gridX, y: gridY, worldX, worldY, tileType, sprite: tile };
-  }, [tileHeight, tileTypes, tileWidth, onTileHover, onTileClick]);
 
   // Initialize grid
   useEffect(() => {
@@ -177,7 +57,7 @@ export default function IsometricGrid({
     gridContainer.sortableChildren = true;
     gridContainer.zIndex = 100; // base layer under buildings
     // enable leave detection for hover overlay
-    (gridContainer as any).eventMode = 'static';
+      (gridContainer as unknown as { eventMode: string }).eventMode = 'static';
     viewport.addChild(gridContainer);
     gridContainerRef.current = gridContainer;
 
@@ -186,7 +66,7 @@ export default function IsometricGrid({
     
     for (let x = 0; x < gridSize; x++) {
       for (let y = 0; y < gridSize; y++) {
-        const tile = createTileSprite(x, y);
+        const tile = createTileSprite(x, y, gridContainer, tileWidth, tileHeight, tileTypes);
         const key = `${x},${y}`;
         tiles.set(key, tile);
         gridContainer.addChild(tile.sprite);
@@ -197,96 +77,13 @@ export default function IsometricGrid({
     logger.debug('Grid container children count:', gridContainer.children.length);
     tilesRef.current = tiles;
 
-    // Build shared hover and selection overlays
-    const makeOverlay = (color: number, alpha: number) => {
-      const g = new PIXI.Graphics();
-      g.zIndex = 9999;
-      (g as any).eventMode = 'none';
-      g.clear();
-      g.fill({ color, alpha });
-      g.moveTo(0, -tileHeight / 2);
-      g.lineTo(tileWidth / 2, 0);
-      g.lineTo(0, tileHeight / 2);
-      g.lineTo(-tileWidth / 2, 0);
-      g.closePath();
-      g.fill();
-      g.visible = false;
-      return g;
-    };
-
-    const hoverOverlay = makeOverlay(0x4f46e5, 0.25); // indigo
-    const selectOverlay = makeOverlay(0x10b981, 0.3); // emerald
-    hoverOverlayRef.current = hoverOverlay;
-    selectOverlayRef.current = selectOverlay;
-    gridContainer.addChild(hoverOverlay);
-    gridContainer.addChild(selectOverlay);
-
-    // Hide hover overlay when leaving grid container
-    const onPointerLeave = () => {
-      const hover = hoverOverlayRef.current;
-      if (hover) hover.visible = false;
-      lastHoverIndexRef.current = null;
-    };
-    gridContainer.on('pointerleave', onPointerLeave);
-
-    // Compute tile index from local world coordinates
-    const toTileIndex = (wx: number, wy: number) => {
-      const tw2 = tileWidth / 2;
-      const th2 = tileHeight / 2;
-      const fx = wy / th2 + wx / tw2; // equals 2*gx ideally
-      const fy = wy / th2 - wx / tw2; // equals 2*gy ideally
-      const gx = Math.round(fx / 2);
-      const gy = Math.round(fy / 2);
-      return { gx, gy };
-    };
-
-    const onPointerMove = (e: PIXI.FederatedPointerEvent) => {
-      const local = gridContainer.toLocal({ x: e.globalX, y: e.globalY } as any);
-      const { gx, gy } = toTileIndex(local.x, local.y);
-      const key = `${gx},${gy}`;
-      if (gx < 0 || gy < 0 || !tilesRef.current.has(key)) {
-        const hover = hoverOverlayRef.current;
-        if (hover) hover.visible = false;
-        lastHoverIndexRef.current = null;
-        return;
-      }
-      const last = lastHoverIndexRef.current;
-      if (!last || last.x !== gx || last.y !== gy) {
-        // Debounce hover switch to avoid border flicker
-        if (hoverDebounceRef.current) {
-          clearTimeout(hoverDebounceRef.current);
-          hoverDebounceRef.current = null;
-        }
-        const targetX = gx, targetY = gy;
-        hoverDebounceRef.current = window.setTimeout(() => {
-          lastHoverIndexRef.current = { x: targetX, y: targetY };
-          const { worldX, worldY } = gridToWorld(targetX, targetY, tileWidth, tileHeight);
-          const hover = hoverOverlayRef.current;
-          if (hover) {
-            hover.visible = true;
-            hover.position.set(worldX, worldY);
-          }
-          onTileHover?.(targetX, targetY, tileTypes[targetY]?.[targetX]);
-        }, 20);
-      }
-    };
-
-    const onPointerTap = (e: PIXI.FederatedPointerEvent) => {
-      const local = gridContainer.toLocal({ x: e.globalX, y: e.globalY } as any);
-      const { gx, gy } = toTileIndex(local.x, local.y);
-      if (gx < 0 || gy < 0 || !tilesRef.current.has(`${gx},${gy}`)) return;
-      const { worldX, worldY } = gridToWorld(gx, gy, tileWidth, tileHeight);
-      selectedTileRef.current = { x: gx, y: gy, worldX, worldY, tileType: tileTypes[gy]?.[gx] || 'unknown', sprite: new PIXI.Graphics() } as any;
-      const select = selectOverlayRef.current;
-      if (select) {
-        select.visible = true;
-        select.position.set(worldX, worldY);
-      }
-      onTileClick?.(gx, gy, tileTypes[gy]?.[gx]);
-    };
-
-    gridContainer.on('pointermove', onPointerMove);
-    gridContainer.on('pointertap', onPointerTap);
+    overlayManagerRef.current = new TileOverlay(gridContainer, {
+      tileWidth,
+      tileHeight,
+      getTileType: (x, y) => tileTypesRef.current[y]?.[x],
+      onTileHover,
+      onTileClick,
+    });
 
     // Compute world bounds for clamping based on isometric grid extents
     // For an isometric grid, we need to find the actual world bounds of all tiles
@@ -348,26 +145,19 @@ export default function IsometricGrid({
 
     // Cleanup function
     return () => {
+      overlayManagerRef.current?.destroy();
+      overlayManagerRef.current = null;
       if (gridContainer.parent) {
         gridContainer.parent.removeChild(gridContainer);
       }
       gridContainer.destroy({ children: true });
       viewport.off('zoomed', updateClamp);
       window.removeEventListener('resize', onResize);
-      gridContainer.off('pointerleave', onPointerLeave);
-      gridContainer.off('pointermove', onPointerMove);
-      gridContainer.off('pointertap', onPointerTap);
-      if (hoverDebounceRef.current) {
-        clearTimeout(hoverDebounceRef.current);
-        hoverDebounceRef.current = null;
-      }
       tilesRef.current.clear();
-      hoveredTileRef.current = null;
-      selectedTileRef.current = null;
       centeredRef.current = false;
       initializedRef.current = false;
     };
-  }, [viewport, gridSize, tileWidth, tileHeight, tileTypes]);
+  }, [viewport, gridSize, tileWidth, tileHeight, tileTypes, onTileHover, onTileClick]);
 
   // Dynamically add missing tiles when gridSize grows
   useEffect(() => {
@@ -379,7 +169,7 @@ export default function IsometricGrid({
       for (let y = 0; y < gridSize; y++) {
         const key = `${x},${y}`;
         if (!tiles.has(key)) {
-          const tile = createTileSprite(x, y);
+          const tile = createTileSprite(x, y, gridContainer, tileWidth, tileHeight, tileTypes);
           tiles.set(key, tile);
           gridContainer.addChild(tile.sprite);
           added++;
@@ -389,7 +179,7 @@ export default function IsometricGrid({
     if (added > 0) {
       logger.debug(`IsometricGrid: added ${added} tiles after gridSize changed to ${gridSize}`);
     }
-  }, [gridSize, createTileSprite]);
+  }, [gridSize, tileWidth, tileHeight, tileTypes]);
 
   // Refresh tile graphics when tileTypes change
   useEffect(() => {
@@ -400,13 +190,13 @@ export default function IsometricGrid({
     tiles.forEach((gridTile, key) => {
       const nextType = tileTypes[gridTile.y]?.[gridTile.x];
       if (nextType && nextType !== gridTile.tileType) {
-        const oldSprite: any = gridTile.sprite as any;
-        const oldTex = oldSprite.__tex;
+          const oldSprite = gridTile.sprite as PIXI.Graphics & { __tex?: PIXI.Graphics };
+          const oldTex = oldSprite.__tex;
         if (oldTex) {
           try { gridContainer.removeChild(oldTex); } catch {}
         }
         try { gridContainer.removeChild(gridTile.sprite); } catch {}
-        const newTile = createTileSprite(gridTile.x, gridTile.y);
+        const newTile = createTileSprite(gridTile.x, gridTile.y, gridContainer, tileWidth, tileHeight, tileTypes);
         tiles.set(key, newTile);
         gridContainer.addChild(newTile.sprite);
         updates++;
@@ -415,7 +205,7 @@ export default function IsometricGrid({
     if (updates > 0) {
       logger.debug(`IsometricGrid: updated ${updates} tiles due to tileTypes change`);
     }
-  }, [tileTypes, createTileSprite]);
+  }, [tileTypes, tileWidth, tileHeight]);
 
   // Performance optimization: Viewport culling and LOD + lightweight animations
   useEffect(() => {
@@ -476,7 +266,7 @@ export default function IsometricGrid({
         }
 
         // Lightweight tile animations via overlay
-        const overlay = (tile.sprite as any).__overlay as PIXI.Graphics | undefined;
+          const overlay = (tile.sprite as PIXI.Graphics & { __overlay?: PIXI.Graphics }).__overlay;
         if (overlay) {
           overlay.visible = shouldShowTile;
           if (shouldShowTile) {
@@ -517,7 +307,7 @@ export default function IsometricGrid({
     const tick = () => {
       t += 16;
       // Subtle pulse on selection overlay
-      const sel = selectOverlayRef.current;
+      const sel = overlayManagerRef.current?.selectOverlay;
       if (sel && sel.visible) {
         const base = 0.35;
         const amp = 0.1;

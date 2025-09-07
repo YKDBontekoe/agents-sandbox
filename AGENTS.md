@@ -1,6 +1,6 @@
 # Arcane Dominion Agents Guide
 
-This guide defines the agent architecture, prompting standards, safety, and ops practices for the Arcane Dominion Tycoon. It is the canonical reference for building, extending, and operating the AI council.
+This guide defines the agent architecture, prompting standards, safety, and ops practices for the Arcane Dominion Tycoon. It is the canonical reference for building, extending, and operating the AI council. When new systems or knowledge are introduced, update this guide to keep it current.
 
 Related docs: docs/agents/ARCHITECTURE.md, docs/agents/PROMPTS.md, docs/agents/SECURITY.md, docs/agents/OPERATIONS.md, docs/agents/EVALUATION.md, docs/agents/EXTENSIONS.md, docs/agents/CONTRIBUTING.md
 
@@ -61,13 +61,21 @@ Related docs: docs/agents/ARCHITECTURE.md, docs/agents/PROMPTS.md, docs/agents/S
 - `supabase/migrations/` — schema and idempotent updates for `game_state`, `proposals`
 - `src/components/game/buildingIcons/` — canvas icon drawers keyed by building type
 - `src/components/game/BuildingsLayer.tsx` — renders building sprites and tooltips
+- `src/components/game/effects/` — PIXI visual effect hooks (traffic, construction, activity, day-night).
+- `src/components/game/citizens/` — animated citizen/vehicle helpers (types, pathfinding, renderers).
 - `src/components/settings/` — reusable settings panel components and configuration
-- `src/components/game/hud/accessibility/` — HUD accessibility utilities (config, focus, announcer). Run `npm run lint src/components/game/hud/HUDAccessibility.tsx src/components/game/hud/accessibility` when modifying
-- `packages/engine/src/simulation/traffic/` — modular traffic simulation system (vehicle, pedestrian, and light managers). Run `npm test` and `npm run lint packages/engine/src/simulation/traffic` when modifying
+- `src/components/game/hud/accessibility/` — HUD accessibility utilities (config, focus, announcer).
+- `src/components/game/city/` — city management panel subcomponents and config.
+- `packages/engine/src/simulation/traffic/` — modular traffic simulation system (vehicle, pedestrian, and light managers).
+- `packages/engine/src/simulation/zoning/` — zoning simulation components.
+- `packages/engine/src/simulation/transport/` — public transport simulation system (route and vehicle managers).
 - `src/components/game/skills/` — skill tree modules
   - `types.ts` — shared skill interfaces
   - `generate.ts` — procedural tree generation
   - `progression.ts` — achievement and challenge evaluation
+  - `hooks.ts` — animation and utility hooks
+  - `canvasPool.ts` — canvas pooling utility
+  - `effects.ts` — particle and connection render helpers
 
 ## Design Canon
 
