@@ -14,32 +14,22 @@ import { publicConfig as config } from '@/infrastructure/config';
 import { IntegratedHUDSystem } from '@/components/game/hud/IntegratedHUDSystem';
 import { SimResources, canAfford, applyCost, projectCycleDeltas } from '@/components/game/resourceUtils';
 import { SIM_BUILDINGS, BUILDABLE_TILES } from '@/components/game/simCatalog';
-import WorkerPanel from '@/components/game/WorkerPanel';
-import { CouncilPanel, CouncilProposal } from '@/components/game/CouncilPanel';
-import { EdictsPanel, EdictSetting } from '@/components/game/EdictsPanel';
-import DistrictSprites, { District } from '@/components/game/districts';
-import { LeylineSystem, Leyline } from '@/components/game/LeylineSystem';
+import WorkerPanel from '@/components/game/hud/WorkerPanel';
+import { CouncilPanel, CouncilProposal } from '@/components/game/hud/CouncilPanel';
+import { EdictsPanel, EdictSetting } from '@/components/game/hud/EdictsPanel';
+import type { District } from '@/components/game/districts';
+import type { Leyline } from '@/components/game/LeylineSystem';
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
 import { generateSkillTree } from '@/components/game/skills/generate';
 import { accumulateEffects } from '@/components/game/skills/progression';
 import type { SkillNode } from '@/components/game/skills/types';
-import EffectsLayer from '@/components/game/EffectsLayer';
-import PreviewLayer from '@/components/game/PreviewLayer';
-import AmbientLayer from '@/components/game/AmbientLayer';
-import SeasonalLayer from '@/components/game/SeasonalLayer';
 import TileTooltip from '@/components/game/TileTooltip';
 import SettingsPanel from '@/components/game/SettingsPanel';
-import HeatLayer from '@/components/game/HeatLayer';
-import MarkersLayer from '@/components/game/MarkersLayer';
-import BuildingsLayer from '@/components/game/BuildingsLayer';
-import RoutesLayer from '@/components/game/RoutesLayer';
-import RoadsLayer from '@/components/game/RoadsLayer';
-import CitizensLayer from '@/components/game/CitizensLayer';
-import EnhancedVisualEffectsLayer from '@/components/game/EnhancedVisualEffectsLayer';
-import AnimatedCitizensLayer from '@/components/game/AnimatedCitizensLayer';
-import AssignmentLinesLayer, { type AssignLine } from '@/components/game/AssignmentLinesLayer';
-import PathHintsLayer, { type PathHint } from '@/components/game/PathHintsLayer';
-import BuildingPulseLayer, { type Pulse } from '@/components/game/BuildingPulseLayer';
+import type { AssignLine } from '@/components/game/AssignmentLinesLayer';
+import type { PathHint } from '@/components/game/PathHintsLayer';
+import type { Pulse } from '@/components/game/BuildingPulseLayer';
+import TileInfoPanel from '@/components/game/panels/TileInfoPanel';
+import GameLayers from '@/components/game/GameLayers';
 import type { CrisisData } from '@/components/game/CrisisModal';
 import GoalBanner from '@/components/game/GoalBanner';
 import OnboardingGuide from '@/components/game/OnboardingGuide';
@@ -61,230 +51,6 @@ import { TimeSystem, timeSystem, TIME_SPEEDS, type TimeSpeed, GameTime as System
 
 type BuildTypeId = keyof typeof SIM_BUILDINGS;
 
-function TileInfoPanel({
-  selected,
-  resources,
-  simResources,
-  placedBuildings,
-  routes,
-  onPreviewType,
-  onBuild,
-  onUpgrade,
-  onDismantle,
-  onRemoveRoute,
-  routeDraftFrom,
-  onStartRoute,
-  onFinalizeRoute,
-  onCancelRoute,
-  onOpenCouncil,
-  tutorialFree,
-  onConsumeTutorialFree,
-  onTutorialProgress,
-  allowFineSawmill,
-  onSetRecipe,
-}: {
-  selected: { x: number; y: number; tileType?: string };
-  resources: GameResources;
-  simResources: SimResources | null;
-  placedBuildings: StoredBuilding[];
-  routes: TradeRoute[];
-  onPreviewType: (typeId: BuildTypeId | null) => void;
-  onBuild: (typeId: BuildTypeId) => void | Promise<void>;
-  onUpgrade: (buildingId: string) => void | Promise<void>;
-  onDismantle: (buildingId: string) => void | Promise<void>;
-  onRemoveRoute: (routeId: string) => void | Promise<void>;
-  routeDraftFrom: string | null;
-  onStartRoute: (buildingId: string) => void;
-  onFinalizeRoute: (fromId: string, toId: string) => void;
-  onCancelRoute: () => void;
-  onOpenCouncil: () => void;
-  tutorialFree: Partial<Record<BuildTypeId, number>>;
-  onConsumeTutorialFree: (typeId: BuildTypeId) => void;
-  onTutorialProgress: (evt: { type: 'built' | 'openedCouncil' }) => void;
-  allowFineSawmill: boolean;
-  onSetRecipe: (buildingId: string, recipe: 'basic' | 'fine' | 'premium') => void;
-}) {
-  const { x, y, tileType } = selected;
-  const occupied = placedBuildings.find(b => b.x === x && b.y === y) || null;
-  const hasCouncil = placedBuildings.some(b => b.typeId === 'council_hall');
-
-  const candidates: BuildTypeId[] = hasCouncil
-    ? ['farm', 'house', 'lumber_camp', 'sawmill', 'storehouse', 'trade_post', 'automation_workshop', 'shrine'] as BuildTypeId[]
-    : ['farm', 'house', 'lumber_camp', 'sawmill', 'council_hall'] as BuildTypeId[];
-
-  const canPlaceOnTile = (typeId: BuildTypeId) => {
-    const allowed = (BUILDABLE_TILES as any)[typeId] as string[] | undefined;
-    if (!allowed) return true;
-    if (!tileType) return false;
-    return allowed.includes(tileType);
-  };
-
-  const canAffordBuild = (typeId: BuildTypeId) => {
-    if (!simResources) return false;
-    if ((tutorialFree[typeId] || 0) > 0) return true;
-    return canAfford(SIM_BUILDINGS[typeId].cost, simResources);
-  };
-
-  const renderCost = (typeId: BuildTypeId) => {
-    const cost = SIM_BUILDINGS[typeId].cost;
-    const parts = Object.entries(cost)
-      .filter(([_, v]) => (v ?? 0) > 0)
-      .map(([k, v]) => `${k} -${v}`);
-    return parts.length ? parts.join('  ') : 'Free';
-  };
-
-  return (
-    <div className="absolute bottom-56 left-4 bg-white/95 border border-slate-200 text-slate-800 px-3 py-2 rounded-md text-sm shadow-sm pointer-events-auto w-[320px]">
-      <div className="flex items-center justify-between gap-2">
-        <div>
-          <div className="font-medium">Tile ({x}, {y})</div>
-          <div className="text-xs text-slate-500">{tileType ?? 'unknown'}{occupied ? ` • ${SIM_BUILDINGS[occupied.typeId].name}` : ''}</div>
-        </div>
-        <button
-          onClick={() => { onOpenCouncil(); onTutorialProgress({ type: 'openedCouncil' }); }}
-          className="px-2 py-1 rounded bg-blue-600 hover:bg-blue-700 text-white text-xs"
-        >
-          Open Council
-        </button>
-      </div>
-
-      <div className="mt-2 border-t pt-2">
-        {occupied ? (
-          <div className="space-y-2">
-            <div className="text-xs text-slate-600">
-              {SIM_BUILDINGS[occupied.typeId].name} • Lv.{occupied.level}
-            </div>
-            <div className="text-xs text-slate-500">
-              Workers: {occupied.workers}
-            </div>
-            <div className="flex gap-2 pt-1">
-              <button onClick={() => onUpgrade(occupied.id)} className="px-2 py-1 text-xs rounded bg-amber-600 hover:bg-amber-700 text-white">Upgrade</button>
-              <button onClick={() => onDismantle(occupied.id)} className="px-2 py-1 text-xs rounded bg-slate-200 hover:bg-slate-300 text-slate-700">Dismantle</button>
-            </div>
-            {occupied.typeId === 'sawmill' && (
-              <div className="flex items-center gap-2 pt-1 text-xs">
-                <span className="text-slate-600">Recipe:</span>
-                <button
-                  onClick={() => onSetRecipe(occupied.id, 'basic')}
-                  className={`px-2 py-0.5 rounded border ${((occupied as any).recipe ?? 'basic') === 'basic' ? 'bg-emerald-600 text-white border-emerald-700' : 'bg-slate-100 text-slate-700 border-slate-300'}`}
-                >
-                  Planks
-                </button>
-                <button
-                  onClick={() => allowFineSawmill && onSetRecipe(occupied.id, 'fine')}
-                  disabled={!allowFineSawmill}
-                  className={`px-2 py-0.5 rounded border ${((occupied as any).recipe) === 'fine' ? 'bg-emerald-600 text-white border-emerald-700' : 'bg-slate-100 text-slate-700 border-slate-300'} ${!allowFineSawmill ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  title={allowFineSawmill ? 'Fine Planks (wood 4 → planks 9)' : 'Requires relevant skill'}
-                >
-                  Fine Planks
-                </button>
-              </div>
-            )}
-            {occupied.typeId === 'trade_post' && (
-              <div className="flex flex-col gap-2 pt-1">
-                <div className="flex items-center gap-2 text-xs">
-                  <span className="text-slate-600">Trade Mode:</span>
-                  <button
-                    onClick={() => onSetRecipe(occupied.id, 'basic')}
-                    className={`px-2 py-0.5 rounded border ${(((occupied as any).recipe ?? 'basic') === 'basic') ? 'bg-emerald-600 text-white border-emerald-700' : 'bg-slate-100 text-slate-700 border-slate-300'}`}
-                  >
-                    Standard
-                  </button>
-                  <button
-                    onClick={() => onSetRecipe(occupied.id, 'premium')}
-                    className={`px-2 py-0.5 rounded border ${(((occupied as any).recipe) === 'premium') ? 'bg-emerald-600 text-white border-emerald-700' : 'bg-slate-100 text-slate-700 border-slate-300'}`}
-                    title={'Premium Goods (grain 3 → coin 12)'}
-                  >
-                    Premium
-                  </button>
-                </div>
-                {routeDraftFrom === null && (
-                  <button onClick={() => onStartRoute(occupied.id)} className="px-2 py-1 text-xs rounded bg-blue-600 hover:bg-blue-700 text-white">Create Trade Route</button>
-                )}
-                {routeDraftFrom && routeDraftFrom === occupied.id && (
-                  <button onClick={onCancelRoute} className="px-2 py-1 text-xs rounded bg-slate-200 hover:bg-slate-300 text-slate-700">Cancel</button>
-                )}
-                {routeDraftFrom && routeDraftFrom !== occupied.id && (
-                  <div className="flex items-center gap-2">
-                    <button onClick={() => onFinalizeRoute(routeDraftFrom, occupied.id)} className="px-2 py-1 text-xs rounded bg-emerald-600 hover:bg-emerald-700 text-white">Connect Route Here</button>
-                    <span className="text-[11px] text-slate-500">
-                      {/* Estimate cost based on Manhattan distance */}
-                      {(() => {
-                        const from = placedBuildings.find(b => b.id === routeDraftFrom);
-                        if (!from) return null;
-                        const length = Math.abs(from.x - occupied.x) + Math.abs(from.y - occupied.y);
-                        const cost = 5 + 2 * length;
-                        return `Cost: coin ${cost} (len ${length})`;
-                      })()}
-                    </span>
-                  </div>
-                )}
-                {/* Show existing connections with remove buttons */}
-                {(() => {
-                  const connected = (routes || []).filter(r => r.fromId === occupied.id || r.toId === occupied.id);
-                  if (connected.length === 0) return null;
-                  return (
-                    <div className="text-[11px] text-slate-600">
-                      Routes:
-                      <ul className="mt-1 space-y-1">
-                        {connected.map(r => {
-                          const otherId = r.fromId === occupied.id ? r.toId : r.fromId;
-                          const other = placedBuildings.find(b => b.id === otherId);
-                          return (
-                            <li key={r.id} className="flex items-center gap-2">
-                              <span>→ {other ? SIM_BUILDINGS[other.typeId].name : otherId} (len {r.length})</span>
-                              <button
-                                className="px-2 py-0.5 text-[11px] rounded bg-red-600 hover:bg-red-700 text-white"
-                                onClick={async (e) => {
-                                  e.stopPropagation();
-                                  await onRemoveRoute(r.id);
-                                }}
-                              >Remove</button>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    </div>
-                  );
-                })()}
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="space-y-2">
-            <div className="text-xs text-slate-600">Available builds</div>
-            {candidates.map((typeId) => {
-              const placeable = canPlaceOnTile(typeId);
-              const affordable = canAffordBuild(typeId);
-              const disabled = !placeable || !affordable;
-              return (
-                <div key={typeId} className="flex items-center justify-between gap-2">
-                  <div>
-                    <div className="font-medium text-slate-800 text-sm">{SIM_BUILDINGS[typeId].name}</div>
-                    <div className="text-[11px] text-slate-500">{renderCost(typeId)}{!placeable ? ' • cannot build on this terrain' : ''}</div>
-                  </div>
-                  <button
-                    onMouseEnter={() => onPreviewType(typeId)}
-                    onMouseLeave={() => onPreviewType(null)}
-                    onClick={() => {
-                      onBuild(typeId);
-                      if ((tutorialFree[typeId] || 0) > 0) onConsumeTutorialFree(typeId);
-                      onTutorialProgress({ type: 'built' });
-                    }}
-                    disabled={disabled}
-                    className={`px-2 py-1 rounded text-xs border ${disabled ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-700'}`}
-                  >
-                    Build
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
 
 
 interface StoredBuilding {
@@ -1512,103 +1278,34 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
               }
             }}
       >
-            <PreviewLayer
+            <GameLayers
+              tileTypes={tileTypes}
               hoverTile={hoverTile}
               selectedTile={selectedTile}
-              tileTypes={tileTypes}
-              buildings={placedBuildings.map(b => ({ id: b.id, typeId: b.typeId, x: b.x, y: b.y }))}
+              placedBuildings={placedBuildings}
               previewTypeId={previewTypeId}
-              buildHint={( ()=>{
-                if (!previewTypeId) return undefined;
-                const tile = hoverTile || selectedTile;
-                if (!tile) return undefined;
-                const occupied = placedBuildings.some(b => b.x === tile.x && b.y === tile.y);
-                if (occupied) return { valid: false, reason: 'Occupied' };
-                const allowed = (BUILDABLE_TILES as any)[previewTypeId] as string[] | undefined;
-                if (allowed && tile.tileType && !allowed.includes(tile.tileType)) return { valid: false, reason: 'Invalid terrain' };
-                // Council prerequisite for advanced builds
-                const needsCouncil = (previewTypeId === 'trade_post' || previewTypeId === 'automation_workshop');
-                const hasCouncil = placedBuildings.some(b => b.typeId === 'council_hall');
-                if (needsCouncil && !hasCouncil) return { valid: false, reason: 'Requires Council Hall' };
-                // Affordability
-                const hasFree = (tutorialFree[previewTypeId as BuildTypeId] || 0) > 0;
-                if (!hasFree && simResources) {
-                  const cost = SIM_BUILDINGS[previewTypeId].cost as Record<string, number>;
-                  const lack: string[] = [];
-                  (Object.keys(cost) as Array<keyof typeof cost>).forEach((k) => {
-                    const need = cost[k] || 0;
-                    const cur = (simResources as any)[k] || 0;
-                    if (need > cur) lack.push(`${String(k)} ${need - cur}`);
-                  });
-                  if (lack.length > 0) return { valid: false, reason: `Insufficient: ${lack.slice(0,3).join(', ')}` } as any;
-                }
-                return { valid: true };
-              })()}
-              highlightAllPlaceable={!!previewTypeId}
-              hasCouncil={placedBuildings.some(b => b.typeId === 'council_hall')}
-              affordable={( ()=>{
-                if (!previewTypeId) return false;
-                const hasFree = (tutorialFree[previewTypeId as BuildTypeId] || 0) > 0;
-                if (hasFree) return true;
-                if (!simResources) return false;
-                return canAfford(SIM_BUILDINGS[previewTypeId].cost, simResources);
-              })()}
-            />
-            <DistrictSprites districts={districts} tileTypes={tileTypes} onDistrictHover={()=>{}} />
-            <LeylineSystem leylines={leylines} onLeylineCreate={()=>{}} onLeylineSelect={setSelectedLeyline} selectedLeyline={selectedLeyline} isDrawingMode={false} />
-            <HeatLayer gridSize={Math.max(tileTypes.length, tileTypes[0]?.length ?? 0)} tileWidth={64} tileHeight={32} unrest={resources.unrest} threat={resources.threat} />
-            {
-              (() => {
-                const connected = new Set<string>();
-                (routes || []).forEach(r => {
-                  const a = placedBuildings.find(b => b.id === r.fromId);
-                  const b = placedBuildings.find(b => b.id === r.toId);
-                  if (!a || !b) return;
-                  if (a.typeId === 'storehouse' && b.id) connected.add(b.id);
-                  if (b.typeId === 'storehouse' && a.id) connected.add(a.id);
-                });
-                return (
-                  <BuildingsLayer
-                    buildings={placedBuildings.map(b => ({ id: b.id, typeId: b.typeId, x: b.x, y: b.y, workers: b.workers, level: b.level }))}
-                    storeConnectedIds={Array.from(connected)}
-                    selected={selectedTile ? { x: selectedTile.x, y: selectedTile.y } : null}
-                  />
-                );
-              })()
-            }
-            <RoutesLayer
-              routes={(routes || []).map(r => ({ id: r.id, fromId: r.fromId, toId: r.toId }))}
-              buildings={placedBuildings.map(b => ({ id: b.id, x: b.x, y: b.y }))}
-              draftFromId={routeDraftFrom}
-              draftToId={routeHoverToId}
-            />
-            <AssignmentLinesLayer lines={assignLines} />
-            <PathHintsLayer hints={pathHints} />
-            <BuildingPulseLayer pulses={pulses} />
-            {showRoads && <RoadsLayer roads={roads} />}
-            {showCitizens && (
-            <AnimatedCitizensLayer
-              buildings={placedBuildings.map(b => ({ id: b.id, typeId: b.typeId, x: b.x, y: b.y, workers: b.workers, level: b.level }))}
+              tutorialFree={tutorialFree}
+              simResources={simResources}
+              routes={routes}
+              routeDraftFrom={routeDraftFrom}
+              routeHoverToId={routeHoverToId}
+              assignLines={assignLines}
+              pathHints={pathHints}
+              pulses={pulses}
+              showRoads={showRoads}
               roads={roads}
-              tileTypes={tileTypes}
+              showCitizens={showCitizens}
               citizensCount={citizensCount}
-              enableTraffic={true}
-            />)}
-            {acceptedNotice && (
-              <EffectsLayer trigger={{ eventKey: acceptedNoticeKeyRef.current || 'accept', deltas: acceptedNotice.delta || {}, gridX: selectedTile?.x ?? 10, gridY: selectedTile?.y ?? 10 }} />
-            )}
-            {clickEffectKey && selectedTile && (
-              <EffectsLayer trigger={{ eventKey: clickEffectKey, deltas: {}, gridX: selectedTile.x, gridY: selectedTile.y }} />
-            )}
-            <AmbientLayer tileTypes={tileTypes} />
-            <SeasonalLayer season={((state.cycle ?? 0) % 4 === 0 ? 'spring' : (state.cycle % 4 === 1 ? 'summer' : (state.cycle % 4 === 2 ? 'autumn' : 'winter')))} />
-            <MarkersLayer markers={markers.map(m => ({ id: m.id, gridX: m.x, gridY: m.y, label: m.label }))} />
-            <EnhancedVisualEffectsLayer
-              buildings={placedBuildings.map(b => ({ id: b.id, typeId: b.typeId, x: b.x, y: b.y, workers: b.workers, level: b.level }))}
-              citizens={placedBuildings.filter(b => b.workers > 0).map(b => ({ id: b.id, x: b.x, y: b.y, activity: 'working', speed: 1.0 }))}
-              roads={roads}
-              gameTime={{ hour: Math.floor((Date.now() / 60000) % 24), minute: Math.floor((Date.now() / 1000) % 60), day: Math.floor(Date.now() / 86400000) }}
-              cityMetrics={{ population: citizensCount, happiness: 75, pollution: 20, traffic: roads.length * 10 }}
+              acceptedNotice={acceptedNotice}
+              acceptedNoticeKey={acceptedNoticeKeyRef.current}
+              clickEffectKey={clickEffectKey}
+              markers={markers}
+              districts={districts}
+              leylines={leylines}
+              selectedLeyline={selectedLeyline}
+              setSelectedLeyline={setSelectedLeyline}
+              resources={resources}
+              cycle={state.cycle ?? 0}
               constructionEvents={constructionEvents}
             />
       </GameRenderer>

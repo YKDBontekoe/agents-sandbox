@@ -1,5 +1,5 @@
 import React from 'react';
-import { SIM_BUILDINGS } from './simCatalog';
+import { SIM_BUILDINGS } from '../simCatalog';
 
 type WorkerBuilding = {
   id: string;
