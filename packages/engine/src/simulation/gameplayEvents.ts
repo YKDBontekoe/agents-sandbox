@@ -1,7 +1,7 @@
 import type { SimResources } from '../index';
 import type { SimulatedBuilding } from './buildingSimulation';
 import type { Citizen } from './citizenBehavior';
-import type { WorkerProfile } from './workerSimulation';
+import type { WorkerProfile } from './workers/types';
 
 // Event types and their impacts
 export type EventType = 

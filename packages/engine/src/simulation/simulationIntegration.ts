@@ -9,7 +9,8 @@ import {
   createSimulatedBuilding
 } from './buildingSimulation';
 import { CitizenBehaviorSystem, Citizen } from './citizenBehavior';
-import { WorkerSimulationSystem, WorkerProfile } from './workerSimulation';
+import { WorkerSimulationSystem } from './workerSimulation';
+import type { WorkerProfile } from './workers/types';
 import {
   ActiveEvent,
   VisualIndicator,
