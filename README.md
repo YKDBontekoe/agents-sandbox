@@ -38,6 +38,10 @@ Environment variables are validated and layered in `src/infrastructure/config.ts
 | `NEXT_PUBLIC_OFFLINE_MODE` | Use local data instead of API | `false` |
 | `NEXT_PUBLIC_DISABLE_REALTIME` | Disable realtime updates | `false` |
 
+## Architecture
+
+See [Architecture Overview](docs/architecture/overview.md) and [Package Diagram](docs/architecture/packages.md) for system context. Architecture Decision Records live in [docs/adr](docs/adr/).
+
 ## Design Tokens
 
 Global color tokens are defined in `src/app/globals.css` and surfaced in Tailwind via `theme.extend.colors`.
