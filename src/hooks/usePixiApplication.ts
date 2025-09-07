@@ -10,7 +10,7 @@ interface UsePixiApplicationOptions {
 }
 
 interface UsePixiApplicationResult {
-  canvasRef: React.RefObject<HTMLCanvasElement>;
+  canvasRef: React.RefObject<HTMLCanvasElement | null>;
   app: PIXI.Application | null;
   viewport: Viewport | null;
   isInitialized: boolean;

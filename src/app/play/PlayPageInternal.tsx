@@ -1514,7 +1514,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
               isOpen: true,
               onClose: () => console.log('City management panel close requested')
             }}
-            onGameAction={(action, payload) => {
+            onGameAction={(action, payload: any) => {
               if (action === 'advance-cycle') { tick(); if (onboardingStep < 6) setOnboardingStep(6); }
               if (action === 'pause') { 
                 timeSystem.setSpeed(TIME_SPEEDS.PAUSED);
@@ -1623,7 +1623,6 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
           {selectedTile && (
             <TileInfoPanel
               selected={{ x: selectedTile.x, y: selectedTile.y, tileType: selectedTile.tileType ?? tileTypes[selectedTile.y]?.[selectedTile.x] }}
-              resources={resources}
               simResources={simResources}
               placedBuildings={placedBuildings}
               routes={routes || []}

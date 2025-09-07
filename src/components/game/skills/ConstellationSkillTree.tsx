@@ -22,6 +22,7 @@ export default function ConstellationSkillTree({ tree, unlocked, onUnlock, color
   const [selected, setSelected] = useState<ConstellationNode | null>(null);
   const [pan, setPan] = useState<Vec2>({ x: 0, y: 0 });
   const [zoom, setZoom] = useState<number>(0.8); // Start slightly zoomed out for better overview
+  const [targetZoom, setTargetZoom] = useState<number>(0.8);
   const [isZooming, setIsZooming] = useState<boolean>(false);
   const [tooltip, setTooltip] = useState<TooltipState>({
     visible: false,

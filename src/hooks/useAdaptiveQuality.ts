@@ -11,7 +11,7 @@ interface AdaptiveQualityResult {
  * Manages adaptive quality adjustments and FPS tracking for a PIXI application.
  */
 export function useAdaptiveQuality(app: Application | null): AdaptiveQualityResult {
-  const managerRef = useRef<AdaptiveQualityManager>();
+  const managerRef = useRef<AdaptiveQualityManager | null>(null);
   const [quality, setQuality] = useState<"high" | "medium" | "low">("high");
   const [fps, setFps] = useState(60);
 
@@ -42,7 +42,7 @@ export function useAdaptiveQuality(app: Application | null): AdaptiveQualityResu
     return () => {
       manager.stop();
       app.ticker.remove(fpsMonitor);
-      managerRef.current = undefined;
+      managerRef.current = null;
     };
   }, [app]);
 

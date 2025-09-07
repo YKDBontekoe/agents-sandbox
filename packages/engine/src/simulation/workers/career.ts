@@ -1,4 +1,4 @@
-import type { GameTime } from '../types/gameTime';
+import type { GameTime } from '../../types/gameTime';
 import type { JobRole, WorkerProfile } from './types';
 
 // Adjust job satisfaction based on how a worker's wage compares to the market

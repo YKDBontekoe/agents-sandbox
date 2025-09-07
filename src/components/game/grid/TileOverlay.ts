@@ -58,7 +58,7 @@ export class TileOverlay {
   };
 
   private onPointerMove = (e: PIXI.FederatedPointerEvent) => {
-      const local = this.container.toLocal({ x: e.globalX, y: e.globalY } as PIXI.IPointData);
+      const local = this.container.toLocal({ x: e.globalX, y: e.globalY } as PIXI.PointData);
     const { gx, gy } = this.toTileIndex(local.x, local.y);
     const keyType = this.opts.getTileType(gx, gy);
     if (gx < 0 || gy < 0 || keyType === undefined) {
@@ -84,7 +84,7 @@ export class TileOverlay {
   };
 
   private onPointerTap = (e: PIXI.FederatedPointerEvent) => {
-    const local = this.container.toLocal({ x: e.globalX, y: e.globalY } as PIXI.IPointData);
+    const local = this.container.toLocal({ x: e.globalX, y: e.globalY } as PIXI.PointData);
     const { gx, gy } = this.toTileIndex(local.x, local.y);
     const tileType = this.opts.getTileType(gx, gy);
     if (gx < 0 || gy < 0 || tileType === undefined) return;
@@ -108,6 +108,4 @@ export class TileOverlay {
     this.selectOverlay.destroy();
   }
 }
-
-export type { TileOverlayOptions };
 

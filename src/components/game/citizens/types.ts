@@ -59,7 +59,8 @@ export interface CitizensLayerProps {
   tileWidth?: number;
   tileHeight?: number;
   dayLengthSeconds?: number;
-=======
+}
+
 export interface AnimatedCitizen {
   id: string;
   x: number;

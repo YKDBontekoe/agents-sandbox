@@ -17,15 +17,17 @@ export function attachCanvasEvents({
 }: CanvasEventsOptions): () => void {
   const handlePointerMove = (event: FederatedPointerEvent) => {
     if (!onTileHover) return;
-    const x = Math.floor(event.world.x);
-    const y = Math.floor(event.world.y);
+    const worldPos = viewport.toWorld(event.global.x, event.global.y);
+    const x = Math.floor(worldPos.x);
+    const y = Math.floor(worldPos.y);
     onTileHover(x, y);
   };
 
   const handlePointerTap = (event: FederatedPointerEvent) => {
     if (!onTileClick) return;
-    const x = Math.floor(event.world.x);
-    const y = Math.floor(event.world.y);
+    const worldPos = viewport.toWorld(event.global.x, event.global.y);
+    const x = Math.floor(worldPos.x);
+    const y = Math.floor(worldPos.y);
     onTileClick(x, y);
   };
 

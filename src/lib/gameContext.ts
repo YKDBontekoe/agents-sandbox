@@ -23,10 +23,11 @@ export interface GameContext {
 }
 
 export function buildGameContext(state: unknown): GameContext {
-  const buildings: RawBuilding[] = Array.isArray(state?.buildings)
-    ? (state!.buildings! as RawBuilding[])
+  const stateObj = state as any;
+  const buildings: RawBuilding[] = Array.isArray(stateObj?.buildings)
+    ? (stateObj.buildings as RawBuilding[])
     : []
-  const routes: unknown[] = Array.isArray(state?.routes) ? state!.routes! : []
+  const routes: unknown[] = Array.isArray(stateObj?.routes) ? stateObj.routes : []
 
   const byType: Record<string, number> = {}
   let farmsNearWater = 0
@@ -46,10 +47,10 @@ export function buildGameContext(state: unknown): GameContext {
     building_multipliers: {},
     upkeep_grain_per_worker_delta: 0,
   }
-  const skills: string[] = Array.isArray(state?.skills) ? state!.skills! : []
+  const skills: string[] = Array.isArray(stateObj?.skills) ? stateObj.skills : []
   if (skills.length > 0) {
     try {
-      const tree = generateSkillTree(state?.skill_tree_seed ?? 12345)
+      const tree = generateSkillTree(stateObj?.skill_tree_seed ?? 12345)
       const unlocked = tree.nodes.filter(n => skills.includes(n.id))
       const acc = accumulateEffects(unlocked)
       skillModifiers = {

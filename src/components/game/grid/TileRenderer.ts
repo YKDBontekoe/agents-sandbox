@@ -119,5 +119,3 @@ export function createTileSprite(
   return { x: gridX, y: gridY, worldX, worldY, tileType, sprite: tile };
 }
 
-export { createTileSprite };
-

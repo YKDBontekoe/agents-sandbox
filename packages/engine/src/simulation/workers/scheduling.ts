@@ -68,18 +68,15 @@ export function findBestShift(worker: WorkerProfile, job: JobAssignment): WorkSh
   const scoredShifts = availableShifts.map(shift => {
     let score = 50;
 
-    switch (worker.preferences.preferredShift) {
-      case 'morning':
-        if (shift.startHour >= 5 && shift.startHour <= 8) score += 30;
-        break;
-      case 'afternoon':
-        if (shift.startHour >= 12 && shift.startHour <= 16) score += 30;
-        break;
-      case 'evening':
-        if (shift.startHour >= 16 && shift.startHour <= 20) score += 30;
+    switch (worker.shiftType) {
+      case 'day':
+        if (shift.startHour >= 6 && shift.startHour <= 18) score += 30;
         break;
       case 'night':
-        if (shift.startHour >= 20 || shift.startHour <= 4) score += 30;
+        if (shift.startHour >= 18 || shift.startHour <= 6) score += 30;
+        break;
+      case 'rotating':
+        score += 15;
         break;
       case 'flexible':
         score += 10;

@@ -272,14 +272,14 @@ export class SimulationIntegrationSystem {
     switch (action.type) {
       case 'respond_to_event':
         return this.eventManager.respondToEvent(
-          action.params.eventId,
-          action.params.responseId,
+          action.params.eventId as string,
+          action.params.responseId as string,
           { resources: gameState.resources }
         );
         
       case 'hire_worker':
         const citizenId = this.generateCitizen('New Worker', 25);
-        const success = this.createWorker(citizenId, action.params.roleId || 'general');
+        const success = this.createWorker(citizenId, (action.params.roleId as string) || 'general');
         return {
           success,
           message: success ? 'New worker hired' : 'Failed to hire worker',
