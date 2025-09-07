@@ -1,5 +1,6 @@
 import PlayClient from './PlayClient';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { config } from '@/infrastructure/config';
 
 interface GameStateRow {
   id: string;
@@ -13,7 +14,7 @@ export default async function Page() {
   let initialState: GameStateRow | null = null;
   let initialProposals: any[] = [];
   try {
-    const supabase = createSupabaseServerClient();
+    const supabase = createSupabaseServerClient(config);
     const { data: state } = await supabase
       .from('game_state')
       .select('*')

@@ -3,10 +3,11 @@ import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { SupabaseUnitOfWork } from '@arcane/infrastructure/supabase'
 import { SIM_BUILDINGS } from '@engine'
 import { processTick } from '@engine'
+import { config } from '@/infrastructure/config'
 
 // Advance one cycle: delegate to engine and persist results
 export async function POST() {
-  const supabase = createSupabaseServerClient()
+  const supabase = createSupabaseServerClient(config)
   const uow = new SupabaseUnitOfWork(supabase)
 
   const state = await uow.gameStates.getLatest()

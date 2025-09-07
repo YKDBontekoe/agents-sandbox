@@ -23,6 +23,7 @@ This project uses [`next/font`](https://nextjs.org/docs/app/building-your-applic
 ## Configuration
 
 Environment variables are validated and layered in `src/infrastructure/config.ts`. Provide values via `.env.local`.
+Services like the Supabase clients are constructed via factory functions that accept this configuration explicitly rather than using a shared container.
 
 | Key | Description | Default |
 | --- | --- | --- |
@@ -37,6 +38,10 @@ Environment variables are validated and layered in `src/infrastructure/config.ts
 | `OPENAI_API_KEY` | OpenAI key (optional) | - |
 | `NEXT_PUBLIC_OFFLINE_MODE` | Use local data instead of API | `false` |
 | `NEXT_PUBLIC_DISABLE_REALTIME` | Disable realtime updates | `false` |
+
+## Architecture
+
+See [Architecture Overview](docs/architecture/overview.md) and [Package Diagram](docs/architecture/packages.md) for system context. Architecture Decision Records live in [docs/adr](docs/adr/).
 
 ## Design Tokens
 
