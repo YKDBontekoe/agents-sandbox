@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { Application } from "pixi.js";
-import { AdaptiveQualityManager } from "@/utils/performance";
+import { AdaptiveQualityManager } from "@/utils/performance/adaptiveQuality";
 
 interface AdaptiveQualityResult {
   quality: "high" | "medium" | "low";

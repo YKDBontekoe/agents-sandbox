@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import * as PIXI from "pixi.js";
-import { useGameContext } from "./GameContext";
+import { useEffect, useRef } from 'react';
+import * as PIXI from 'pixi.js';
+import { useGameContext } from '@/components/game/GameContext';
 
 interface EffectsTrigger {
   eventKey: string;
