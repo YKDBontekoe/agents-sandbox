@@ -1,37 +1,11 @@
-import type { GameTime } from '../types/gameTime';
-import type { RoadSegment, RoadType, PathNode } from './pathfinding';
+import type { RoadSegment, RoadType } from './pathfinding';
 import { pathfindingSystem } from './pathfinding';
-
-export interface RoadConnection {
-  segmentId: string;
-  connectionPoint: { x: number; y: number };
-  direction: 'in' | 'out' | 'bidirectional';
-}
-
-export interface Intersection {
-  id: string;
-  position: { x: number; y: number };
-  connectedRoads: RoadConnection[];
-  trafficLights: boolean;
-  lightCycle: number; // seconds
-  currentPhase: 'north-south' | 'east-west' | 'all-stop';
-  phaseTimer: number;
-}
-
-export interface RoadConstructionCost {
-  money: number;
-  time: number; // construction time in game hours
-  maintenance: number; // ongoing maintenance cost per game day
-}
-
-export interface RoadBlueprint {
-  type: RoadType;
-  start: { x: number; y: number };
-  end: { x: number; y: number };
-  cost: RoadConstructionCost;
-  valid: boolean;
-  conflicts: string[]; // List of issues preventing construction
-}
+import type { Intersection, RoadBlueprint } from './roads/types';
+import {
+  calculateRoadPath,
+  calculateConstructionCost,
+  validateRoadPlacement
+} from './roads/construction';
 
 export class RoadNetworkSystem {
   private roads: Map<string, RoadSegment>;
@@ -66,107 +40,25 @@ export class RoadNetworkSystem {
 
   // Plan road construction
   planRoad(type: RoadType, start: { x: number; y: number }, end: { x: number; y: number }): RoadBlueprint {
+    const path = calculateRoadPath(start, end);
+
     const blueprint: RoadBlueprint = {
       type,
       start,
       end,
-      cost: this.calculateConstructionCost(type, start, end),
+      path,
+      cost: calculateConstructionCost(type, start, end),
       valid: true,
       conflicts: []
     };
 
     // Validate road placement
-    this.validateRoadPlacement(blueprint);
-    
+    validateRoadPlacement(blueprint, this.roadGrid, this.gridWidth, this.gridHeight);
+
     return blueprint;
   }
 
-  private validateRoadPlacement(blueprint: RoadBlueprint): void {
-    const { start, end, type } = blueprint;
-    
-    // Check if coordinates are within bounds
-    if (start.x < 0 || start.x >= this.gridWidth || start.y < 0 || start.y >= this.gridHeight ||
-        end.x < 0 || end.x >= this.gridWidth || end.y < 0 || end.y >= this.gridHeight) {
-      blueprint.valid = false;
-      blueprint.conflicts.push('Road extends outside city boundaries');
-      return;
-    }
-
-    // Check for existing roads along the path
-    const roadPath = this.calculateRoadPath(start, end);
-    for (const point of roadPath) {
-      const existingRoad = this.roadGrid[point.x][point.y];
-      if (existingRoad && type !== 'intersection') {
-        blueprint.conflicts.push(`Conflicts with existing road at (${point.x}, ${point.y})`);
-      }
-    }
-
-    // Check minimum road length
-    const distance = Math.sqrt(Math.pow(end.x - start.x, 2) + Math.pow(end.y - start.y, 2));
-    if (distance < 2) {
-      blueprint.valid = false;
-      blueprint.conflicts.push('Road too short (minimum 2 tiles)');
-    }
-
-    // Check maximum road length for certain types
-    if (type === 'residential' && distance > 20) {
-      blueprint.conflicts.push('Residential road too long (maximum 20 tiles)');
-    }
-
-    blueprint.valid = blueprint.conflicts.length === 0;
-  }
-
-  private calculateRoadPath(start: { x: number; y: number }, end: { x: number; y: number }): Array<{ x: number; y: number }> {
-    const path: Array<{ x: number; y: number }> = [];
-    
-    // Simple line drawing algorithm (Bresenham's line algorithm)
-    const dx = Math.abs(end.x - start.x);
-    const dy = Math.abs(end.y - start.y);
-    const sx = start.x < end.x ? 1 : -1;
-    const sy = start.y < end.y ? 1 : -1;
-    let err = dx - dy;
-    
-    let x = start.x;
-    let y = start.y;
-    
-    while (true) {
-      path.push({ x, y });
-      
-      if (x === end.x && y === end.y) break;
-      
-      const e2 = 2 * err;
-      if (e2 > -dy) {
-        err -= dy;
-        x += sx;
-      }
-      if (e2 < dx) {
-        err += dx;
-        y += sy;
-      }
-    }
-    
-    return path;
-  }
-
-  private calculateConstructionCost(type: RoadType, start: { x: number; y: number }, end: { x: number; y: number }): RoadConstructionCost {
-    const distance = Math.sqrt(Math.pow(end.x - start.x, 2) + Math.pow(end.y - start.y, 2));
-    
-    const baseCosts = {
-      pedestrian: { money: 100, time: 0.5, maintenance: 5 },
-      residential: { money: 500, time: 2, maintenance: 20 },
-      commercial: { money: 800, time: 3, maintenance: 35 },
-      highway: { money: 2000, time: 8, maintenance: 100 },
-      intersection: { money: 1500, time: 4, maintenance: 50 }
-    };
-
-    const base = baseCosts[type];
-    
-    return {
-      money: Math.round(base.money * distance),
-      time: Math.round(base.time * distance),
-      maintenance: Math.round(base.maintenance * distance)
-    };
-  }
+  
 
   // Construct road from blueprint
   constructRoad(blueprint: RoadBlueprint): string | null {
@@ -175,8 +67,7 @@ export class RoadNetworkSystem {
     }
 
     const roadId = `road_${this.nextRoadId++}`;
-    const roadPath = this.calculateRoadPath(blueprint.start, blueprint.end);
-    
+
     // Create road segment
     const road: RoadSegment = {
       id: roadId,
@@ -191,7 +82,7 @@ export class RoadNetworkSystem {
     };
 
     // Update road grid
-    for (const point of roadPath) {
+    for (const point of blueprint.path) {
       this.roadGrid[point.x][point.y] = roadId;
       
       // Update pathfinding system
@@ -334,7 +225,7 @@ export class RoadNetworkSystem {
     if (!road) return false;
 
     // Remove from grid
-    const roadPath = this.calculateRoadPath(road.start, road.end);
+    const roadPath = calculateRoadPath(road.start, road.end);
     for (const point of roadPath) {
       this.roadGrid[point.x][point.y] = null;
       pathfindingSystem.setWalkable(point.x, point.y, false);
@@ -421,7 +312,7 @@ export class RoadNetworkSystem {
       }[road.condition];
       
       totalCondition += conditionValue;
-      maintenanceCost += this.calculateConstructionCost(road.type, road.start, road.end).maintenance;
+      maintenanceCost += calculateConstructionCost(road.type, road.start, road.end).maintenance;
     }
 
     return {

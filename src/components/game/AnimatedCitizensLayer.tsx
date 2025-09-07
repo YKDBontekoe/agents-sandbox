@@ -1,50 +1,15 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as PIXI from 'pixi.js';
 import { useGameContext } from './GameContext';
-
-interface AnimatedCitizen {
-  id: string;
-  x: number;
-  y: number;
-  targetX: number;
-  targetY: number;
-  speed: number;
-  type: 'worker' | 'trader' | 'citizen';
-  buildingId?: string;
-  path?: { x: number; y: number }[];
-  pathIndex?: number;
-  lastActivity?: number;
-  direction?: number;
-}
-
-interface AnimatedVehicle {
-  id: string;
-  x: number;
-  y: number;
-  targetX: number;
-  targetY: number;
-  speed: number;
-  type: 'cart' | 'wagon' | 'boat';
-  cargo?: string;
-  path?: { x: number; y: number }[];
-  pathIndex?: number;
-  direction?: number;
-  lastDelivery?: number;
-}
-
-interface Building {
-  id: string;
-  typeId: string;
-  x: number;
-  y: number;
-  workers: number;
-  level: number;
-}
-
-interface Road {
-  x: number;
-  y: number;
-}
+import {
+  AnimatedCitizen,
+  AnimatedVehicle,
+  Building,
+  Road
+} from './citizens/types';
+import { generatePath } from './citizens/citizenPathfinding';
+import { renderCitizen } from './citizens/CitizenRenderer';
+import { renderVehicle } from './citizens/VehicleRenderer';
 
 interface AnimatedCitizensLayerProps {
   buildings: Building[];
@@ -54,135 +19,6 @@ interface AnimatedCitizensLayerProps {
   enableTraffic?: boolean;
 }
 
-const TILE_WIDTH = 64;
-const TILE_HEIGHT = 32;
-
-// Convert grid coordinates to isometric screen coordinates
-function gridToIso(gridX: number, gridY: number): { x: number; y: number } {
-  return {
-    x: (gridX - gridY) * (TILE_WIDTH / 2),
-    y: (gridX + gridY) * (TILE_HEIGHT / 2)
-  };
-}
-
-// Generate pathfinding between two points
-// A* pathfinding implementation
-function generatePath(startX: number, startY: number, endX: number, endY: number, roads: Road[], tileTypes: string[][]): { x: number; y: number }[] {
-  const roadSet = new Set(roads.map(r => `${r.x},${r.y}`));
-  const maxX = tileTypes[0]?.length || 20;
-  const maxY = tileTypes.length || 20;
-  
-  // Node for A* algorithm
-  interface PathNode {
-    x: number;
-    y: number;
-    g: number; // Cost from start
-    h: number; // Heuristic to end
-    f: number; // Total cost
-    parent?: PathNode;
-  }
-  
-  const heuristic = (x1: number, y1: number, x2: number, y2: number) => {
-    return Math.abs(x1 - x2) + Math.abs(y1 - y2);
-  };
-  
-  const getMoveCost = (x: number, y: number) => {
-    // Prefer roads for movement
-    if (roadSet.has(`${x},${y}`)) return 1;
-    // Higher cost for non-road tiles
-    if (x >= 0 && x < maxX && y >= 0 && y < maxY) {
-      const tileType = tileTypes[y]?.[x];
-      if (tileType === 'water') return 10; // Avoid water
-      if (tileType === 'mountain') return 8; // Difficult terrain
-      return 3; // Regular terrain
-    }
-    return 5; // Unknown terrain
-  };
-  
-  const openSet: PathNode[] = [];
-  const closedSet = new Set<string>();
-  
-  const startNode: PathNode = {
-    x: Math.round(startX),
-    y: Math.round(startY),
-    g: 0,
-    h: heuristic(Math.round(startX), Math.round(startY), Math.round(endX), Math.round(endY)),
-    f: 0
-  };
-  startNode.f = startNode.g + startNode.h;
-  
-  openSet.push(startNode);
-  
-  const directions = [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [-1, 1], [1, -1], [1, 1]];
-  
-  while (openSet.length > 0) {
-    // Find node with lowest f cost
-    let currentIndex = 0;
-    for (let i = 1; i < openSet.length; i++) {
-      if (openSet[i].f < openSet[currentIndex].f) {
-        currentIndex = i;
-      }
-    }
-    
-    const current = openSet.splice(currentIndex, 1)[0];
-    closedSet.add(`${current.x},${current.y}`);
-    
-    // Check if we reached the goal
-    if (Math.abs(current.x - Math.round(endX)) <= 1 && Math.abs(current.y - Math.round(endY)) <= 1) {
-      const path: { x: number; y: number }[] = [];
-      let node: PathNode | undefined = current;
-      while (node) {
-        path.unshift({ x: node.x, y: node.y });
-        node = node.parent;
-      }
-      return path;
-    }
-    
-    // Check neighbors
-    for (const [dx, dy] of directions) {
-      const newX = current.x + dx;
-      const newY = current.y + dy;
-      const key = `${newX},${newY}`;
-      
-      if (closedSet.has(key)) continue;
-      
-      const moveCost = getMoveCost(newX, newY);
-      const g = current.g + moveCost;
-      
-      let neighbor = openSet.find(n => n.x === newX && n.y === newY);
-      
-      if (!neighbor) {
-        neighbor = {
-          x: newX,
-          y: newY,
-          g: g,
-          h: heuristic(newX, newY, Math.round(endX), Math.round(endY)),
-          f: 0,
-          parent: current
-        };
-        neighbor.f = neighbor.g + neighbor.h;
-        openSet.push(neighbor);
-      } else if (g < neighbor.g) {
-        neighbor.g = g;
-        neighbor.f = neighbor.g + neighbor.h;
-        neighbor.parent = current;
-      }
-    }
-  }
-  
-  // Fallback to simple path if A* fails
-  const path: { x: number; y: number }[] = [];
-  const steps = Math.max(Math.abs(endX - startX), Math.abs(endY - startY));
-  
-  for (let i = 0; i <= steps; i++) {
-    const progress = steps > 0 ? i / steps : 0;
-    const x = Math.round(startX + (endX - startX) * progress);
-    const y = Math.round(startY + (endY - startY) * progress);
-    path.push({ x, y });
-  }
-  
-  return path;
-}
 
 export default function AnimatedCitizensLayer({
   buildings,
@@ -190,12 +26,12 @@ export default function AnimatedCitizensLayer({
   tileTypes,
   citizensCount,
   enableTraffic = true
-}: AnimatedCitizensLayerProps) {
-  const { app } = useGameContext();
-  const containerRef = useRef<PIXI.Container | null>(null);
-  const [citizens, setCitizens] = useState<AnimatedCitizen[]>([]);
-  const [vehicles, setVehicles] = useState<AnimatedVehicle[]>([]);
-  const animationRef = useRef<number>(0);
+  }: AnimatedCitizensLayerProps) {
+    const { app } = useGameContext();
+    const containerRef = useRef<PIXI.Container | null>(null);
+    const [, setCitizens] = useState<AnimatedCitizen[]>([]);
+    const [, setVehicles] = useState<AnimatedVehicle[]>([]);
+    const animationRef = useRef<number>(0);
 
   // Initialize citizens based on buildings
   useEffect(() => {
@@ -295,7 +131,7 @@ export default function AnimatedCitizensLayer({
       // Animate citizens
       setCitizens(prevCitizens => {
         return prevCitizens.map(citizen => {
-          let newCitizen = { ...citizen };
+          const newCitizen = { ...citizen };
           const currentTime = Date.now();
 
           // Check if following a path
@@ -375,58 +211,7 @@ export default function AnimatedCitizensLayer({
             }
           }
 
-          // Create citizen sprite
-          const isoPos = gridToIso(newCitizen.x, newCitizen.y);
-          const sprite = new PIXI.Graphics();
-          
-          // Rotate sprite based on direction
-          if (citizen.direction !== undefined) {
-            sprite.rotation = citizen.direction;
-          }
-          
-          // Draw citizen based on type with directional shape
-           let baseColor = 0x7ED321; // Default green for citizens
-           if (citizen.type === 'worker') {
-             baseColor = 0x4A90E2; // Blue for workers
-           } else if (citizen.type === 'trader') {
-             baseColor = 0xF5A623; // Orange for traders
-           }
-          
-          sprite.beginFill(baseColor);
-          sprite.drawCircle(0, 0, 3);
-          
-          // Add directional indicator
-          sprite.beginFill(baseColor, 0.7);
-          sprite.drawCircle(2, 0, 1.5);
-          sprite.endFill();
-          
-          // Add activity-based visual indicators
-          if (citizen.lastActivity) {
-            const timeSinceActivity = Date.now() - citizen.lastActivity;
-            const activityIntensity = Math.max(0, 1 - timeSinceActivity / 5000); // Fade over 5 seconds
-            
-            let activityColor = 0xFFFFFF;
-            if (citizen.type === 'worker') {
-              activityColor = 0xFFA500; // Orange for working
-            } else if (citizen.type === 'trader') {
-              activityColor = 0x32CD32; // Green for trading
-            } else {
-              activityColor = 0x87CEEB; // Sky blue for general activity
-            }
-            
-            sprite.beginFill(activityColor, activityIntensity * 0.6);
-            sprite.drawCircle(-1, -4, 1.5);
-            sprite.endFill();
-          }
-          
-          // Add path visualization if citizen is following a path
-          if (citizen.path && citizen.pathIndex !== undefined) {
-            sprite.beginFill(0x00FF00, 0.4); // Green path indicator
-            sprite.drawCircle(0, -6, 1.5);
-            sprite.endFill();
-          }
-          
-          sprite.position.set(isoPos.x, isoPos.y);
+          const sprite = renderCitizen(newCitizen);
           container.addChild(sprite);
 
           return newCitizen;
@@ -436,7 +221,7 @@ export default function AnimatedCitizensLayer({
       // Animate vehicles
       setVehicles(prevVehicles => {
         return prevVehicles.map(vehicle => {
-          let newVehicle = { ...vehicle };
+          const newVehicle = { ...vehicle };
           const currentTime = Date.now();
 
           // Check if following a path
@@ -504,60 +289,7 @@ export default function AnimatedCitizensLayer({
             }
           }
 
-          // Create vehicle sprite
-          const isoPos = gridToIso(newVehicle.x, newVehicle.y);
-          const sprite = new PIXI.Graphics();
-          
-          // Rotate sprite based on direction
-          if (vehicle.direction !== undefined) {
-            sprite.rotation = vehicle.direction;
-          }
-          
-          // Draw vehicle based on type with directional shape
-          if (vehicle.type === 'cart') {
-            sprite.beginFill(0x8B4513); // Brown for carts
-            sprite.drawRect(-6, -3, 12, 6);
-            // Add front indicator
-            sprite.beginFill(0xA0522D);
-            sprite.drawRect(4, -2, 2, 4);
-          } else if (vehicle.type === 'wagon') {
-            sprite.beginFill(0x654321); // Dark brown for wagons
-            sprite.drawRect(-8, -4, 16, 8);
-            // Add front indicator
-            sprite.beginFill(0x8B4513);
-            sprite.drawRect(6, -3, 2, 6);
-          } else {
-            sprite.beginFill(0x4169E1); // Blue for boats
-            sprite.drawEllipse(0, 0, 10, 5);
-            // Add bow indicator
-            sprite.beginFill(0x6495ED);
-            sprite.drawEllipse(6, 0, 4, 2);
-          }
-          sprite.endFill();
-          
-          // Add cargo indicator with type-specific color
-          if (vehicle.cargo) {
-            let cargoColor = 0xFFD700; // Default gold
-            switch (vehicle.cargo) {
-              case 'wood': cargoColor = 0x8B4513; break;
-              case 'stone': cargoColor = 0x708090; break;
-              case 'food': cargoColor = 0x32CD32; break;
-              case 'goods': cargoColor = 0xFF6347; break;
-              case 'tools': cargoColor = 0x4682B4; break;
-            }
-            sprite.beginFill(cargoColor, 0.8);
-            sprite.drawCircle(-2, -2, 3);
-            sprite.endFill();
-          }
-          
-          // Add path visualization if vehicle is following a path
-          if (vehicle.path && vehicle.pathIndex !== undefined) {
-            sprite.beginFill(0x00FF00, 0.3);
-            sprite.drawCircle(0, -8, 2);
-            sprite.endFill();
-          }
-          
-          sprite.position.set(isoPos.x, isoPos.y);
+          const sprite = renderVehicle(newVehicle);
           container.addChild(sprite);
 
           return newVehicle;
@@ -574,7 +306,7 @@ export default function AnimatedCitizensLayer({
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [app, buildings]);
+  }, [app, buildings, roads, tileTypes]);
 
   return null;
 }
