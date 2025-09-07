@@ -1,31 +1,10 @@
 import React from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as Tooltip from '@radix-ui/react-tooltip';
-
-export interface SeasonalEvent {
-  id: string;
-  name: string;
-  description: string;
-  type: 'blessing' | 'curse' | 'neutral' | 'crisis';
-  season: 'spring' | 'summer' | 'autumn' | 'winter';
-  cycleOffset: number; // cycles from now
-  probability: number; // 0-100
-  effects: {
-    resource: string;
-    impact: string;
-  }[];
-  duration?: number; // cycles, if ongoing
-  isRevealed: boolean; // false for hidden/uncertain events
-}
-
-export interface OmenReading {
-  id: string;
-  title: string;
-  description: string;
-  confidence: number; // 0-100
-  revealedAt: number; // cycle when this was revealed
-  events: string[]; // event IDs this reading hints at
-}
+import { SeasonIcon, EventTypeIcon } from './omen/icons';
+import EventCard from './omen/EventCard';
+import OmenReadingList from './omen/OmenReadingList';
+import type { SeasonalEvent, OmenReading } from './omen/types';
 
 export interface OmenPanelProps {
   isOpen: boolean;
@@ -33,167 +12,12 @@ export interface OmenPanelProps {
   upcomingEvents: SeasonalEvent[];
   omenReadings: OmenReading[];
   currentCycle: number;
-  currentSeason: string;
+  currentSeason: SeasonalEvent['season'];
   onRequestReading?: () => void;
   canRequestReading: boolean;
   readingCost: number;
   currentMana: number;
 }
-
-const SeasonIcon: React.FC<{ season: SeasonalEvent['season'] }> = ({ season }) => {
-  const icons = {
-    spring: '🌸',
-    summer: '☀️',
-    autumn: '🍂',
-    winter: '❄️'
-  };
-  return <span>{icons[season]}</span>;
-};
-
-const EventTypeIcon: React.FC<{ type: SeasonalEvent['type'] }> = ({ type }) => {
-  const icons = {
-    blessing: '✨',
-    curse: '💀',
-    neutral: '⚖️',
-    crisis: '🔥'
-  };
-  return <span>{icons[type]}</span>;
-};
-
-const EventCard: React.FC<{
-  event: SeasonalEvent;
-  currentCycle: number;
-}> = ({ event, currentCycle }) => {
-  const targetCycle = currentCycle + event.cycleOffset;
-  const isImminent = event.cycleOffset <= 3;
-  const isDistant = event.cycleOffset > 10;
-
-  const getTypeColor = (type: SeasonalEvent['type']) => {
-    switch (type) {
-      case 'blessing': return 'border-emerald-700/60 bg-emerald-900/20';
-      case 'curse': return 'border-rose-700/60 bg-rose-900/20';
-      case 'crisis': return 'border-amber-700/60 bg-amber-900/20';
-      default: return 'border-gray-700 bg-gray-900/20';
-    }
-  };
-
-  const getProbabilityColor = (probability: number) => {
-    if (probability >= 80) return 'text-rose-400';
-    if (probability >= 60) return 'text-amber-400';
-    if (probability >= 40) return 'text-blue-400';
-    return 'text-gray-400';
-  };
-
-  return (
-    <div className={`rounded-lg p-4 border-2 ${
-      getTypeColor(event.type)
-    } ${isImminent ? 'ring-2 ring-yellow-500/50' : ''} ${
-      isDistant ? 'opacity-60' : ''
-    }`}>
-      {/* Header */}
-      <div className="flex items-start justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <EventTypeIcon type={event.type} />
-          <SeasonIcon season={event.season} />
-          <div>
-            <h3 className={`font-medium ${
-              event.isRevealed ? 'text-gray-100' : 'text-gray-400'
-            }`}>
-              {event.isRevealed ? event.name : '???'}
-            </h3>
-            <div className="flex items-center gap-2 text-xs">
-              <span className="text-gray-400">Cycle {targetCycle}</span>
-              <span className="text-gray-500">•</span>
-              <span className="capitalize text-gray-400">{event.season}</span>
-            </div>
-          </div>
-        </div>
-        <div className="text-right">
-          <div className={`text-xs font-mono ${getProbabilityColor(event.probability)}`}>
-            {event.probability}%
-          </div>
-          {isImminent && (
-            <div className="text-xs text-amber-400 font-medium">
-              IMMINENT
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Description */}
-      <p className={`text-sm mb-3 ${
-        event.isRevealed ? 'text-gray-300' : 'text-gray-400 italic'
-      }`}>
-        {event.isRevealed ? event.description : 'The future remains shrouded in mystery...'}
-      </p>
-
-      {/* Effects */}
-      {event.isRevealed && event.effects.length > 0 && (
-        <div className="space-y-1">
-          <div className="text-xs text-gray-400">Predicted Effects:</div>
-          {event.effects.map((effect, index) => (
-            <div key={index} className="text-xs text-gray-300 flex items-center gap-2">
-              <span className="text-blue-400">{effect.resource}:</span>
-              <span>{effect.impact}</span>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Duration */}
-      {event.duration && event.duration > 1 && (
-        <div className="mt-2 text-xs text-gray-400">
-          Duration: {event.duration} cycles
-        </div>
-      )}
-    </div>
-  );
-};
-
-const OmenReadingCard: React.FC<{
-  reading: OmenReading;
-  currentCycle: number;
-}> = ({ reading, currentCycle }) => {
-  const age = currentCycle - reading.revealedAt;
-  const isRecent = age <= 2;
-  const isStale = age > 5;
-
-  const getConfidenceColor = (confidence: number) => {
-    if (confidence >= 80) return 'text-emerald-400';
-    if (confidence >= 60) return 'text-amber-400';
-    if (confidence >= 40) return 'text-orange-400';
-    return 'text-rose-400';
-  };
-
-  return (
-    <div className={`bg-purple-900/20 border border-purple-700/60 rounded-lg p-4 ${
-      isRecent ? 'ring-1 ring-purple-700/40' : ''
-    } ${isStale ? 'opacity-60' : ''}`}>
-      <div className="flex items-start justify-between mb-2">
-        <div className="flex items-center gap-2">
-          <span className="text-lg">🔮</span>
-          <h3 className="text-purple-300 font-medium">{reading.title}</h3>
-        </div>
-        <div className="text-right">
-          <div className={`text-xs font-mono ${getConfidenceColor(reading.confidence)}`}>
-            {reading.confidence}% confidence
-          </div>
-          <div className="text-xs text-gray-400">
-            Cycle {reading.revealedAt}
-          </div>
-        </div>
-      </div>
-      <p className="text-purple-300 text-sm italic">
-        &ldquo;{reading.description}&rdquo;
-      </p>
-      {isRecent && (
-        <div className="mt-2 text-xs text-purple-300">
-          ✨ Recent vision
-        </div>
-      )}
-    </div>
-  );
-};
 
 const TimelineView: React.FC<{
   events: SeasonalEvent[];
@@ -351,7 +175,7 @@ export const OmenPanel: React.FC<OmenPanelProps> = ({
                     <h3 className="text-lg font-semibold text-gray-100 mb-4">🔍 Known Events</h3>
                     <div className="grid gap-4">
                       {revealedEvents
-                        .filter(e => !imminentEvents.includes(e))
+                        .filter(e => !imminentEvents.some(ie => ie.id === e.id))
                         .slice(0, 6)
                         .map(event => (
                           <EventCard key={event.id} event={event} currentCycle={currentCycle} />
@@ -376,14 +200,7 @@ export const OmenPanel: React.FC<OmenPanelProps> = ({
                 {omenReadings.length > 0 && (
                   <div>
                     <h3 className="text-lg font-semibold text-blue-400 mb-4">📜 Recent Visions</h3>
-                    <div className="space-y-3">
-                      {omenReadings
-                        .sort((a, b) => b.revealedAt - a.revealedAt)
-                        .slice(0, 5)
-                        .map(reading => (
-                          <OmenReadingCard key={reading.id} reading={reading} currentCycle={currentCycle} />
-                        ))}
-                    </div>
+                    <OmenReadingList readings={omenReadings} currentCycle={currentCycle} />
                   </div>
                 )}
 

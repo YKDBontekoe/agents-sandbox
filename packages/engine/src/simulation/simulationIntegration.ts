@@ -4,18 +4,13 @@ import {
   calculateDeterioration,
   calculateUtilityEfficiency,
   performMaintenance,
-  getBuildingsNeedingMaintenance,
-  calculateTotalUtilityConsumption,
   createSimulatedBuilding
 } from './buildingSimulation';
 import { CitizenBehaviorSystem, Citizen } from './citizenBehavior';
 import { WorkerSimulationSystem } from './workerSimulation';
 import type { WorkerProfile } from './workers/types';
-import {
-  ActiveEvent,
-  VisualIndicator,
-  GameplayEventsSystem
-} from './gameplayEvents';
+import type { ActiveEvent, VisualIndicator } from './events/types';
+import { EventManager } from './events/EventManager';
 import type { GameTime } from '../types/gameTime';
 
 // Enhanced game state interface
@@ -69,7 +64,7 @@ export class SimulationIntegrationSystem {
   // Initialize simulation systems
   private citizenSystem = new CitizenBehaviorSystem();
   private workerSystem = new WorkerSimulationSystem();
-  private eventSystem = new GameplayEventsSystem();
+  private eventManager = new EventManager();
   
   private visualConfig: VisualFeedbackConfig;
   private performanceMetrics: PerformanceMetrics;
@@ -105,7 +100,8 @@ export class SimulationIntegrationSystem {
     }>;
     resources: SimResources;
     gameTime: GameTime;
-  }, deltaTime: number): EnhancedGameState {
+  }, _deltaTime: number): EnhancedGameState {
+    void _deltaTime;
     const startTime = performance.now();
     
     try {
@@ -132,7 +128,7 @@ export class SimulationIntegrationSystem {
           buildings: updatedBuildings,
           resources: gameState.resources,
           threatLevel: this.calculateThreatLevel(gameState),
-          cityEvents: this.eventSystem.getActiveEvents().map((e: any) => e.type)
+            cityEvents: this.eventManager.getActiveEvents().map(e => e.type)
         });
       });
       
@@ -146,7 +142,7 @@ export class SimulationIntegrationSystem {
       const workers = this.workerSystem.getAllWorkers();
       
       // Update events system
-      this.eventSystem.updateEvents(gameState.gameTime, {
+      this.eventManager.updateEvents(gameState.gameTime, {
         buildings: updatedBuildings,
         citizens: citizens,
         workers: workers,
@@ -171,7 +167,7 @@ export class SimulationIntegrationSystem {
         simulatedBuildings: updatedBuildings,
         citizens: citizens,
         workers: workers,
-        activeEvents: this.eventSystem.getActiveEvents(),
+        activeEvents: this.eventManager.getActiveEvents(),
         systemHealth
       };
       
@@ -240,7 +236,7 @@ export class SimulationIntegrationSystem {
     
     // Add event-based indicators
     if (this.visualConfig.showEventImpacts) {
-      indicators.push(...this.eventSystem.getVisualIndicators());
+      indicators.push(...this.eventManager.getVisualIndicators());
     }
     
     return indicators;
@@ -265,13 +261,17 @@ export class SimulationIntegrationSystem {
   }
   
   // Handle player actions
-  handlePlayerAction(action: {
-    type: string;
-    params: any;
-  }, gameState: EnhancedGameState): { success: boolean; message: string; effects?: any } {
+    handlePlayerAction(action: {
+      type: string;
+      params: Record<string, unknown>;
+    }, gameState: EnhancedGameState): {
+      success: boolean;
+      message: string;
+      effects?: Record<string, unknown>;
+    } {
     switch (action.type) {
       case 'respond_to_event':
-        return this.eventSystem.respondToEvent(
+        return this.eventManager.respondToEvent(
           action.params.eventId,
           action.params.responseId,
           { resources: gameState.resources }
@@ -300,7 +300,7 @@ export class SimulationIntegrationSystem {
         
       case 'organize_festival':
         if (gameState.resources.coin && gameState.resources.coin >= 30) {
-          this.eventSystem.triggerEvent('festival', gameState.gameTime);
+          this.eventManager.triggerEvent('festival', gameState.gameTime);
           return {
             success: true,
             message: 'Festival organized successfully',
@@ -316,12 +316,15 @@ export class SimulationIntegrationSystem {
   
   // Get system health summary
   getSystemHealth() {
-    return this.eventSystem.getSystemHealth();
+    return this.eventManager.getSystemHealth();
   }
   
   // Helper methods
   private calculateThreatLevel(gameState: { resources: SimResources }): number {
-    const resourceScore = Object.values(gameState.resources).reduce((sum: number, val: any) => sum + (val || 0), 0) / 100;
+      const resourceScore = Object.values(gameState.resources).reduce(
+        (sum: number, val: number) => sum + (val || 0),
+        0
+      ) / 100;
     return Math.max(0, Math.min(100, 50 - resourceScore));
   }
   
@@ -338,7 +341,10 @@ export class SimulationIntegrationSystem {
     const communityMood = this.citizenSystem.getCommunityMood();
     const socialCohesion = communityMood.happiness;
     
-    const resourceHealth = Object.values(gameState.resources).reduce((sum: number, val: any) => sum + (val || 0), 0) / 4;
+      const resourceHealth = Object.values(gameState.resources).reduce(
+        (sum: number, val: number) => sum + (val || 0),
+        0
+      ) / 4;
     
     return {
       economicHealth: Math.min(100, resourceHealth),
@@ -376,7 +382,7 @@ export class SimulationIntegrationSystem {
   }
   
   getActiveEvents(): ActiveEvent[] {
-    return this.eventSystem.getActiveEvents();
+    return this.eventManager.getActiveEvents();
   }
   
   getPerformanceMetrics(): PerformanceMetrics {

@@ -61,13 +61,19 @@ Related docs: docs/agents/ARCHITECTURE.md, docs/agents/PROMPTS.md, docs/agents/S
 - `supabase/migrations/` — schema and idempotent updates for `game_state`, `proposals`
 - `src/components/game/buildingIcons/` — canvas icon drawers keyed by building type
 - `src/components/game/BuildingsLayer.tsx` — renders building sprites and tooltips
-- `src/components/game/effects/` — PIXI visual effect hooks (traffic, construction, activity, day-night). Run `npm run lint src/components/game/effects src/components/game/EnhancedVisualEffectsLayer.tsx` when modifying
+- `src/components/game/effects/` — PIXI visual effect hooks (traffic, construction, activity, day-night).
+- `src/components/game/citizens/` — animated citizen/vehicle helpers (types, pathfinding, renderers).
 - `src/components/settings/` — reusable settings panel components and configuration
-- `packages/engine/src/simulation/traffic/` — modular traffic simulation system (vehicle, pedestrian, and light managers). Run `npm test` and `npm run lint packages/engine/src/simulation/traffic` when modifying
+- `packages/engine/src/simulation/traffic/` — modular traffic simulation system (vehicle, pedestrian, and light managers).
+- `packages/engine/src/simulation/zoning/` — zoning simulation components.
+- `packages/engine/src/simulation/transport/` — public transport simulation system (route and vehicle managers).
 - `src/components/game/skills/` — skill tree modules
   - `types.ts` — shared skill interfaces
   - `generate.ts` — procedural tree generation
   - `progression.ts` — achievement and challenge evaluation
+  - `hooks.ts` — animation and utility hooks
+  - `canvasPool.ts` — canvas pooling utility
+  - `effects.ts` — particle and connection render helpers
 
 ## Design Canon
 
