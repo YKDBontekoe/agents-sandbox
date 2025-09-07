@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { SupabaseUnitOfWork } from '@arcane/infrastructure/supabase'
 import { z } from 'zod'
+import { config } from '@/infrastructure/config'
 
 interface RouteContext {
   params: Promise<{ id: string }>
@@ -14,7 +15,7 @@ const BodySchema = z.object({
 
 export async function POST(req: NextRequest, context: RouteContext) {
   const params = await context.params
-  const supabase = createSupabaseServerClient()
+  const supabase = createSupabaseServerClient(config)
   const uow = new SupabaseUnitOfWork(supabase)
   const { id } = params
   const json = await req.json().catch(() => ({}))

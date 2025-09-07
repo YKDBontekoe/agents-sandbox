@@ -993,7 +993,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     }
     let client: ReturnType<typeof createSupabaseBrowserClient> | null = null;
     try {
-      client = createSupabaseBrowserClient();
+      client = createSupabaseBrowserClient(config);
     } catch (e: unknown) {
       logger.debug('Realtime disabled:', e instanceof Error ? e.message : String(e));
       return;

@@ -22,9 +22,9 @@
       "@/*": ["./src/*"],
       "@engine": ["./packages/engine/src"],
       "@engine/*": ["./packages/engine/src/*"],
-      "@arcane/infrastructure": ["./packages/infrastructure/src"],
-      "@arcane/infrastructure/*": ["./packages/infrastructure/src/*"]
-      "@/utils/performance/*": ["./packages/utils/performance/*"]
+        "@arcane/infrastructure": ["./packages/infrastructure/src"],
+        "@arcane/infrastructure/*": ["./packages/infrastructure/src/*"],
+        "@/utils/performance/*": ["./packages/utils/performance/*"]
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],

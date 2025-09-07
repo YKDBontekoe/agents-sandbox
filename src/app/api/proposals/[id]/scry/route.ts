@@ -45,7 +45,7 @@ export async function POST(req: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 })
   }
   const params = await context.params
-  const supabase = createSupabaseServerClient()
+  const supabase = createSupabaseServerClient(config)
   const uow = new SupabaseUnitOfWork(supabase)
   const { id } = params
   const body = await req.json().catch(() => ({}))
