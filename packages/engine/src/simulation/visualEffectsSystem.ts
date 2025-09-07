@@ -2,7 +2,6 @@ import type { SimResources } from '../index';
 import type { SimulatedBuilding } from './buildingSimulation';
 import type { Citizen } from './citizenBehavior';
 import type { WorkerProfile } from './workers/types';
-import type { VisualIndicator } from './gameplayEvents';
 
 export interface TrafficFlow {
   id: string;
@@ -102,19 +101,19 @@ export class VisualEffectsSystem {
     this.lastUpdateTime = currentTime;
 
     // Update existing effects
-    this.updateTrafficFlows(gameTime);
-    this.updateConstructionAnimations(gameTime);
-    this.updateActivityIndicators(gameTime);
-    this.updateWeatherEffects(gameTime);
+    this.updateTrafficFlows();
+    this.updateConstructionAnimations();
+    this.updateActivityIndicators();
+    this.updateWeatherEffects();
 
     // Generate new effects based on game state
     this.generateTrafficFromActivity(gameState, gameTime);
-    this.generateConstructionAnimations(gameState, gameTime);
-    this.generateActivityIndicators(gameState, gameTime);
+    this.generateConstructionAnimations(gameState);
+    this.generateActivityIndicators(gameState);
     this.generateWeatherEffects(gameTime);
   }
 
-  private updateTrafficFlows(gameTime: GameTime): void {
+  private updateTrafficFlows(): void {
     const toRemove: string[] = [];
     
     for (const [id, flow] of this.trafficFlows) {
@@ -127,7 +126,7 @@ export class VisualEffectsSystem {
     toRemove.forEach(id => this.trafficFlows.delete(id));
   }
 
-  private updateConstructionAnimations(gameTime: GameTime): void {
+  private updateConstructionAnimations(): void {
     const toRemove: string[] = [];
     
     for (const [id, animation] of this.constructionAnimations) {
@@ -142,7 +141,7 @@ export class VisualEffectsSystem {
     toRemove.forEach(id => this.constructionAnimations.delete(id));
   }
 
-  private updateActivityIndicators(gameTime: GameTime): void {
+  private updateActivityIndicators(): void {
     const toRemove: string[] = [];
     
     for (const [id, indicator] of this.activityIndicators) {
@@ -155,7 +154,7 @@ export class VisualEffectsSystem {
     toRemove.forEach(id => this.activityIndicators.delete(id));
   }
 
-  private updateWeatherEffects(gameTime: GameTime): void {
+  private updateWeatherEffects(): void {
     const toRemove: string[] = [];
     
     for (const [id, effect] of this.weatherEffects) {
@@ -185,13 +184,15 @@ export class VisualEffectsSystem {
 
     // Generate traffic based on citizen activity and building workers
     const trafficDensity = activeBuildings.reduce((total, building) => {
-      const utilityEff = building.utilityEfficiency || 0.8; // Use utilityEfficiency property
-      return total + ((building as any).workers || 0) * utilityEff;
+      const utilityEff = building.utilityEfficiency || 0.8;
+      return total + (building.workers || 0) * utilityEff;
     }, 0);
 
-    // Create pedestrian traffic based on time of day
+    // Create pedestrian traffic based on time of day and building activity
     const timeMultiplier = this.getTimeActivityMultiplier(gameTime);
-    const trafficIntensity = Math.min(gameState.citizens.length / 100, 1) * timeMultiplier;
+    const trafficIntensity =
+      Math.min((gameState.citizens.length + trafficDensity) / 100, 1) *
+      timeMultiplier;
 
     if (Math.random() < trafficIntensity * 0.3) {
       this.createTrafficFlow({
@@ -221,7 +222,7 @@ export class VisualEffectsSystem {
     citizens: Citizen[];
     workers: WorkerProfile[];
     resources: SimResources;
-  }, gameTime: GameTime): void {
+  }): void {
     if (!this.config.constructionEnabled || this.constructionAnimations.size >= this.config.maxConstructionAnimations) {
       return;
     }
@@ -261,7 +262,7 @@ export class VisualEffectsSystem {
     citizens: Citizen[];
     workers: WorkerProfile[];
     resources: SimResources;
-  }, gameTime: GameTime): void {
+  }): void {
     if (!this.config.activityEnabled || this.activityIndicators.size >= this.config.maxActivityIndicators) {
       return;
     }
@@ -524,7 +525,7 @@ export class VisualEffectsSystem {
     };
     
     const options = seasonWeather[gameTime.season as keyof typeof seasonWeather] || ['wind'];
-    return options[Math.floor(Math.random() * options.length)] as any;
+    return options[Math.floor(Math.random() * options.length)] as WeatherEffect['type'];
   }
 
   // Public getters
