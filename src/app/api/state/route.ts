@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
-import { SupabaseUnitOfWork } from '@/infrastructure/supabase/unit-of-work'
+import { SupabaseUnitOfWork } from '@arcane/infrastructure/supabase'
 import logger from '@/lib/logger'
 import { z } from 'zod'
 import type { GameState } from '@engine'

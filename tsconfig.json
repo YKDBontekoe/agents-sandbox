@@ -21,7 +21,9 @@
     "paths": {
       "@/*": ["./src/*"],
       "@engine": ["./packages/engine/src"],
-      "@engine/*": ["./packages/engine/src/*"]
+      "@engine/*": ["./packages/engine/src/*"],
+      "@arcane/infrastructure": ["./packages/infrastructure/src"],
+      "@arcane/infrastructure/*": ["./packages/infrastructure/src/*"]
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],

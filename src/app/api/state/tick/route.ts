@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
-import { SupabaseUnitOfWork } from '@/infrastructure/supabase/unit-of-work'
+import { SupabaseUnitOfWork } from '@arcane/infrastructure/supabase'
 import { SIM_BUILDINGS } from '@engine'
 import { processTick } from '@engine'
 
