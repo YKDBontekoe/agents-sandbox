@@ -4,7 +4,7 @@ import { TrafficSimulationSystem } from './trafficSimulation';
 import { ZoningSystem, ZoneType } from './zoning';
 import { createGameTime } from '../types/gameTime';
 import { CityServicesSystem, ServiceType } from './cityServices';
-import { PublicTransportSystem } from './publicTransport';
+import { PublicTransportSystem } from './transport/transportSystem';
 
 export interface CityConfig {
   gridWidth: number;
