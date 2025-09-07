@@ -243,7 +243,9 @@ export * from './simulation/buildingSimulation';
 export * from './simulation/citizenBehavior';
 export * from './simulation/workerSimulation';
 export * from './simulation/simulationIntegration';
-export * from './simulation/gameplayEvents';
+export * from './simulation/events/types';
+export * from './simulation/events/definitions';
+export { EventManager } from './simulation/events/EventManager';
 
 // Export time system
 export * from './systems/timeSystem';
