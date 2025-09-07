@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { SupabaseUnitOfWork } from '@/infrastructure/supabase/unit-of-work'
 import { z } from 'zod'
+import { AppError, ValidationError } from '@logging'
+import logger from '@/lib/logger'
 
 interface RouteContext {
   params: Promise<{ id: string }>
@@ -13,35 +15,35 @@ const BodySchema = z.object({
 })
 
 export async function POST(req: NextRequest, context: RouteContext) {
-  const params = await context.params
-  const supabase = createSupabaseServerClient()
-  const uow = new SupabaseUnitOfWork(supabase)
-  const { id } = params
-  const json = await req.json().catch(() => ({}))
-  const parsed = BodySchema.safeParse(json)
-  if (!parsed.success) {
-    return NextResponse.json(
-      { error: parsed.error.message },
-      { status: 400 },
-    )
-  }
-  const { decision, comment } = parsed.data
-
-  const prop = await uow.proposals.getById(id)
-  if (!prop) return NextResponse.json({ error: 'Proposal not found' }, { status: 404 })
-
-  // Record decision
-  const { error: decErr } = await supabase.from('decisions').insert({ proposal_id: id, decision, comment })
-  if (decErr) return NextResponse.json({ error: decErr.message }, { status: 500 })
-
-  // Update proposal status
-  const status = decision === 'accept' ? 'accepted' : 'rejected'
   try {
-    await uow.proposals.update(id, { status })
-  } catch (upErr: unknown) {
-    const message = upErr instanceof Error ? upErr.message : String(upErr)
-    return NextResponse.json({ error: message }, { status: 500 })
-  }
+    const params = await context.params
+    const supabase = createSupabaseServerClient()
+    const uow = new SupabaseUnitOfWork(supabase)
+    const { id } = params
+    const json = await req.json().catch(() => ({}))
+    const parsed = BodySchema.safeParse(json)
+    if (!parsed.success) {
+      throw new ValidationError(parsed.error.message)
+    }
+    const { decision, comment } = parsed.data
 
-  return NextResponse.json({ ok: true })
+    const prop = await uow.proposals.getById(id)
+    if (!prop) throw new AppError('Proposal not found', 404)
+
+    // Record decision
+    const { error: decErr } = await supabase.from('decisions').insert({ proposal_id: id, decision, comment })
+    if (decErr) throw new AppError(decErr.message)
+
+    // Update proposal status
+    const status = decision === 'accept' ? 'accepted' : 'rejected'
+    await uow.proposals.update(id, { status })
+
+    return NextResponse.json({ ok: true })
+  } catch (error) {
+    if (error instanceof AppError) {
+      return NextResponse.json({ error: error.message }, { status: error.status })
+    }
+    logger.error('Unhandled error deciding proposal:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
 }

@@ -1,9 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { SupabaseUnitOfWork } from '@/infrastructure/supabase/unit-of-work'
 import logger from '@/lib/logger'
+import { AppError } from '@logging'
 
-export async function GET(req: NextRequest) {
+export async function GET() {
   try {
     const supabase = createSupabaseServerClient()
     const uow = new SupabaseUnitOfWork(supabase)
@@ -20,6 +21,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ proposals })
   } catch (error) {
     logger.error('Supabase connection error in proposals route:', error)
+    if (error instanceof AppError) {
+      return NextResponse.json({ error: error.message }, { status: error.status })
+    }
     return NextResponse.json(
       { error: 'Service unavailable - database not configured' },
       { status: 503 }

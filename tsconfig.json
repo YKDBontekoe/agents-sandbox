@@ -21,7 +21,9 @@
     "paths": {
       "@/*": ["./src/*"],
       "@engine": ["./packages/engine/src"],
-      "@engine/*": ["./packages/engine/src/*"]
+      "@engine/*": ["./packages/engine/src/*"],
+      "@logging": ["./packages/utils/logging/src"],
+      "@logging/*": ["./packages/utils/logging/src/*"]
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],

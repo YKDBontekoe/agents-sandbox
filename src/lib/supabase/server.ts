@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import logger from '@/lib/logger'
+import { AppError } from '@logging'
 import { config } from '@/infrastructure/config'
 
 // Server-side Supabase client using the service role key (never sent to the browser)
@@ -17,7 +18,7 @@ export function createSupabaseServerClient() {
       urlContainsPlaceholder: url?.includes('placeholder'),
       serviceKeyContainsPlaceholder: serviceKey?.includes('placeholder')
     })
-    throw new Error('Supabase not configured - check environment variables')
+    throw new AppError('Supabase not configured - check environment variables', 503)
   }
 
   // Provide a fetch with timeout so DB issues fail fast instead of hanging
