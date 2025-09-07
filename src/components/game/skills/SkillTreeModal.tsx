@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import ConstellationSkillTree from './ConstellationSkillTree';
-import { generateSkillTree, expandSkillTree, SkillNode } from './procgen';
+import { generateSkillTree, expandSkillTree } from './generate';
+import type { SkillNode } from './types';
 
 interface SkillTreeModalProps {
   isOpen: boolean;
@@ -10,7 +11,7 @@ interface SkillTreeModalProps {
 }
 
 export default function SkillTreeModal({ isOpen, onClose, resources }: SkillTreeModalProps) {
-  const [seed, setSeed] = useState<number>(12345);
+  const [seed] = useState<number>(12345);
   const [query, setQuery] = useState('');
   const [focusNodeId, setFocusNodeId] = useState<string | undefined>(undefined);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -69,7 +70,7 @@ export default function SkillTreeModal({ isOpen, onClose, resources }: SkillTree
     const path = [...plannedPath, ...(target ? [target] : [])];
     let coin = resources.coin || 0, mana = resources.mana || 0, favor = resources.favor || 0;
     for (const n of path) {
-      const c = n.cost || {} as any;
+      const c: { coin?: number; mana?: number; favor?: number } = n.cost || {};
       const needCoin = c.coin || 0, needMana = c.mana || 0, needFavor = c.favor || 0;
       if (coin < needCoin || mana < needMana || favor < needFavor) return n.id;
       coin -= needCoin; mana -= needMana; favor -= needFavor;
@@ -84,9 +85,9 @@ export default function SkillTreeModal({ isOpen, onClose, resources }: SkillTree
       try {
         const res = await fetch('/api/state');
         if (!res.ok) return;
-        const data = await res.json();
+        const data: { id?: string; pinned_skill_targets?: string[] } = await res.json();
         setStateId(data.id || null);
-        if (Array.isArray((data as any).pinned_skill_targets)) setPinned((data as any).pinned_skill_targets);
+        if (Array.isArray(data.pinned_skill_targets)) setPinned(data.pinned_skill_targets);
       } catch {}
     })();
   }, [isOpen]);
