@@ -1,9 +1,8 @@
-import React from 'react';
 import type { Notification } from '@/components/game/hud/types';
 
-export type NotificationsState = {
+export interface NotificationsState {
   list: Notification[];
-};
+}
 
 export type NotificationsAction =
   | { type: 'notifications/add'; payload: Omit<Notification, 'id' | 'timestamp' | 'read'> & { id?: string } }
@@ -16,10 +15,17 @@ export const initialNotificationsState: NotificationsState = {
   list: [],
 };
 
-export function notificationsReducer(state: NotificationsState, action: NotificationsAction): NotificationsState {
+export function notificationsReducer(
+  state: NotificationsState,
+  action: NotificationsAction,
+): NotificationsState {
   switch (action.type) {
     case 'notifications/add': {
-      const id = action.payload.id || (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : Math.random().toString(36).slice(2));
+      const id =
+        action.payload.id ||
+        (typeof crypto !== 'undefined' && 'randomUUID' in crypto
+          ? crypto.randomUUID()
+          : Math.random().toString(36).slice(2));
       const n: Notification = {
         id,
         timestamp: Date.now(),
@@ -39,7 +45,10 @@ export function notificationsReducer(state: NotificationsState, action: Notifica
       return { ...state, list: [] };
     }
     case 'notifications/markRead': {
-      return { ...state, list: state.list.map(n => n.id === action.payload.id ? { ...n, read: true } : n) };
+      return {
+        ...state,
+        list: state.list.map((n) => (n.id === action.payload.id ? { ...n, read: true } : n)),
+      };
     }
     case 'notifications/hydrate': {
       return { ...state, list: action.payload.list };
@@ -49,7 +58,19 @@ export function notificationsReducer(state: NotificationsState, action: Notifica
   }
 }
 
-export const addNotification = (payload: Omit<Notification, 'id' | 'timestamp'> & { id?: string }): NotificationsAction => ({ type: 'notifications/add', payload });
-export const dismissNotification = (id: string): NotificationsAction => ({ type: 'notifications/dismiss', payload: { id } });
+export const addNotification = (
+  payload: Omit<Notification, 'id' | 'timestamp'> & { id?: string },
+): NotificationsAction => ({ type: 'notifications/add', payload });
+
+export const dismissNotification = (id: string): NotificationsAction => ({
+  type: 'notifications/dismiss',
+  payload: { id },
+});
+
 export const clearNotifications = (): NotificationsAction => ({ type: 'notifications/clear' });
-export const markRead = (id: string): NotificationsAction => ({ type: 'notifications/markRead', payload: { id } });
+
+export const markRead = (id: string): NotificationsAction => ({
+  type: 'notifications/markRead',
+  payload: { id },
+});
+
