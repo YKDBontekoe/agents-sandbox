@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { register } from './container';
 
 const ConfigSchema = z.object({
   nodeEnv: z.enum(['development', 'test', 'production']).default('development'),
@@ -47,7 +46,7 @@ const ClientSchema = ConfigSchema.partial({
 });
 
 export function loadConfig(overrides: Partial<Config> = {}): Config {
-  const base = { ...defaults, ...fromEnv, ...overrides } as any;
+  const base: Partial<Config> = { ...defaults, ...fromEnv, ...overrides };
   const isBrowser = typeof window !== 'undefined';
   const parsed = isBrowser ? ClientSchema.parse(base) : ConfigSchema.parse(base);
   return parsed as Config;
@@ -63,7 +62,5 @@ export const publicConfig = {
   nextPublicOfflineMode: config.nextPublicOfflineMode,
   nextPublicDisableRealtime: config.nextPublicDisableRealtime,
 };
-
-register('config', config);
 
 export { ConfigSchema };

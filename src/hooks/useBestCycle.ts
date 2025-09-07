@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
+import { publicConfig } from '@/infrastructure/config';
 
 interface GameStateRow {
   cycle: number;
@@ -21,7 +22,7 @@ export function useBestCycle(cycle: number) {
 
       let remoteBest = 0;
       try {
-        const supabase = createSupabaseBrowserClient();
+        const supabase = createSupabaseBrowserClient(publicConfig);
         const { data } = await supabase
           .from('game_state')
           .select('cycle')
