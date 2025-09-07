@@ -59,6 +59,7 @@ Related docs: docs/agents/ARCHITECTURE.md, docs/agents/PROMPTS.md, docs/agents/S
   - `browser.ts` (anon; read-focused)
 - `docs/agents/` — this guide and deep dives
 - `supabase/migrations/` — schema and idempotent updates for `game_state`, `proposals`
+- `src/components/settings/` — reusable settings panel components and configuration
 
 ## Design Canon
 

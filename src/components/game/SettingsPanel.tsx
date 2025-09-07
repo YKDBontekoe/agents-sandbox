@@ -2,34 +2,18 @@
 
 import React, { useState, useMemo } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import type { IconDefinition } from '@fortawesome/fontawesome-svg-core';
-import {
-  faTimes,
-  faCog,
-  faSearch,
-  faDesktop,
-  faGamepad,
-  faVolumeUp,
-  faUniversalAccess,
-  faInfoCircle,
-  faChevronDown,
-  faChevronRight,
-  faCheck,
-  faUndo,
-  faSave,
-  faPlay,
-  faPause
-} from '@/lib/icons';
+import { faTimes, faCog, faInfoCircle, faUndo, faSave } from '@/lib/icons';
 import { ActionButton } from '../ui';
 import '../../styles/design-tokens.css';
 import '../../styles/animations.css';
 
-export interface LayoutPreset {
-  id: string;
-  name: string;
-  description: string;
-  icon?: IconDefinition;
-}
+import SettingsSearchBar from '@/components/settings/SettingsSearchBar';
+import SettingCategory from '@/components/settings/components/SettingCategory';
+import { createSettingsConfig } from '@/components/settings/config';
+import type {
+  LayoutPreset,
+  SettingCategory as SettingCategoryType,
+} from '@/components/settings/config';
 
 export interface SettingsPanelProps {
   isOpen: boolean;
@@ -71,221 +55,6 @@ export interface SettingsPanelProps {
   isPaused?: boolean;
   onTogglePause?: (paused: boolean) => void;
 }
-
-// Settings categories for better organization
-interface SettingCategory {
-  id: string;
-  name: string;
-  icon: IconDefinition;
-  description: string;
-  settings: SettingItem[];
-}
-
-type SettingValue = string | number | boolean;
-
-interface SettingItem {
-  id: string;
-  name: string;
-  description: string;
-  type: 'toggle' | 'select' | 'range' | 'preset' | 'number';
-  value: SettingValue;
-  options?: { value: SettingValue; label: string }[];
-  min?: number;
-  max?: number;
-  step?: number;
-  onChange: (value: SettingValue) => void;
-}
-
-// Search functionality
-const SearchBar: React.FC<{
-  searchTerm: string;
-  onSearchChange: (term: string) => void;
-}> = ({ searchTerm, onSearchChange }) => {
-  return (
-    <div className="relative mb-6">
-      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-        <FontAwesomeIcon icon={faSearch} className="text-gray-400" />
-      </div>
-      <input
-        type="text"
-        placeholder="Search settings..."
-        value={searchTerm}
-        onChange={(e) => onSearchChange(e.target.value)}
-        className="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-gray-200 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-        aria-label="Search settings"
-      />
-    </div>
-  );
-};
-
-// Collapsible category section
-const CategorySection: React.FC<{
-  category: SettingCategory;
-  isExpanded: boolean;
-  onToggle: () => void;
-  searchTerm: string;
-  renderCustom?: () => React.ReactNode;
-}> = ({ category, isExpanded, onToggle, searchTerm, renderCustom }) => {
-  const filteredSettings = useMemo(() => {
-    if (!searchTerm) return category.settings;
-    return category.settings.filter(setting => 
-      setting.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      setting.description.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [category.settings, searchTerm]);
-
-  if (searchTerm && filteredSettings.length === 0) return null;
-
-  return (
-    <div className="mb-4 bg-gray-900/30 border border-gray-700 rounded-xl overflow-hidden transition-all duration-300 hover:shadow-lg">
-      <button
-        onClick={onToggle}
-        className="w-full px-4 py-3 flex items-center justify-between bg-gray-800/80 hover:bg-gray-800 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset text-gray-200"
-        aria-expanded={isExpanded}
-        aria-controls={`category-${category.id}`}
-      >
-        <div className="flex items-center gap-3">
-          <FontAwesomeIcon icon={category.icon} className="text-primary" />
-          <div className="text-left">
-            <h3 className="font-semibold text-gray-100">{category.name}</h3>
-            <p className="text-xs text-gray-400">{category.description}</p>
-          </div>
-        </div>
-        <FontAwesomeIcon 
-          icon={isExpanded ? faChevronDown : faChevronRight} 
-          className="text-gray-400 transition-transform duration-200"
-        />
-      </button>
-      
-      {isExpanded && (
-        <div id={`category-${category.id}`} className="p-4 space-y-4 animate-slide-down">
-          {category.id === 'inbox' && renderCustom ? (
-            renderCustom()
-          ) : (
-            filteredSettings.map(setting => (
-              <SettingControl key={setting.id} setting={setting} />
-            ))
-          )}
-        </div>
-      )}
-    </div>
-  );
-};
-
-// Individual setting control component
-const SettingControl: React.FC<{ setting: SettingItem }> = ({ setting }) => {
-  const renderControl = () => {
-    switch (setting.type) {
-      case 'toggle':
-        return (
-          <button
-            onClick={() => setting.onChange(!setting.value)}
-            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 ${
-              setting.value ? 'bg-primary' : 'bg-border'
-            }`}
-            role="switch"
-            aria-checked={Boolean(setting.value)}
-            aria-labelledby={`setting-${setting.id}-label`}
-          >
-            <span
-              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 ${
-                setting.value ? 'translate-x-6' : 'translate-x-1'
-              }`}
-            />
-          </button>
-        );
-      
-      case 'select':
-        return (
-          <select
-            value={String(setting.value)}
-            onChange={(e) => setting.onChange(e.target.value)}
-            className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-            aria-labelledby={`setting-${setting.id}-label`}
-          >
-            {setting.options?.map(option => (
-              <option key={String(option.value)} value={String(option.value)}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        );
-      
-      case 'range':
-        return (
-          <div className="flex items-center gap-3 flex-1">
-            <input
-              type="range"
-              min={setting.min}
-              max={setting.max}
-              step={setting.step}
-              value={Number(setting.value)}
-              onChange={(e) => setting.onChange(Number(e.target.value))}
-              className="flex-1 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer slider"
-              aria-labelledby={`setting-${setting.id}-label`}
-            />
-            <span className="min-w-[3rem] text-sm font-mono text-gray-200 text-right">
-              {setting.value}
-            </span>
-          </div>
-        );
-
-      case 'number':
-        return (
-          <input
-            type="number"
-            value={Number(setting.value)}
-            onChange={(e) => setting.onChange(Number(e.target.value))}
-            className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 w-36"
-            aria-labelledby={`setting-${setting.id}-label`}
-          />
-        );
-      
-      case 'preset':
-        return (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {setting.options?.map(option => (
-              <button
-                key={String(option.value)}
-                onClick={() => setting.onChange(option.value)}
-                className={`px-3 py-2 rounded-lg border transition-all duration-200 text-sm font-medium ${
-                  setting.value === option.value
-                    ? 'bg-blue-600 text-white border-blue-600 shadow-lg'
-                    : 'bg-gray-800 border-gray-700 text-gray-200 hover:bg-gray-700 hover:border-blue-500/50'
-                }`}
-                aria-pressed={setting.value === option.value}
-              >
-                {setting.value === option.value && (
-                  <FontAwesomeIcon icon={faCheck} className="mr-2" />
-                )}
-                {option.label}
-              </button>
-            ))}
-          </div>
-        );
-      
-      default:
-        return null;
-    }
-  };
-
-  return (
-    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 bg-gray-900/20 rounded-lg border border-gray-700 hover:bg-gray-900/30 transition-colors duration-200">
-      <div className="flex-1">
-        <label 
-          id={`setting-${setting.id}-label`}
-          className="block font-medium text-gray-200 mb-1"
-        >
-          {setting.name}
-        </label>
-        <p className="text-xs text-gray-400">{setting.description}</p>
-      </div>
-      <div className="flex-shrink-0">
-        {renderControl()}
-      </div>
-    </div>
-  );
-};
 
 // Quick actions bar
 const QuickActions: React.FC<{
@@ -347,303 +116,53 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
   onDismissNotification,
   onMarkNotificationRead,
   onClearNotifications,
-  // Legacy time control props (not used - TimeControlPanel handles time management)
-  simTickIntervalMs,
-  onChangeSimTickInterval,
-  isAutoTicking,
-  timeRemainingSec,
-  onToggleAutoTicking,
-  onTickNow,
-  gameSpeedMultiplier,
-  onChangeGameSpeed,
-  isPaused,
-  onTogglePause,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(['display', 'gameplay', 'time']));
   const [hasChanges, setHasChanges] = useState(false);
 
-  // Mock settings data - in a real app, this would come from props or context
-  const categories: SettingCategory[] = useMemo(() => [
-    {
-      id: 'inbox',
-      name: 'Inbox',
-      icon: faInfoCircle,
-      description: 'Notifications & history',
-      settings: []
-    },
-    // Time Control category removed - now handled by dedicated TimeControlPanel component
-    // World category (game UI controls)
-    {
-      id: 'world',
-      name: 'World',
-      icon: faGamepad,
-      description: 'Map, citizens, and building preferences',
-      settings: [
-        {
-          id: 'show-roads',
-          name: 'Show Roads',
-          description: 'Toggle road overlays on the map',
-          type: 'toggle',
-          value: Boolean(showRoads),
-          onChange: (v: SettingValue) => { onToggleRoads?.(Boolean(v)); setHasChanges(true); }
-        },
-        {
-          id: 'show-citizens',
-          name: 'Show Citizens',
-          description: 'Toggle citizen activity markers',
-          type: 'toggle',
-          value: Boolean(showCitizens),
-          onChange: (v: SettingValue) => { onToggleCitizens?.(Boolean(v)); setHasChanges(true); }
-        },
-        {
-          id: 'auto-assign-workers',
-          name: 'Auto-Assign Workers',
-          description: 'Automatically assign idle workers to best available jobs',
-          type: 'toggle',
-          value: Boolean(autoAssignWorkers),
-          onChange: (v: SettingValue) => { onToggleAutoAssignWorkers?.(Boolean(v)); setHasChanges(true); }
-        },
-        {
-          id: 'edge-scroll',
-          name: 'Edge Scroll Panning',
-          description: 'Pan camera when cursor nears screen edge',
-          type: 'toggle',
-          value: Boolean(edgeScrollEnabled),
-          onChange: (v: SettingValue) => { onToggleEdgeScroll?.(Boolean(v)); setHasChanges(true); }
-        },
-        {
-          id: 'confirm-roads',
-          name: 'Confirm Roads Before Building',
-          description: 'Ask for approval when citizens propose roads',
-          type: 'toggle',
-          value: Boolean(requireRoadConfirm),
-          onChange: (v: SettingValue) => { onToggleRoadConfirm?.(Boolean(v)); setHasChanges(true); }
-        },
-        {
-          id: 'citizens-count',
-          name: 'Citizens Count',
-          description: 'Number of active citizens (applies immediately)',
-          type: 'range',
-          value: Number(citizensCount ?? 8),
-          min: 2,
-          max: 20,
-          step: 1,
-          onChange: (v: SettingValue) => { onChangeCitizensCount?.(Number(v)); setHasChanges(true); }
-        },
-        {
-          id: 'citizens-seed',
-          name: 'Citizens Seed',
-          description: 'Randomization seed for citizens (movement variance)',
-          type: 'number',
-          value: Number(citizensSeed ?? 0),
-          onChange: (v: SettingValue) => { onChangeCitizensSeed?.(Number(v)); setHasChanges(true); }
-        },
-      ]
-    },
-    {
-      id: 'display',
-      name: 'Display & Graphics',
-      icon: faDesktop,
-      description: 'Visual settings and performance options',
-      settings: [
-        {
-          id: 'layout-preset',
-          name: 'Layout Preset',
-          description: 'Choose your preferred HUD layout',
-          type: 'preset',
-          value: currentPreset,
-          options: layoutPresets.map(preset => ({ value: preset.id, label: preset.name })),
-          onChange: (value: SettingValue) => {
-            onPresetChange(value as string);
-            setHasChanges(true);
-          }
-        },
-        {
-          id: 'quality',
-          name: 'Graphics Quality',
-          description: 'Adjust visual quality for performance',
-          type: 'select',
-          value: 'high',
-          options: [
-            { value: 'low', label: 'Low' },
-            { value: 'medium', label: 'Medium' },
-            { value: 'high', label: 'High' },
-            { value: 'ultra', label: 'Ultra' }
-          ],
-          onChange: (value: SettingValue) => setHasChanges(true)
-        },
-        {
-          id: 'fps-limit',
-          name: 'FPS Limit',
-          description: 'Maximum frames per second',
-          type: 'range',
-          value: 60,
-          min: 30,
-          max: 120,
-          step: 10,
-          onChange: (value: SettingValue) => setHasChanges(true)
-        },
-        {
-          id: 'vsync',
-          name: 'V-Sync',
-          description: 'Synchronize with monitor refresh rate',
-          type: 'toggle',
-          value: true,
-          onChange: (value: SettingValue) => setHasChanges(true)
-        },
-        {
-          id: 'fullscreen',
-          name: 'Fullscreen Mode',
-          description: 'Run game in fullscreen',
-          type: 'toggle',
-          value: false,
-          onChange: (value: SettingValue) => setHasChanges(true)
-        }
-      ]
-    },
-    {
-      id: 'gameplay',
-      name: 'Gameplay',
-      icon: faGamepad,
-      description: 'Game mechanics and difficulty settings',
-      settings: [
-        {
-          id: 'auto-pause',
-          name: 'Auto-Pause Events',
-          description: 'Automatically pause on important events',
-          type: 'toggle',
-          value: true,
-          onChange: (value: SettingValue) => setHasChanges(true)
-        },
-        {
-          id: 'tutorial-hints',
-          name: 'Tutorial Hints',
-          description: 'Show helpful tips and guidance',
-          type: 'toggle',
-          value: true,
-          onChange: (value: SettingValue) => setHasChanges(true)
-        },
-        {
-          id: 'difficulty',
-          name: 'Difficulty Level',
-          description: 'Adjust game challenge',
-          type: 'select',
-          value: 'normal',
-          options: [
-            { value: 'easy', label: 'Easy' },
-            { value: 'normal', label: 'Normal' },
-            { value: 'hard', label: 'Hard' },
-            { value: 'expert', label: 'Expert' }
-          ],
-          onChange: (value: SettingValue) => setHasChanges(true)
-        }
-      ]
-    },
-    {
-      id: 'audio',
-      name: 'Audio',
-      icon: faVolumeUp,
-      description: 'Sound and music settings',
-      settings: [
-        {
-          id: 'master-volume',
-          name: 'Master Volume',
-          description: 'Overall audio level',
-          type: 'range',
-          value: 80,
-          min: 0,
-          max: 100,
-          step: 5,
-          onChange: (value: SettingValue) => setHasChanges(true)
-        },
-        {
-          id: 'music-volume',
-          name: 'Music Volume',
-          description: 'Background music level',
-          type: 'range',
-          value: 60,
-          min: 0,
-          max: 100,
-          step: 5,
-          onChange: (value: SettingValue) => setHasChanges(true)
-        },
-        {
-          id: 'sfx-volume',
-          name: 'Sound Effects',
-          description: 'Game sound effects level',
-          type: 'range',
-          value: 80,
-          min: 0,
-          max: 100,
-          step: 5,
-          onChange: (value: SettingValue) => setHasChanges(true)
-        },
-        {
-          id: 'mute-background',
-          name: 'Mute When Inactive',
-          description: 'Mute audio when game is not focused',
-          type: 'toggle',
-          value: true,
-          onChange: (value: SettingValue) => setHasChanges(true)
-        }
-      ]
-    },
-    {
-      id: 'accessibility',
-      name: 'Accessibility',
-      icon: faUniversalAccess,
-      description: 'Options to improve game accessibility',
-      settings: [
-        {
-          id: 'high-contrast',
-          name: 'High Contrast Mode',
-          description: 'Increase visual contrast for better visibility',
-          type: 'toggle',
-          value: false,
-          onChange: (value: SettingValue) => setHasChanges(true)
-        },
-        {
-          id: 'large-text',
-          name: 'Large Text',
-          description: 'Increase text size throughout the interface',
-          type: 'toggle',
-          value: false,
-          onChange: (value: SettingValue) => setHasChanges(true)
-        },
-        {
-          id: 'reduced-motion',
-          name: 'Reduce Motion',
-          description: 'Minimize animations and transitions',
-          type: 'toggle',
-          value: false,
-          onChange: (value: SettingValue) => setHasChanges(true)
-        },
-        {
-          id: 'screen-reader',
-          name: 'Screen Reader Support',
-          description: 'Enhanced support for screen readers',
-          type: 'toggle',
-          value: false,
-          onChange: (value: SettingValue) => setHasChanges(true)
-        },
-        {
-          id: 'colorblind-support',
-          name: 'Colorblind Support',
-          description: 'Alternative color schemes for colorblind users',
-          type: 'select',
-          value: 'none',
-          options: [
-            { value: 'none', label: 'None' },
-            { value: 'protanopia', label: 'Protanopia' },
-            { value: 'deuteranopia', label: 'Deuteranopia' },
-            { value: 'tritanopia', label: 'Tritanopia' }
-          ],
-          onChange: (value: SettingValue) => setHasChanges(true)
-        }
-      ]
-    }
-  ], [currentPreset, layoutPresets, onPresetChange]);
+  const categories: SettingCategoryType[] = useMemo(
+    () =>
+      createSettingsConfig({
+        layoutPresets,
+        currentPreset,
+        onPresetChange,
+        onAnyChange: () => setHasChanges(true),
+        showRoads,
+        onToggleRoads,
+        showCitizens,
+        onToggleCitizens,
+        autoAssignWorkers,
+        onToggleAutoAssignWorkers,
+        edgeScrollEnabled,
+        onToggleEdgeScroll,
+        requireRoadConfirm,
+        onToggleRoadConfirm,
+        citizensCount,
+        onChangeCitizensCount,
+        citizensSeed,
+        onChangeCitizensSeed,
+      }),
+    [
+      layoutPresets,
+      currentPreset,
+      onPresetChange,
+      showRoads,
+      onToggleRoads,
+      showCitizens,
+      onToggleCitizens,
+      autoAssignWorkers,
+      onToggleAutoAssignWorkers,
+      edgeScrollEnabled,
+      onToggleEdgeScroll,
+      requireRoadConfirm,
+      onToggleRoadConfirm,
+      citizensCount,
+      onChangeCitizensCount,
+      citizensSeed,
+      onChangeCitizensSeed,
+    ],
+  );
 
   const toggleCategory = (categoryId: string) => {
     setExpandedCategories(prev => {
@@ -695,13 +214,13 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
         <div className="flex flex-col h-full max-h-[calc(90vh-8rem)]">
           {/* Search Bar */}
           <div className="p-6 pb-0">
-            <SearchBar searchTerm={searchTerm} onSearchChange={setSearchTerm} />
+            <SettingsSearchBar searchTerm={searchTerm} onSearchChange={setSearchTerm} />
           </div>
 
           {/* Settings Categories */}
           <div className="flex-1 overflow-y-auto p-6 pt-0 space-y-4">
             {categories.map(category => (
-              <CategorySection
+              <SettingCategory
                 key={category.id}
                 category={category}
                 isExpanded={expandedCategories.has(category.id)}
