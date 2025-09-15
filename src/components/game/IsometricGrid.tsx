@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef } from "react";
 import * as PIXI from "pixi.js";
 import { useGameContext } from "./GameContext";
 import logger from "@/lib/logger";
-import { gridToWorld } from "@/lib/isometric";
+import { gridToWorld, TILE_COLORS } from "@/lib/isometric";
 import { createTileSprite, getTileTexture, type GridTile } from "./grid/TileRenderer";
 import { TileOverlay } from "./grid/TileOverlay";
 
