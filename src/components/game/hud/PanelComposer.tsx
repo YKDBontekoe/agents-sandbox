@@ -79,19 +79,33 @@ export function PanelComposer({
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    const updateVar = () => {
+    let rAF: number | null = null;
+    let pending = false;
+
+    const updateVarNow = () => {
+      pending = false;
       const el = document.querySelector('[data-hud-zone="sidebar-right"]') as HTMLElement | null;
       const w = el ? el.offsetWidth : 0;
       document.documentElement.style.setProperty('--hud-right-rail', w ? `${w}px` : '0px');
+      rAF = null;
     };
-    updateVar();
-    const ro = new ResizeObserver(updateVar);
+
+    const scheduleUpdate = () => {
+      if (pending) return;
+      pending = true;
+      if (rAF !== null) cancelAnimationFrame(rAF);
+      rAF = requestAnimationFrame(updateVarNow);
+    };
+
+    scheduleUpdate();
+    const ro = new ResizeObserver(scheduleUpdate);
     const el = document.querySelector('[data-hud-zone="sidebar-right"]') as HTMLElement | null;
     if (el) ro.observe(el);
-    window.addEventListener('resize', updateVar);
+    window.addEventListener('resize', scheduleUpdate);
     return () => {
       ro.disconnect();
-      window.removeEventListener('resize', updateVar);
+      window.removeEventListener('resize', scheduleUpdate);
+      if (rAF !== null) cancelAnimationFrame(rAF);
     };
   }, []);
 

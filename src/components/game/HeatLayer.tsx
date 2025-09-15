@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useMemo } from "react";
 import * as PIXI from "pixi.js";
 import { useGameContext } from "./GameContext";
 
@@ -22,8 +22,22 @@ export default function HeatLayer({ gridSize, tileWidth = 64, tileHeight = 32, u
     return { wx, wy };
   };
 
+  // Memoize alpha calculations to prevent unnecessary re-renders
+  const { unrestAlpha, threatAlpha, shouldRender } = useMemo(() => {
+    const unrestAlpha = Math.min(Math.max(unrest, 0), 100) / 100 * 0.12;
+    const threatAlpha = Math.min(Math.max(threat, 0), 100) / 100 * 0.12;
+    const shouldRender = unrestAlpha > 0.01 || threatAlpha > 0.01;
+    return { unrestAlpha, threatAlpha, shouldRender };
+  }, [unrest, threat]);
+
   useEffect(() => {
-    if (!viewport) return;
+    if (!viewport || !shouldRender) {
+      // Hide layer if no heat to display
+      if (layerRef.current) {
+        layerRef.current.visible = false;
+      }
+      return;
+    }
 
     // Create or reuse container
     let layer = layerRef.current;
@@ -33,10 +47,8 @@ export default function HeatLayer({ gridSize, tileWidth = 64, tileHeight = 32, u
       viewport.addChild(layer);
       layerRef.current = layer;
     }
+    layer.visible = true;
     layer.removeChildren();
-
-    const unrestAlpha = Math.min(Math.max(unrest, 0), 100) / 100 * 0.12; // soft
-    const threatAlpha = Math.min(Math.max(threat, 0), 100) / 100 * 0.12;
 
     // Draw per-tile semi-transparent overlays
     for (let gx = 0; gx < gridSize; gx++) {
@@ -82,7 +94,7 @@ export default function HeatLayer({ gridSize, tileWidth = 64, tileHeight = 32, u
     return () => {
       // keep layer; contents get rebuilt on prop change
     };
-  }, [viewport, gridSize, tileWidth, tileHeight, unrest, threat]);
+  }, [viewport, gridSize, tileWidth, tileHeight, unrestAlpha, threatAlpha, shouldRender, gridToWorld]);
 
   useEffect(() => {
     return () => {

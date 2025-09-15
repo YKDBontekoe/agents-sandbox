@@ -25,7 +25,7 @@ export function useAdaptiveQuality(app: Application | null): AdaptiveQualityResu
       app.renderer.resize(app.canvas.width, app.canvas.height);
     });
     managerRef.current = manager;
-    manager.start();
+    manager.start(app.ticker);
 
     let lastTime = performance.now();
     let frameCount = 0;

@@ -16,6 +16,7 @@ interface UseActivityIndicatorsOptions {
   particleSystem: PIXI.Container | null;
   tileWidth: number;
   tileHeight: number;
+  app?: PIXI.Application | null;
 }
 
 export function useActivityIndicators({
@@ -24,9 +25,10 @@ export function useActivityIndicators({
   particleSystem,
   tileWidth,
   tileHeight,
+  app,
 }: UseActivityIndicatorsOptions) {
   const indicators = useRef<Map<string, ActivityIndicator>>(new Map());
-  const frame = useRef<number>(0);
+  const isAnimating = useRef<boolean>(false);
 
   const createActivityIndicator = useCallback(
     (
@@ -105,8 +107,12 @@ export function useActivityIndicators({
       }
     });
 
-    frame.current = requestAnimationFrame(animate);
-  }, []);
+    // Use PIXI ticker instead of requestAnimationFrame
+    if (app?.ticker && !isAnimating.current) {
+      isAnimating.current = true;
+      app.ticker.add(animate);
+    }
+  }, [app]);
 
   useEffect(() => {
     if (!particleSystem) return;
@@ -123,14 +129,15 @@ export function useActivityIndicators({
       }
     }
 
-    if (!frame.current) {
-      frame.current = requestAnimationFrame(animate);
+    if (!isAnimating.current && app?.ticker) {
+      isAnimating.current = true;
+      app.ticker.add(animate);
     }
 
     return () => {
-      if (frame.current) {
-        cancelAnimationFrame(frame.current);
-        frame.current = 0;
+      if (isAnimating.current && app?.ticker) {
+        app.ticker.remove(animate);
+        isAnimating.current = false;
       }
     };
   }, [buildings, cityMetrics, particleSystem, createActivityIndicator, animate]);

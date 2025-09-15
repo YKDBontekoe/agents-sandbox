@@ -6,12 +6,19 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import GameRenderer from '@/components/game/GameRenderer';
 import { GameProvider } from '@/components/game/GameContext';
+import IsometricGrid from '@/components/game/IsometricGrid';
+import ViewportManager from '@/components/game/ViewportManager';
+import MemoryManager from '@/components/game/MemoryManager';
 import * as PIXI from 'pixi.js';
 import { Viewport } from 'pixi-viewport';
 import logger from '@/lib/logger';
 import { publicConfig as config } from '@/infrastructure/config';
 
-import { IntegratedHUDSystem } from '@/components/game/hud/IntegratedHUDSystem';
+import dynamic from 'next/dynamic';
+const IntegratedHUDSystem = dynamic(
+  () => import('@/components/game/hud/IntegratedHUDSystem').then(m => m.IntegratedHUDSystem),
+  { ssr: false }
+);
 import { SimResources, canAfford, applyCost, projectCycleDeltas } from '@/components/game/resourceUtils';
 import { SIM_BUILDINGS, BUILDABLE_TILES } from '@/components/game/simCatalog';
 import WorkerPanel from '@/components/game/hud/WorkerPanel';
@@ -110,12 +117,95 @@ interface PlayPageProps {
 }
 
 export default function PlayPage({ initialState = null, initialProposals = [] }: PlayPageProps) {
+  console.log('🚀 PlayPage component mounting/rendering');
   const generateId = useIdGenerator();
   const [state, setState] = useState<GameState | null>(initialState);
   const [proposals, setProposals] = useState<Proposal[]>(initialProposals ?? []);
   const [loading, setLoading] = useState(false);
   const [guild, _setGuild] = useState("Wardens");
   const [error, setError] = useState<string | null>(null);
+  
+  // Initialize tileTypes and gridSize early - MUST be before conditional returns
+  const [tileTypes, setTileTypes] = useState<string[][]>([]);
+  const [gridSize, setGridSize] = useState<number | null>(() => {
+    // Priority: initialState.map_size > localStorage > default 32
+    if (initialState?.map_size) {
+      const n = Math.max(8, Math.min(48, initialState.map_size));
+      console.log('Initial gridSize from initialState.map_size:', n);
+      return n;
+    }
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('ad_map_size');
+        if (stored) {
+          const n = Math.max(8, Math.min(48, parseInt(stored, 10) || 32));
+          console.log('Initial gridSize from localStorage:', n);
+          return n;
+        }
+      } catch (err) {
+        console.error('Error reading gridSize from localStorage:', err);
+      }
+    }
+    console.log('Initial gridSize fallback to default: 32');
+    return 32;
+  });
+  
+  // Load map data when gridSize changes - MUST be before conditional returns
+  useEffect(() => {
+    console.log('🔥 MAP USEEFFECT SETUP - gridSize:', gridSize);
+    async function loadMap() {
+      try {
+        console.log('🗺️ USEEFFECT TRIGGERED - gridSize:', gridSize);
+        
+        if (gridSize == null) {
+          console.log('❌ SKIPPED - gridSize is null');
+          return;
+        }
+        
+        const url = `/api/map?size=${gridSize}`;
+        console.log('🌐 FETCHING:', url);
+        
+        const res = await fetch(url);
+        console.log('📡 RESPONSE STATUS:', res.status, res.ok);
+        
+        if (!res.ok) throw new Error('Failed to load map');
+        
+        const data = await res.json();
+        console.log('📦 DATA RECEIVED - map length:', data.map?.length);
+        
+        console.log('🎯 CALLING setTileTypes with data:', {
+          mapLength: data.map?.length,
+          firstRowLength: data.map?.[0]?.length,
+          sampleData: data.map?.slice(0, 2)
+        });
+        console.log('🔄 Current tileTypes length before setState:', tileTypes.length);
+        setTileTypes(data.map);
+        console.log('✅ setTileTypes CALLED - should trigger tileTypes useEffect');
+        // Check if we're in React StrictMode (double execution)
+        console.log('🔍 React StrictMode check - this log should appear once per actual call');
+        
+      } catch (err) {
+        console.error('❌ MAP LOAD ERROR:', err);
+      }
+    }
+    loadMap();
+  }, [gridSize]);
+  
+  // Monitor tileTypes state changes - MUST be before conditional returns
+  useEffect(() => {
+    console.log('🔥 TILETYPES USEEFFECT SETUP');
+    console.log('🔍 TILETYPES CHANGED - length:', tileTypes.length, 'firstRowLength:', tileTypes[0]?.length || 0);
+    if (tileTypes.length > 0) {
+      console.log('✅ TILETYPES STATE UPDATED SUCCESSFULLY!');
+      // Make a server-side visible log by calling a simple API
+      fetch('/api/debug-log?message=TILETYPES_STATE_UPDATED&length=' + tileTypes.length).catch(() => {});
+    } else {
+      console.log('❌ TILETYPES STILL EMPTY');
+      // Make a server-side visible log for empty state too
+      fetch('/api/debug-log?message=TILETYPES_STILL_EMPTY').catch(() => {});
+    }
+  }, [tileTypes]);
+  
   const [isPaused, setIsPaused] = useState(true);
   const [timeRemaining, setTimeRemaining] = useState(60);
   const [edgeScrollEnabled, setEdgeScrollEnabled] = useState(true);
@@ -125,10 +215,13 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     if (typeof window === 'undefined') return 1;
     try { return parseInt(localStorage.getItem('ad_onboarding_step') || '1', 10) || 1; } catch { return 1; }
   });
-  const [onboardingOpen, setOnboardingOpen] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return true;
-    try { return localStorage.getItem('ad_onboarding_dismissed') !== '1'; } catch { return true; }
-  });
+  const [onboardingOpen, setOnboardingOpen] = useState<boolean>(false);
+  useEffect(() => {
+    try {
+      const dismissed = localStorage.getItem('ad_onboarding_dismissed') === '1';
+      setOnboardingOpen(!dismissed);
+    } catch {}
+  }, []);
   const [tutorialFree, setTutorialFree] = useState<Partial<Record<BuildTypeId, number>>>({ farm: 1, house: 1, council_hall: 1 });
   const [isEdictsOpen, setIsEdictsOpen] = useState(false);
   const [, setIsOmensOpen] = useState(false);
@@ -140,6 +233,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   const [visualIndicators, setVisualIndicators] = useState<VisualIndicator[]>([]);
   const [enhancedGameState, setEnhancedGameState] = useState<EnhancedGameState | null>(null);
   const notify = useNotify();
+  const lastMemoryToastRef = useRef<{ time: number; lastShownMB: number }>({ time: 0, lastShownMB: 0 });
   // building hover details disabled in stable mode
   const [gameMode, setGameMode] = useState<'casual' | 'advanced'>('casual');
   const [, setShowOnboarding] = useState(false);
@@ -181,8 +275,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   // simplified: direct tile builds; no separate build selection UI here
   const [districts, _setDistricts] = useState<District[]>([]);
   const [leylines, setLeylines] = useState<Leyline[]>([]);
-  const [gridSize, setGridSize] = useState<number | null>(null);
-  const [tileTypes, setTileTypes] = useState<string[][]>([]);
+
   const [mapSizeModalOpen, setMapSizeModalOpen] = useState(true);
   const [pendingMapSize, setPendingMapSize] = useState<number>(32);
 
@@ -308,32 +401,87 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     try { return Object.keys(JSON.parse(localStorage.getItem('ad_skills_unlocked') || '{}')).filter(k => JSON.parse(localStorage.getItem('ad_skills_unlocked') || '{}')[k]); } catch { return []; }
   });
   useEffect(() => {
+    console.log('localStorage useEffect running, window defined:', typeof window !== 'undefined');
     if (typeof window === 'undefined') return;
+    
+    // Don't override if gridSize was already set from initialState.map_size
+    if (initialState?.map_size) {
+      console.log('Skipping localStorage override - initialState.map_size already set gridSize to:', gridSize);
+      setPendingMapSize(gridSize || 24);
+      setMapSizeModalOpen(false);
+      return;
+    }
+    
     try {
       const saved = localStorage.getItem('ad_map_size');
+      console.log('Saved map size from localStorage:', saved);
       if (saved) {
-        const n = Math.max(8, Math.min(512, Number(saved) || 32));
+        // Limit map size to prevent performance issues - max 48 for stability
+        const n = Math.max(8, Math.min(48, Number(saved) || 24));
+        console.log('Setting gridSize from localStorage:', n);
         setGridSize(n);
         setPendingMapSize(n);
         setMapSizeModalOpen(false);
+        console.log('localStorage: Set gridSize to', n, 'and closed modal');
+      } else {
+        // Set default map size if none exists
+        console.log('No saved map size, setting default to 32');
+        setGridSize(32);
+        setPendingMapSize(32);
+        setMapSizeModalOpen(false);
+        localStorage.setItem('ad_map_size', '32');
+        console.log('localStorage: Set default gridSize to 32 and closed modal');
       }
-    } catch {}
-  }, []);
+    } catch (err) {
+      console.error('Error loading map size from localStorage:', err);
+      // Fallback to default
+      setGridSize(32);
+      setPendingMapSize(32);
+      setMapSizeModalOpen(false);
+      console.log('localStorage: Error fallback - set gridSize to 32 and closed modal');
+    }
+  }, [initialState?.map_size, gridSize]);
 
+  // Load map data when gridSize changes - MUST be before conditional returns
   useEffect(() => {
+    console.log('🔥 MAP USEEFFECT SETUP - gridSize:', gridSize);
     async function loadMap() {
       try {
-        if (gridSize == null) return;
-        const res = await fetch(`/api/map?size=${gridSize}`);
+        console.log('🗺️ USEEFFECT TRIGGERED - gridSize:', gridSize);
+        
+        if (gridSize == null) {
+          console.log('❌ SKIPPED - gridSize is null');
+          return;
+        }
+        
+        const url = `/api/map?size=${gridSize}`;
+        console.log('🌐 FETCHING:', url);
+        
+        const res = await fetch(url);
+        console.log('📡 RESPONSE STATUS:', res.status, res.ok);
+        
         if (!res.ok) throw new Error('Failed to load map');
+        
         const data = await res.json();
+        console.log('📦 DATA RECEIVED - map length:', data.map?.length);
+        
+        console.log('🎯 CALLING setTileTypes');
         setTileTypes(data.map);
+        console.log('✅ setTileTypes CALLED');
+        
       } catch (err) {
-        logger.error('Map load error', err);
+        console.error('❌ MAP LOAD ERROR:', err);
       }
     }
     loadMap();
   }, [gridSize]);
+  
+  // Monitor tileTypes state changes - MUST be before conditional returns
+  useEffect(() => {
+    console.log('🔥 TILETYPES USEEFFECT SETUP');
+    console.log('🔍 TILETYPES CHANGED - length:', tileTypes.length);
+  }, [tileTypes]);
+  
   // Listen for skill unlock events to deduct costs && persist
   useEffect(() => {
     const onUnlock = async (e: any) => {
@@ -412,7 +560,8 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   }, [state]);
 
   const confirmMapSize = useCallback(async () => {
-    const n = Math.max(8, Math.min(512, Number(pendingMapSize) || 32));
+    // Limit map size to prevent performance issues - max 48 for stability
+    const n = Math.max(8, Math.min(48, Number(pendingMapSize) || 24));
     setGridSize(n);
     try { localStorage.setItem('ad_map_size', String(n)); } catch {}
     // Save map size to game state for persistence
@@ -766,7 +915,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
       saveState({ buildings: updatedBuildings }).catch(()=>{});
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoAssignWorkers, JSON.stringify(placedBuildings), simResources?.workers]);
+  }, [autoAssignWorkers, simResources?.workers]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -799,10 +948,11 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     try { setRoads(((json as any).roads as Array<{x:number;y:number}>) ?? []); } catch {}
     try { if ((json as any).citizens_count) setCitizensCount((json as any).citizens_count); } catch {}
     try { if ((json as any).citizens_seed) setCitizensSeed((json as any).citizens_seed); } catch {}
-    // Load saved map size from game state
+    // Load saved map size from game state with performance-focused validation
     try { 
       if ((json as any).map_size) {
-        const savedSize = Math.max(8, Math.min(512, Number((json as any).map_size) || 32));
+        // Limit map size to prevent performance issues - max 48 for stability
+        const savedSize = Math.max(8, Math.min(48, Number((json as any).map_size) || 24));
         setGridSize(savedSize);
         setPendingMapSize(savedSize);
         setMapSizeModalOpen(false);
@@ -816,6 +966,17 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     if (!res.ok) throw new Error(json.error || "Failed to fetch proposals");
     setProposals(json.proposals || []);
   }, []);
+  
+  // Fetch initial state if not provided
+  useEffect(() => {
+    if (!initialState && !state) {
+      console.log('🔄 No initial state provided, fetching from API...');
+      fetchState().catch((err) => {
+        console.error('❌ Failed to fetch initial state:', err);
+        setError(err.message || 'Failed to load game state');
+      });
+    }
+  }, [initialState, state, fetchState]);
 
   const tick = useCallback(async () => {
     setLoading(true);
@@ -1191,15 +1352,15 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
           <div className="absolute inset-0 z-[20000] bg-black/60 flex items-center justify-center">
             <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 shadow-2xl w-[min(92vw,28rem)]">
               <h2 className="text-lg font-semibold text-gray-100">Choose starting map size</h2>
-              <p className="text-sm text-gray-400 mt-1">You can expand infinitely by exploring. Pick an initial size:</p>
+              <p className="text-sm text-gray-400 mt-1">You can expand infinitely by exploring. Pick an initial size (larger maps may cause performance issues):</p>
               <div className="mt-4 grid grid-cols-4 gap-2">
                 {[16,24,32,48].map(sz => (
-                  <button key={sz} onClick={() => setPendingMapSize(sz)} className={`px-3 py-2 rounded border text-sm ${pendingMapSize===sz ? 'bg-blue-600 border-blue-500 text-white' : 'bg-gray-800 border-gray-700 text-gray-200 hover:bg-gray-750'}`}>{sz}×{sz}</button>
+                  <button key={sz} onClick={() => setPendingMapSize(sz)} className={`px-3 py-2 rounded border text-sm ${pendingMapSize===sz ? 'bg-blue-600 border-blue-500 text-white' : 'bg-gray-800 border-gray-700 text-gray-200 hover:bg-gray-750'} ${sz > 32 ? 'border-yellow-600 text-yellow-200' : ''}`}>{sz}×{sz}{sz > 32 ? ' ⚠️' : ''}</button>
                 ))}
               </div>
               <div className="mt-4">
-                <label className="block text-xs text-gray-400 mb-1">Custom size (8 - 512)</label>
-                <input type="number" min={8} max={512} value={pendingMapSize} onChange={e=>setPendingMapSize(Number(e.target.value)||32)} className="w-full px-3 py-2 rounded bg-gray-800 border border-gray-700 text-gray-100 outline-none focus:ring-2 focus:ring-blue-500" />
+                <label className="block text-xs text-gray-400 mb-1">Custom size (8 - 48, larger sizes may cause freezing)</label>
+                <input type="number" min={8} max={48} value={pendingMapSize} onChange={e=>setPendingMapSize(Number(e.target.value)||24)} className="w-full px-3 py-2 rounded bg-gray-800 border border-gray-700 text-gray-100 outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
               <div className="mt-5 flex items-center justify-between">
                 <div className="text-xs text-gray-500">Infinite expansion is enabled during play.</div>
@@ -1209,32 +1370,70 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
           </div>
         )}
         <GameProvider app={pixiApp} viewport={pixiViewport} setApp={setPixiApp} setViewport={setPixiViewport}>
+          <MemoryManager 
+            maxMemoryMB={300}
+            maxTextures={150}
+            cleanupInterval={15000}
+            warnAtPercent={90}
+            warningCooldownMs={90000}
+            onMemoryWarning={(stats) => {
+              const now = Date.now();
+              const last = lastMemoryToastRef.current;
+              const deltaMb = Math.abs(stats.memoryUsage - last.lastShownMB);
+              const cooldownPassed = now - last.time > 60000; // 60s UI cooldown for toasts
+              const significantChange = deltaMb >= 32; // Only toast if >=32MB change
+              if (cooldownPassed || significantChange) {
+                logger.warn('Memory usage high:', stats);
+                const percent = typeof stats.percentUsed === 'number' ? `${stats.percentUsed.toFixed(1)}%` : 'n/a';
+                notify({ type: 'warning', title: 'Memory Warning', message: `Memory usage: ${stats.memoryUsage.toFixed(1)}MB (${percent})`, dedupeKey: 'memory-warning', dedupeMs: 60000 });
+                lastMemoryToastRef.current = { time: now, lastShownMB: stats.memoryUsage };
+              }
+            }}
+            onMemoryCleanup={(freedMB) => {
+              logger.info(`Memory cleanup freed ${freedMB.toFixed(1)}MB`);
+            }}
+          />
+          <ViewportManager
+            initialZoom={1.5}
+            minZoom={0.2}
+            maxZoom={4.0}
+            worldWidth={20000}
+            worldHeight={20000}
+          >
+            <IsometricGrid
+               gridSize={gridSize || 24}
+               tileTypes={tileTypes}
+               tileWidth={64}
+               tileHeight={32}
+              onTileHover={(x,y,t)=>{ 
+                ensureCapacityAround(x,y,2); 
+                const tileType = t || 'grass';
+                setHoverTile({x,y,tileType});
+              }}
+              onTileClick={(x,y,t)=>{
+                ensureCapacityAround(x,y,2);
+                const tileType = t || 'grass';
+                setSelectedTile({x,y,tileType});
+                setTooltipLocked(true);
+                setClickEffectKey(`click-${Date.now()}-${x}-${y}`);
+                try { window.dispatchEvent(new CustomEvent('ad_select_tile', { detail: { gridX: x, gridY: y, tileWidth: 64, tileHeight: 32 } })); } catch {}
+              }}
+            />
+          </ViewportManager>
           <GameRenderer
             useExternalProvider
             enableEdgeScroll={edgeScrollEnabled}
-            gridSize={Math.max(tileTypes.length, tileTypes[0]?.length ?? 0)}
+            gridSize={(() => {
+              console.log('🎮 GameRenderer gridSize prop:', { 
+                gridSize, 
+                fallback: gridSize || 0, 
+                tileTypesLength: tileTypes.length,
+                tileTypesFirstRow: tileTypes[0]?.length || 0,
+                hasTileData: tileTypes.length > 0 && tileTypes[0]?.length > 0
+              });
+              return gridSize || 0;
+            })()}
             tileTypes={tileTypes}
-            onTileHover={(x,y,t)=>{ 
-              ensureCapacityAround(x,y,2); 
-              const tileType = t || tileTypes[y]?.[x] || 'unknown';
-              setHoverTile({x,y,tileType});
-              // Reveal unknown tiles around hover position
-              if (tileType === 'unknown' || (tileTypes[y]?.[x] === 'unknown')) {
-                revealUnknownTiles(x, y, 4);
-              }
-            }}
-            onTileClick={(x,y,t)=>{
-              ensureCapacityAround(x,y,2);
-              const tileType = t || tileTypes[y]?.[x] || 'unknown';
-              setSelectedTile({x,y,tileType});
-              setTooltipLocked(true);
-              setClickEffectKey(`click-${Date.now()}-${x}-${y}`);
-              // Reveal unknown tiles around click position
-              if (tileType === 'unknown' || (tileTypes[y]?.[x] === 'unknown')) {
-                revealUnknownTiles(x, y, 6);
-              }
-              try { window.dispatchEvent(new CustomEvent('ad_select_tile', { detail: { gridX: x, gridY: y, tileWidth: 64, tileHeight: 32 } })); } catch {}
-            }}
             onReset={() => {
               // Reset game state for development
               if (confirm('Reset all game progress? This cannot be undone.')) {

@@ -31,3 +31,20 @@ export function gridToWorld(
   const worldY = (gridX + gridY) * (tileHeight / 2);
   return { worldX, worldY };
 }
+
+// Inverse transform of gridToWorld: convert isometric world coords back to grid indices (fractional)
+export function worldToGrid(
+  worldX: number,
+  worldY: number,
+  tileWidth: number,
+  tileHeight: number,
+) {
+  // Solve for gridX/gridY from:
+  // worldX = (gx - gy) * (tileWidth/2)
+  // worldY = (gx + gy) * (tileHeight/2)
+  const a = worldX / (tileWidth / 2);
+  const b = worldY / (tileHeight / 2);
+  const gridX = (a + b) / 2;
+  const gridY = (b - a) / 2;
+  return { gridX, gridY };
+}

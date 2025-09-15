@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, ReactNode } from "react";
+import { createContext, useContext, ReactNode, useMemo } from "react";
 import { Viewport } from "pixi-viewport";
 import * as PIXI from "pixi.js";
 import logger from "@/lib/logger";
@@ -39,8 +39,10 @@ export function GameProvider({
 }: GameProviderProps) {
   logger.debug("GameProvider rendering with:", { app: !!app, viewport: !!viewport });
   
+  const value = useMemo(() => ({ app, viewport, setApp, setViewport }), [app, viewport, setApp, setViewport]);
+  
   return (
-    <GameContext.Provider value={{ app, viewport, setApp, setViewport }}>
+    <GameContext.Provider value={value}>
       {children}
     </GameContext.Provider>
   );

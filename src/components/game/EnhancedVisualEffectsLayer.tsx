@@ -107,6 +107,7 @@ export default function EnhancedVisualEffectsLayer({
     particleSystem: particleSystem.current,
     tileWidth,
     tileHeight,
+    app,
   });
 
   useConstructionAnimations({
@@ -116,6 +117,7 @@ export default function EnhancedVisualEffectsLayer({
     particleSystem: particleSystem.current,
     tileWidth,
     tileHeight,
+    app,
   });
 
   useActivityIndicators({
@@ -124,6 +126,7 @@ export default function EnhancedVisualEffectsLayer({
     particleSystem: particleSystem.current,
     tileWidth,
     tileHeight,
+    app,
   });
 
   useDayNightCycle({

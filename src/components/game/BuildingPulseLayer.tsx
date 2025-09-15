@@ -14,9 +14,9 @@ interface BuildingPulseLayerProps {
 }
 
 export default function BuildingPulseLayer({ pulses, tileWidth = 64, tileHeight = 32 }: BuildingPulseLayerProps) {
-  const { viewport } = useGameContext();
+  const { viewport, app } = useGameContext();
   const containerRef = useRef<PIXI.Container | null>(null);
-  const rafRef = useRef<number | null>(null);
+  const isAnimatingRef = useRef<boolean>(false);
 
   useEffect(() => {
     if (!viewport) return;
@@ -30,7 +30,7 @@ export default function BuildingPulseLayer({ pulses, tileWidth = 64, tileHeight 
       if (container.parent) container.parent.removeChild(container);
       container.destroy({ children: true });
       containerRef.current = null;
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+
     };
   }, [viewport]);
 
@@ -55,10 +55,20 @@ export default function BuildingPulseLayer({ pulses, tileWidth = 64, tileHeight 
         g.stroke();
         container.addChild(g);
       }
-      rafRef.current = requestAnimationFrame(tick);
+      if (app && !isAnimatingRef.current) {
+        isAnimatingRef.current = true;
+        app.ticker.add(tick);
+      }
     };
-    rafRef.current = requestAnimationFrame(tick);
-    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
+    if (app && pulses.length > 0) {
+      tick();
+    }
+    return () => {
+      if (app && isAnimatingRef.current) {
+        app.ticker.remove(tick);
+        isAnimatingRef.current = false;
+      }
+    };
   }, [JSON.stringify(pulses), tileWidth, tileHeight]);
 
   return null;

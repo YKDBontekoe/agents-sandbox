@@ -106,6 +106,10 @@ export function usePixiApplication({
           worldHeight: 2000,
           events: app.renderer.events,
         });
+        // Ensure pointer events are processed in Pixi v7+/v8
+        (app.stage as any).eventMode = "static";
+        (viewport as any).eventMode = "static";
+
         viewport.sortableChildren = true;
         app.stage.addChild(viewport);
         viewport
@@ -125,22 +129,61 @@ export function usePixiApplication({
 
       const initializeFallbackCanvas = async () => {
         const app = new PIXI.Application();
-        const fallbackOptions = {
+        const initOptions = {
           canvas: canvasRef.current!,
           width,
           height,
           backgroundColor: 0x111827,
           antialias: false,
           resolution: 1,
-          autoDensity: false,
+          autoDensity: true,
           hello: false,
           clearBeforeRender: true,
           preserveDrawingBuffer: false,
-          failIfMajorPerformanceCaveat: true,
-        } as const;
+          failIfMajorPerformanceCaveat: false,
+          powerPreference: "high-performance" as const,
+          premultipliedAlpha: false,
+        };
 
-        await app.init(fallbackOptions);
+        await app.init(initOptions);
         if (cancelled) return;
+
+        const canvas = app.canvas as HTMLCanvasElement;
+        contextLostHandlerRef.current = (event: Event) => {
+          event.preventDefault();
+          setInitError(
+            "WebGL context lost. The game will attempt to restore automatically."
+          );
+        };
+        contextRestoredHandlerRef.current = () => {
+          setInitError(null);
+          setIsInitialized(false);
+          setTimeout(() => {
+            if (canvasRef.current && !cancelled) {
+              initPixi();
+            }
+          }, 100);
+        };
+        canvas.addEventListener(
+          "webglcontextlost",
+          contextLostHandlerRef.current
+        );
+        canvas.addEventListener(
+          "webglcontextrestored",
+          contextRestoredHandlerRef.current
+        );
+
+        app.ticker.maxFPS = 60;
+        app.ticker.minFPS = 30;
+        if (app.renderer.textureGC) {
+          app.renderer.textureGC.maxIdle = 60 * 60;
+          app.renderer.textureGC.checkCountMax = 600;
+        }
+        if ("batchSize" in app.renderer) {
+          (app.renderer as PIXI.Renderer & { batchSize?: number }).batchSize =
+            4096;
+        }
+
         appRef.current = app;
 
         const viewport = new Viewport({
@@ -150,17 +193,25 @@ export function usePixiApplication({
           worldHeight: 2000,
           events: app.renderer.events,
         });
+        // Ensure pointer events are processed in Pixi v7+/v8
+        (app.stage as any).eventMode = "static";
+        (viewport as any).eventMode = "static";
+
+        viewport.sortableChildren = true;
         app.stage.addChild(viewport);
-        viewportRef.current = viewport;
-        if (cancelled) return;
         viewport
-          .drag({ mouseButtons: "left" })
+          .drag({ mouseButtons: "all" })
+          .pinch()
+          .decelerate({ friction: 0.92, bounce: 0.25, minSpeed: 0.02 })
           .clampZoom({ minScale: 0.2, maxScale: 3 })
           .wheel({ smooth: 0, percent: 0.12 });
+
+        viewportRef.current = viewport;
+        if (cancelled) return;
         setApp(app);
         setViewport(viewport);
         setIsInitialized(true);
-        logger.debug("Fallback canvas initialized successfully");
+        logger.debug("PIXI Fallback Application initialized successfully");
       };
 
       try {
@@ -221,16 +272,22 @@ export function usePixiApplication({
   useEffect(() => {
     const applySize = () => {
       if (appRef.current && viewportRef.current) {
-        appRef.current.renderer.resize(width, height);
-        viewportRef.current.resize(width, height);
+        const renderer = appRef.current.renderer as any;
+        const curW = renderer?.width ?? 0;
+        const curH = renderer?.height ?? 0;
+        if (curW !== width || curH !== height) {
+          appRef.current.renderer.resize(width, height);
+          viewportRef.current.resize(width, height);
+        }
       }
     };
     applySize();
-    const onResize = () => applySize();
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
+    // We rely on React-driven width/height updates; avoid extra window resize listeners here to prevent redundant resizes.
+    return () => {
+      // no-op
+    };
   }, [width, height, isInitialized]);
-
+  
   return {
     canvasRef,
     app: appRef.current,

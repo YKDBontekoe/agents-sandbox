@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo, useRef } from 'react';
 import { HUDZone, useHUDLayout } from './HUDLayoutSystem';
 
 // Panel configuration interface
@@ -216,11 +216,13 @@ export function HUDPanelRegistryProvider({ children }: HUDPanelRegistryProviderP
 // Hook for registering panels
 export function useHUDPanel(panel: HUDPanelComponent) {
   const { registerPanel, unregisterPanel } = useHUDPanelRegistry();
+  
+  const stablePanel = useMemo(() => panel, [panel.config.id, panel.config.zone, panel.config.priority]);
 
   useEffect(() => {
-    registerPanel(panel);
-    return () => unregisterPanel(panel.config.id);
-  }, [panel.config.id, registerPanel, unregisterPanel]);
+    registerPanel(stablePanel);
+    return () => unregisterPanel(stablePanel.config.id);
+  }, [stablePanel, registerPanel, unregisterPanel]);
 }
 
 // Panel wrapper component

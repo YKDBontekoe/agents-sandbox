@@ -73,25 +73,59 @@ function GameRendererContent({
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
-    const update = () => {
+    let rAF: number | null = null;
+    let pending = false;
+
+    const updateNow = () => {
+      pending = false;
       const rect = el.getBoundingClientRect();
       const w = Math.max(320, Math.floor(rect.width));
       const h = Math.max(320, Math.floor(rect.height));
-      setDims({ w, h });
+      setDims(prev => (prev.w === w && prev.h === h ? prev : { w, h }));
+      rAF = null;
     };
-    update();
-    const ro = new ResizeObserver(update);
+
+    const scheduleUpdate = () => {
+      if (pending) return;
+      pending = true;
+      if (rAF !== null) {
+        cancelAnimationFrame(rAF);
+      }
+      rAF = requestAnimationFrame(updateNow);
+    };
+
+    scheduleUpdate();
+    const ro = new ResizeObserver(scheduleUpdate);
     ro.observe(el);
-    return () => ro.disconnect();
+    return () => {
+      ro.disconnect();
+      if (rAF !== null) cancelAnimationFrame(rAF);
+    };
   }, []);
 
-  // Edge scroll: pan when cursor is near container edges
+  // Edge scroll: pan when cursor is near container edges using PIXI ticker
   useEffect(() => {
     const el = containerRef.current;
     if (!el || !viewport || !enableEdgeScroll) return;
     const margin = 24; // px from edge
     const maxSpeed = 12; // pixels per frame pan speed
     const state = edgeScrollRef.current;
+
+    const animate = () => {
+      if (!viewport) { state.raf = null; return; }
+      const { vx, vy } = state;
+      if (Math.abs(vx) < 0.01 && Math.abs(vy) < 0.01) { 
+        state.raf = null;
+        if (viewport.parent && 'ticker' in viewport.parent) {
+          const app = viewport.parent as any;
+          if (app.ticker) {
+            app.ticker.remove(animate);
+          }
+        }
+        return; 
+      }
+      viewport.moveCenter(viewport.center.x + vx, viewport.center.y + vy);
+    };
 
     const onMouseMove = (e: MouseEvent) => {
       const rect = el.getBoundingClientRect();
@@ -104,45 +138,39 @@ function GameRendererContent({
       else if (y > rect.height - margin) vy = ((y - (rect.height - margin)) / margin) * maxSpeed;
       state.vx = vx;
       state.vy = vy;
-      if (!state.raf) animate();
+      if (!state.raf && (vx !== 0 || vy !== 0)) {
+        state.raf = 1; // mark as active
+        if (viewport.parent && 'ticker' in viewport.parent) {
+          const app = viewport.parent as any;
+          if (app.ticker) {
+            app.ticker.add(animate);
+          }
+        }
+      }
     };
     const onMouseLeave = () => {
       state.vx = 0; state.vy = 0;
     };
-    const animate = () => {
-      if (!viewport) { state.raf = null; return; }
-      const { vx, vy } = state;
-      if (Math.abs(vx) < 0.01 && Math.abs(vy) < 0.01) { state.raf = null; return; }
-      viewport.moveCenter(viewport.center.x + vx, viewport.center.y + vy);
-      state.raf = requestAnimationFrame(animate);
-    };
+    
     el.addEventListener('mousemove', onMouseMove);
     el.addEventListener('mouseleave', onMouseLeave);
     return () => {
       el.removeEventListener('mousemove', onMouseMove);
       el.removeEventListener('mouseleave', onMouseLeave);
-      if (state.raf) cancelAnimationFrame(state.raf);
+      if (state.raf && viewport.parent && 'ticker' in viewport.parent) {
+        const app = viewport.parent as any;
+        if (app.ticker) {
+          app.ticker.remove(animate);
+        }
+      }
       state.vx = 0; state.vy = 0; state.raf = null;
     };
   }, [viewport, enableEdgeScroll]);
 
   return (
     <div ref={containerRef} className="relative w-full h-full bg-gray-900">
-      <GameCanvas
-        width={dims.w}
-        height={dims.h}
-        onTileHover={onTileHover}
-        onTileClick={onTileClick}
-      />
-
-      <IsometricGrid
-        gridSize={gridSize}
-        tileWidth={64}
-        tileHeight={32}
-        tileTypes={tileTypes}
-        onTileHover={onTileHover}
-        onTileClick={onTileClick}
-      />
+      {/* Grid rendering is now handled by ChunkedIsometricGrid in PlayPageInternal */}
+      {/* Removed GameCanvas and IsometricGrid to prevent flickering from multiple overlapping grid systems */}
       
       {showHelp && (
         <div className="absolute top-2 left-2 pointer-events-none">

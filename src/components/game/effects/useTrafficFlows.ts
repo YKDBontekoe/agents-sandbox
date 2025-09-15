@@ -11,6 +11,7 @@ interface UseTrafficFlowsOptions {
   particleSystem: PIXI.Container | null;
   tileWidth: number;
   tileHeight: number;
+  app?: PIXI.Application | null;
 }
 
 export function useTrafficFlows({
@@ -19,9 +20,10 @@ export function useTrafficFlows({
   particleSystem,
   tileWidth,
   tileHeight,
+  app,
 }: UseTrafficFlowsOptions) {
   const flows = useRef<Map<string, TrafficFlow>>(new Map());
-  const frame = useRef<number>(0);
+  const isAnimating = useRef<boolean>(false);
   const lastTime = useRef<number>(0);
 
   const createTrafficFlow = useCallback(
@@ -96,8 +98,12 @@ export function useTrafficFlows({
       });
     });
 
-    frame.current = requestAnimationFrame(animate);
-  }, [tileWidth, tileHeight]);
+    // Use PIXI ticker instead of requestAnimationFrame
+    if (app?.ticker && !isAnimating.current) {
+      isAnimating.current = true;
+      app.ticker.add(animate);
+    }
+  }, [tileWidth, tileHeight, app]);
 
   useEffect(() => {
     if (!enable || !particleSystem) return;
@@ -113,15 +119,16 @@ export function useTrafficFlows({
       }
     }
 
-    if (!frame.current) {
+    if (!isAnimating.current && app?.ticker) {
       lastTime.current = Date.now();
-      frame.current = requestAnimationFrame(animate);
+      isAnimating.current = true;
+      app.ticker.add(animate);
     }
 
     return () => {
-      if (frame.current) {
-        cancelAnimationFrame(frame.current);
-        frame.current = 0;
+      if (isAnimating.current && app?.ticker) {
+        app.ticker.remove(animate);
+        isAnimating.current = false;
       }
     };
   }, [buildings, enable, particleSystem, createTrafficFlow, animate]);

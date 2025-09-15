@@ -23,13 +23,12 @@
       "@engine": ["./packages/engine/src"],
       "@engine/*": ["./packages/engine/src/*"],
       "@arcane/ui": ["./packages/ui/src"],
-      "@arcane/ui/*": ["./packages/ui/src/*"]
+      "@arcane/ui/*": ["./packages/ui/src/*"],
       "@arcane/infrastructure": ["./packages/infrastructure/src"],
       "@arcane/infrastructure/*": ["./packages/infrastructure/src/*"],
-      "@/utils/performance/*": ["./packages/utils/performance/*"]
-        "@arcane/infrastructure": ["./packages/infrastructure/src"],
-        "@arcane/infrastructure/*": ["./packages/infrastructure/src/*"],
-        "@/utils/performance/*": ["./packages/utils/performance/*"]
+      "@/utils/performance/*": ["./packages/utils/performance/*"],
+      "@arcane/engine": ["./packages/engine/src"],
+      "@arcane/engine/*": ["./packages/engine/src/*"]
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],

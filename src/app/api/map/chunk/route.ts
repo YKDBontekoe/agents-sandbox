@@ -7,6 +7,7 @@ export async function GET(req: NextRequest) {
   const chunkYParam = searchParams.get('chunkY')
   const chunkSizeParam = searchParams.get('chunkSize')
   const seedParam = searchParams.get('seed')
+  const detail = searchParams.get('detail') || 'full' // 'minimal', 'standard', 'full'
   
   const chunkX = Number(chunkXParam ?? 0)
   const chunkY = Number(chunkYParam ?? 0)
@@ -235,13 +236,17 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ 
-    chunk, 
-    chunkX, 
-    chunkY, 
-    chunkSize,
-    biome,
-    metadata: {
+  // Optimize response based on detail level
+  const response: any = {
+    x: chunkX,
+    y: chunkY,
+    size: chunkSize,
+    tiles: chunk
+  }
+
+  if (detail === 'full') {
+    response.biome = biome
+    response.metadata = {
       hasVillage: chunk.some(row => row.some(cell => cell === 'village')),
       hasRuins: chunk.some(row => row.some(cell => cell === 'ruins')),
       hasSpecialResources: chunk.some(row => row.some(cell => 
@@ -250,5 +255,15 @@ export async function GET(req: NextRequest) {
       waterCoverage: chunk.flat().filter(cell => cell === 'water').length / (chunkSize * chunkSize),
       forestCoverage: chunk.flat().filter(cell => cell === 'forest').length / (chunkSize * chunkSize)
     }
-  })
+  } else if (detail === 'standard') {
+    response.biome = biome
+  }
+
+  // Add cache headers for better performance
+  const headers = {
+    'Cache-Control': 'public, max-age=3600, stale-while-revalidate=86400',
+    'Content-Type': 'application/json'
+  }
+
+  return NextResponse.json(response, { headers })
 }

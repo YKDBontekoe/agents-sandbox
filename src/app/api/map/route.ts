@@ -7,6 +7,16 @@ export async function GET(req: NextRequest) {
   const seedParam = searchParams.get('seed')
   const size = Math.max(4, Math.min(100, Number(sizeParam ?? 20)))
   const seed = Number(seedParam ?? 12345)
+  
+  console.log('🗺️ [API] Map endpoint called:', {
+    sizeParam,
+    size,
+    seedParam,
+    seed,
+    url: req.url,
+    timestamp: new Date().toISOString(),
+    userAgent: req.headers.get('user-agent')?.substring(0, 50)
+  })
 
   // Simple seeded RNG (mulberry32)
   function mulberry32(a: number) {
@@ -64,5 +74,12 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  console.log('🗺️ [API] Generated map:', { 
+    size: map.length, 
+    firstRowLength: map[0]?.length, 
+    sampleTiles: map.slice(0, 2).map(row => row.slice(0, 3)),
+    totalTiles: map.length * (map[0]?.length || 0)
+  })
+  
   return NextResponse.json({ map })
 }

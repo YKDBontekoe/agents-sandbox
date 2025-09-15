@@ -97,22 +97,37 @@ export function useScreenSize(breakpoints: ResponsiveBreakpoints = DEFAULT_BREAK
   useEffect(() => {
     if (typeof window === 'undefined') return;
     
-    const updateScreenSize = () => {
+    let rAF: number | null = null;
+    let pending = false;
+
+    const computeSize = () => {
       const width = window.innerWidth;
-      if (width <= breakpoints.mobile) {
-        setScreenSize('mobile');
-      } else if (width <= breakpoints.tablet) {
-        setScreenSize('tablet');
-      } else if (width <= breakpoints.desktop) {
-        setScreenSize('desktop');
-      } else {
-        setScreenSize('wide');
-      }
+      if (width <= breakpoints.mobile) return 'mobile' as const;
+      if (width <= breakpoints.tablet) return 'tablet' as const;
+      if (width <= breakpoints.desktop) return 'desktop' as const;
+      return 'wide' as const;
     };
 
-    updateScreenSize();
-    window.addEventListener('resize', updateScreenSize);
-    return () => window.removeEventListener('resize', updateScreenSize);
+    const updateNow = () => {
+      pending = false;
+      const next = computeSize();
+      setScreenSize(prev => (prev === next ? prev : next));
+      rAF = null;
+    };
+
+    const scheduleUpdate = () => {
+      if (pending) return;
+      pending = true;
+      if (rAF !== null) cancelAnimationFrame(rAF);
+      rAF = requestAnimationFrame(updateNow);
+    };
+
+    scheduleUpdate();
+    window.addEventListener('resize', scheduleUpdate);
+    return () => {
+      window.removeEventListener('resize', scheduleUpdate);
+      if (rAF !== null) cancelAnimationFrame(rAF);
+    };
   }, [breakpoints]);
 
   return screenSize;

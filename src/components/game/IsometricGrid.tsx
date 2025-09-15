@@ -25,7 +25,7 @@ export default function IsometricGrid({
   onTileHover,
   onTileClick,
 }: IsometricGridProps) {
-  const { viewport } = useGameContext();
+  const { viewport, app } = useGameContext();
   const gridContainerRef = useRef<PIXI.Container | null>(null);
   const tilesRef = useRef<Map<string, GridTile>>(new Map());
   const centeredRef = useRef<boolean>(false);
@@ -209,12 +209,12 @@ export default function IsometricGrid({
 
   // Performance optimization: Viewport culling and LOD + lightweight animations
   useEffect(() => {
-    if (!viewport || !gridContainerRef.current) return;
+    if (!viewport || !gridContainerRef.current || !app?.ticker) return;
 
     let lastScale = viewport.scale?.x || 1;
-    let animationFrameId: number | null = null;
     let isUpdating = false;
     let t = 0;
+    let isTickerActive = false;
 
     const updateVisibilityAndLOD = () => {
       if (!viewport || !viewport.scale || isUpdating) return;
@@ -294,16 +294,14 @@ export default function IsometricGrid({
     };
 
     const throttledUpdate = () => {
-      if (animationFrameId) {
-        cancelAnimationFrame(animationFrameId);
-      }
-      animationFrameId = requestAnimationFrame(updateVisibilityAndLOD);
+      // Update will be handled by the ticker
+      updateVisibilityAndLOD();
     };
 
     // Listen to viewport events with throttling
     viewport.on('zoomed', throttledUpdate);
     viewport.on('moved', throttledUpdate);
-    // Global animation ticker
+    // Global animation ticker using PIXI ticker
     const tick = () => {
       t += 16;
       // Subtle pulse on selection overlay
@@ -315,19 +313,25 @@ export default function IsometricGrid({
         sel.alpha = base + amp * (0.5 + 0.5 * Math.sin(t * w));
       }
       throttledUpdate();
-      animationFrameId = requestAnimationFrame(tick);
     };
-    animationFrameId = requestAnimationFrame(tick);
+    
+    if (!isTickerActive) {
+      isTickerActive = true;
+      app.ticker.add(tick);
+    }
     
     // Initial update
     updateVisibilityAndLOD();
 
     return () => {
-      if (animationFrameId) cancelAnimationFrame(animationFrameId);
+      if (isTickerActive && app?.ticker) {
+        app.ticker.remove(tick);
+        isTickerActive = false;
+      }
       viewport.off('zoomed', throttledUpdate);
       viewport.off('moved', throttledUpdate);
     };
-  }, [viewport, tileWidth, tileHeight]);
+  }, [viewport, app, tileWidth, tileHeight]);
 
   return null; // This component doesn't render React elements
 }

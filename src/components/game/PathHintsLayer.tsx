@@ -19,9 +19,9 @@ interface PathHintsLayerProps {
 }
 
 export default function PathHintsLayer({ hints, tileWidth = 64, tileHeight = 32 }: PathHintsLayerProps) {
-  const { viewport } = useGameContext();
+  const { viewport, app } = useGameContext();
   const containerRef = useRef<PIXI.Container | null>(null);
-  const rafRef = useRef<number | null>(null);
+  const isAnimatingRef = useRef<boolean>(false);
 
   useEffect(() => {
     if (!viewport) return;
@@ -35,7 +35,6 @@ export default function PathHintsLayer({ hints, tileWidth = 64, tileHeight = 32 
       if (container.parent) container.parent.removeChild(container);
       container.destroy({ children: true });
       containerRef.current = null;
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
   }, [viewport]);
 
@@ -65,10 +64,20 @@ export default function PathHintsLayer({ hints, tileWidth = 64, tileHeight = 32 
           container.addChild(g);
         }
       }
-      rafRef.current = requestAnimationFrame(redraw);
+      if (app && !isAnimatingRef.current) {
+        isAnimatingRef.current = true;
+        app.ticker.add(redraw);
+      }
     };
-    rafRef.current = requestAnimationFrame(redraw);
-    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
+    if (app && hints.length > 0) {
+      redraw();
+    }
+    return () => {
+      if (app && isAnimatingRef.current) {
+        app.ticker.remove(redraw);
+        isAnimatingRef.current = false;
+      }
+    };
   }, [JSON.stringify(hints), tileWidth, tileHeight]);
 
   return null;

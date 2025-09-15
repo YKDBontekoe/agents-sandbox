@@ -19,6 +19,7 @@ interface UseConstructionAnimationsOptions {
   particleSystem: PIXI.Container | null;
   tileWidth: number;
   tileHeight: number;
+  app?: PIXI.Application | null;
 }
 
 export function useConstructionAnimations({
@@ -28,9 +29,10 @@ export function useConstructionAnimations({
   particleSystem,
   tileWidth,
   tileHeight,
+  app,
 }: UseConstructionAnimationsOptions) {
   const animations = useRef<Map<string, ConstructionAnimation>>(new Map());
-  const frame = useRef<number>(0);
+  const isAnimating = useRef<boolean>(false);
 
   const createConstructionAnimation = useCallback(
     (
@@ -140,8 +142,12 @@ export function useConstructionAnimations({
       });
     });
 
-    frame.current = requestAnimationFrame(animate);
-  }, []);
+    // Use PIXI ticker instead of requestAnimationFrame
+    if (app?.ticker && !isAnimating.current) {
+      isAnimating.current = true;
+      app.ticker.add(animate);
+    }
+  }, [app]);
 
   useEffect(() => {
     if (!enable || !particleSystem) return;
@@ -158,14 +164,15 @@ export function useConstructionAnimations({
       }
     });
 
-    if (!frame.current) {
-      frame.current = requestAnimationFrame(animate);
+    if (!isAnimating.current && app?.ticker) {
+      isAnimating.current = true;
+      app.ticker.add(animate);
     }
 
     return () => {
-      if (frame.current) {
-        cancelAnimationFrame(frame.current);
-        frame.current = 0;
+      if (isAnimating.current && app?.ticker) {
+        app.ticker.remove(animate);
+        isAnimating.current = false;
       }
     };
   }, [buildings, events, enable, particleSystem, createConstructionAnimation, animate]);

@@ -1,5 +1,8 @@
+import type { Ticker } from 'pixi.js';
+
 /**
  * Performance monitoring and optimization utilities
+ * Now uses PIXI ticker instead of independent requestAnimationFrame to prevent render loop conflicts
  */
 export class PerformanceMonitor {
   private frameCount = 0;
@@ -8,27 +11,31 @@ export class PerformanceMonitor {
   private frameHistory: number[] = [];
   private readonly maxHistorySize = 60; // Track last 60 frames
   private onFpsUpdate?: (fps: number) => void;
-  private animationId?: number;
+  private ticker?: Ticker;
   private isRunning = false;
 
   constructor(onFpsUpdate?: (fps: number) => void) {
     this.onFpsUpdate = onFpsUpdate;
   }
 
-  start(): void {
+  start(ticker?: Ticker): void {
     if (this.isRunning) return;
     this.isRunning = true;
     this.lastTime = performance.now();
     this.frameCount = 0;
     this.frameHistory = [];
-    this.tick();
+    
+    if (ticker) {
+      this.ticker = ticker;
+      ticker.add(this.tick);
+    }
   }
 
   stop(): void {
     this.isRunning = false;
-    if (this.animationId) {
-      cancelAnimationFrame(this.animationId);
-      this.animationId = undefined;
+    if (this.ticker) {
+      this.ticker.remove(this.tick);
+      this.ticker = undefined;
     }
   }
 
@@ -54,7 +61,6 @@ export class PerformanceMonitor {
     }
 
     this.lastTime = currentTime;
-    this.animationId = requestAnimationFrame(this.tick);
   };
 
   getFPS(): number {

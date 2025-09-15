@@ -97,8 +97,20 @@ export async function PATCH(req: NextRequest) {
     const data = await uow.gameStates.update(id, updates as Partial<GameState>)
     return NextResponse.json(data)
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : String(error)
-    logger.error('Supabase update error:', message)
-    return NextResponse.json({ error: message }, { status: 500 })
+    let message = 'Unknown error'
+    let details = ''
+    
+    if (error instanceof Error) {
+      message = error.message
+      details = error.stack || ''
+    } else if (typeof error === 'object' && error !== null) {
+      message = JSON.stringify(error, null, 2)
+    } else {
+      message = String(error)
+    }
+    
+    logger.error('Supabase update error:', { message, details, error })
+    console.error('Full error object:', error)
+    return NextResponse.json({ error: message, details }, { status: 500 })
   }
 }
