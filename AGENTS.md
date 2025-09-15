@@ -1,240 +1,243 @@
 # Arcane Dominion Agents Guide
 
-This guide defines the agent architecture, prompting standards, safety, and ops practices for the Arcane Dominion Tycoon. It is the canonical reference for building, extending, and operating the AI council. When new systems or knowledge are introduced, update this guide to keep it current. Always run npm run build after writing new code to ensure the changes are reflected in the game.
+_Last updated: 2025-09-15. Keep this guide evolving alongside the game; when you change systems or knowledge, update the relevant sections and cross-links._
 
-Related docs: docs/agents/ARCHITECTURE.md, docs/agents/PROMPTS.md, docs/agents/SECURITY.md, docs/agents/OPERATIONS.md, docs/agents/EVALUATION.md, docs/agents/EXTENSIONS.md, docs/agents/CONTRIBUTING.md, docs/architecture/overview.md, docs/architecture/packages.md, docs/adr/0001-initial-refactor.md, docs/adr/template.md
+This guide is the canonical reference for building, extending, and operating the Arcane Dominion Tycoon agent council. It consolidates domain lore, architecture, prompting conventions, operations runbooks, and delivery workflows so every contributor—human or AI—can work efficiently and safely.
 
-## Core Focus of the Game
+Related deep dives live in `docs/agents/` (ARCHITECTURE, PROMPTS, SECURITY, OPERATIONS, EVALUATION, EXTENSIONS, CONTRIBUTING) and `docs/architecture/`. Decision records are in `docs/adr/`.
 
-- Fantasy: rule a fragile arcane city-state via a council of guilds.
-- Pillars: scarcity management, risk tradeoffs, legible cause→effect, conservative forecasting.
-- Loop: Observe → Propose → Scry → Decree → Execute → Progress (tick).
-- Tensions: wards decay each cycle; unrest and threat rise by default; coin and mana are scarce.
-- Player Goal: maintain stability while growing capacity; avoid runaway unrest/threat and bankruptcy.
-- Agent Role: produce grounded, plausible proposals (with costs) and sober forecasts; never “magic away” constraints.
+## Table of Contents
 
-## Quick Start
+1. [World & Player Pillars](#world--player-pillars)
+2. [Quick Setup & Environment](#quick-setup--environment)
+3. [Systems Overview](#systems-overview)
+4. [Directory Map](#directory-map)
+5. [Data & API Contracts](#data--api-contracts)
+6. [Agent Responsibilities & Principles](#agent-responsibilities--principles)
+7. [Prompting Standards](#prompting-standards)
+8. [Efficiency Playbook](#efficiency-playbook)
+9. [Safety & Security](#safety--security)
+10. [Operations & Observability](#operations--observability)
+11. [Testing & Evaluation](#testing--evaluation)
+12. [Extending the Council](#extending-the-council)
+13. [Delivery Workflow & Required Checks](#delivery-workflow--required-checks)
+14. [Reference Appendices](#reference-appendices)
 
-- Requirements: Node 18+, Supabase project, OpenAI API key
-- Env (.env.local): `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_SECRET`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `OPENAI_API_KEY` (optional), `NEXT_PUBLIC_LOG_LEVEL` (optional), `NEXT_PUBLIC_OFFLINE_MODE` (optional), `NEXT_PUBLIC_DISABLE_REALTIME` (optional), `VERCEL_ENV` (optional)
-- Config keys:
-  - `NODE_ENV` (default `development`)
-  - `VERCEL_ENV` (default `local`)
-  - `NEXT_PUBLIC_LOG_LEVEL` (default `debug` in development, `error` otherwise)
-  - `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` (required)
-  - `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` (required)
-  - `SUPABASE_JWT_SECRET` (required)
-  - `OPENAI_API_KEY` (optional)
-  - `NEXT_PUBLIC_OFFLINE_MODE` (default `false`)
-  - `NEXT_PUBLIC_DISABLE_REALTIME` (default `false`)
-- DB: apply migrations via `supabase link` then `supabase db push --include-all`, or run SQL in `supabase/migrations/` in order
+---
 
-## Architecture Overview
+## World & Player Pillars
 
-- App: Next.js App Router (`src/app`)
-- Storage: Supabase tables `game_state`, `proposals`
-- Agents: Implemented in API routes using OpenAI via `ai` SDK
-  - Generate proposals: `POST /api/proposals/generate` (guild-scoped)
-  - Scry forecast: `POST /api/proposals/[id]/scry` (conservative deltas)
-  - Decide: `POST /api/proposals/[id]/decide` (accept/reject)
-  - Tick cycle: `POST /api/state/tick` (apply accepted, natural pressures)
-- Supabase helpers: `src/lib/supabase/server.ts` (service role), `src/lib/supabase/browser.ts` (anon)
-- Frontend: `/play` for council loop (observe → propose → scry → decree → execute → progress)
-  - HUD: right-rail stacked panels (Resources, Time, MiniMap, Actions, Skill Tree)
-  - Onboarding: guided first session with free starter builds (Farm, House, Council Hall)
-  - MiniMap: camera-aware with follow-selection option
-  - Skill Tree: procedural, category-aligned; unlocked skills modify production
+- **Fantasy**: Rule a fragile arcane city-state through a guild council.
+- **Gameplay Loop**: Observe → Propose → Scry → Decree → Execute → Progress (tick).
+- **Core Tensions**: Wards decay each cycle; unrest and threat trend upward; coin and mana remain scarce.
+- **Player Goal**: Maintain stability while expanding capacity; avoid runaway unrest/threat and bankruptcy.
+- **Agent Tone**: Diegetic, council deliberation, no meta commentary.
+- **Success Bands**:
+  - Healthy: unrest/threat < 10, positive grain/coin flow, stable mana.
+  - Warning: prolonged negative coin/mana; unrest or threat rising > 2 per tick.
+  - Failure: resource collapse (grain/coin/mana == 0) with high unrest/threat.
+- **Guild Identities**: Wardens (defense), Alchemists (resources), Scribes (infrastructure), Stewards (policy).
+- **Default Pressures**: Mana −5, unrest +1, threat +1 each tick. Agents bias toward stability.
 
-## Directory Structure (Agent-Relevant)
+## Quick Setup & Environment
 
-- `src/app/api/` — server routes (agents live here)
-  - `state/route.ts` (GET): fetch/create latest game state
-  - `state/tick/route.ts` (POST): apply accepted proposals and natural pressures
-  - `proposals/route.ts` (GET): list proposals for current state
-  - `proposals/generate/route.ts` (POST): guild agent proposal creation
-  - `proposals/[id]/scry/route.ts` (POST): oracle forecast per proposal
-  - `proposals/[id]/decide/route.ts` (POST): accept/reject
-- `src/lib/supabase/` — clients
-  - `server.ts` (service role; server-only writes)
-  - `browser.ts` (anon; read-focused)
-- `docs/agents/` — this guide and deep dives
-- `supabase/migrations/` — schema and idempotent updates for `game_state`, `proposals`
-- `src/state/` — global client state management
-  - `slices/` — modular reducers (`notifications`, `session`, `game`) combined in `slices/index.ts`
-  - `persistence.ts` — localStorage hydration/persistence utilities
-- `src/components/game/buildingIcons/` — canvas icon drawers keyed by building type
-- `src/components/game/BuildingsLayer.tsx` — renders building sprites and tooltips
-- `src/components/game/GameLayers.tsx` — centralizes PIXI rendering layers
-- `src/components/game/hud/` — heads-up display panels (Worker, Council, Edicts, etc.)
-- `src/components/game/panels/TileInfoPanel.tsx` — tile selection details and build actions
-- `src/components/game/effects/` — PIXI visual effect hooks (traffic, construction, activity, day-night).
-- `src/components/game/citizens/` — animated citizen/vehicle helpers (types, pathfinding, renderers).
-- `src/components/settings/` — reusable settings panel components and configuration
-- `src/components/game/hud/accessibility/` — HUD accessibility utilities (config, focus, announcer).
-- `src/components/game/city/` — city management panel subcomponents and config.
-- `packages/engine/src/simulation/traffic/` — modular traffic simulation system (vehicle, pedestrian, and light managers).
-- `packages/engine/src/simulation/zoning/` — zoning simulation components.
-- `packages/engine/src/simulation/transport/` — public transport simulation system (route and vehicle managers).
-- `src/components/game/skills/` — skill tree modules
-  - `types.ts` — shared skill interfaces
-  - `generate.ts` — procedural tree generation
-  - `progression.ts` — achievement and challenge evaluation
-  - `hooks.ts` — animation and utility hooks
-  - `canvasPool.ts` — canvas pooling utility
-  - `effects.ts` — particle and connection render helpers
+- **Requirements**: Node 18+, Supabase project, optional OpenAI API key.
+- **Environment Variables (.env.local)**:
+  - `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_SECRET`
+  - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+  - Optional: `OPENAI_API_KEY`, `NEXT_PUBLIC_LOG_LEVEL`, `NEXT_PUBLIC_OFFLINE_MODE`, `NEXT_PUBLIC_DISABLE_REALTIME`, `VERCEL_ENV`
+- **Config Defaults**:
+  - `NODE_ENV=development`, `VERCEL_ENV=local`
+  - `NEXT_PUBLIC_LOG_LEVEL=debug` in development, `error` otherwise
+  - Offline/realtime toggles default to `false`
+- **Database**: Link Supabase (`supabase link`) then `supabase db push --include-all`, or apply SQL in `supabase/migrations/` sequentially.
+- **After Editing Code**: run `npm run lint`, `npm run test`, and `npm run build` to validate changes and ensure the game compiles. For documentation-only edits, explain in your PR why automated checks were skipped.
 
-## Design Canon
+## Systems Overview
 
-- Guilds: Wardens (defense), Alchemists (resources), Scribes (infrastructure), Stewards (policy)
-- Resources: grain, coin, mana, favor, wood, planks, unrest, threat
-- Default pressures: mana −5, unrest +1, threat +1 each tick
-- Tone: concise, diegetic, council deliberation — no meta commentary
+- **App**: Next.js App Router under `src/app`.
+- **Storage**: Supabase tables `game_state` and `proposals`.
+- **Agents**: Implemented in API routes using the `ai` SDK (default model `gpt-4o-mini`).
+- **Core API Routes**:
+  - `POST /api/proposals/generate`: Guild-scoped proposal creation.
+  - `POST /api/proposals/[id]/scry`: Conservative forecast of proposal impact.
+  - `POST /api/proposals/[id]/decide`: Accept or reject proposals.
+  - `POST /api/state/tick`: Apply accepted proposals, natural pressures, clamps.
+  - `GET /api/state`: Fetch or create the latest game state.
+- **Frontend Flow (`/play`)**: Right-rail HUD (Resources, Time, MiniMap, Actions, Skill Tree). Guided onboarding grants one free Farm, House, Council Hall to accelerate ramp.
+- **Rendering**: PIXI-based layers (`GameLayers`, `BuildingsLayer`, `effects`, etc.), accessible HUD modules, canvas icon drawers.
+- **Simulation Packages**: `packages/engine/src/simulation/{traffic,zoning,transport}` for systemic behaviors.
 
-Success/Failure Signals
+## Directory Map
 
-- Healthy: moderate unrest/threat (< 10), positive grain/coin flow, stable mana.
-- Warning: sustained negative coin/mana; unrest or threat rising > 2 per tick.
-- Failure: resource collapse (coin/mana/grain=0) coupled with high unrest/threat; agents should bias stability.
+- `src/app/api/state/route.ts`: GET latest state.
+- `src/app/api/state/tick/route.ts`: POST tick resolution (apply deltas, pressures, clamps).
+- `src/app/api/proposals/route.ts`: GET proposals for current state.
+- `src/app/api/proposals/generate/route.ts`: POST to generate proposals.
+- `src/app/api/proposals/[id]/scry/route.ts`: POST scry update.
+- `src/app/api/proposals/[id]/decide/route.ts`: POST accept/reject.
+- `src/lib/supabase/server.ts`: Service-role client (server-only writes).
+- `src/lib/supabase/browser.ts`: Anon client (read-oriented).
+- `docs/agents/`: Architecture, prompts, security, operations, evaluation, extensions, contributing.
+- `supabase/migrations/`: Schema and idempotent updates for Supabase tables.
+- `src/state/`: Client state slices (`notifications`, `session`, `game`) combined in `slices/index.ts`; persistence utilities.
+- `src/components/game/`: Buildings, HUD, effects, city panels, skills, accessibility helpers, etc.
+- `packages/engine/`: Simulation subsystems.
 
-## Agent Principles
+## Data & API Contracts
 
-- JSON-first: all AI outputs are strict, parseable JSON (no prose outside JSON)
-- Deterministic by default: prefer lower temperature, constrained schemas, minimal randomness
-- Idempotent writes: server routes own writes; never perform direct client writes
-- Least privilege: never expose service role keys; use anon client only for reads in browser
-- Validated inputs/outputs: zod schemas for bodies and AI responses; reject on violation
-- Safety over cleverness: bounded actions, explicit tools, refusal for out-of-scope asks
-- Traceable: log prompts, models, and decisions with request IDs and redaction
+- **Proposal**: `{ id, state_id, guild, title, description, predicted_delta: Record<string, number>, status }`
+- **GameState**: `{ id, cycle, resources: { grain, coin, mana, favor, unrest, threat, wood?, planks? }, updated_at }`
+- **Predicted Delta**: numeric, additive; negatives allowed when sensible. Clamp floors to ≥ 0 after tick application; do not clamp predictions before storage.
+- **Soft Bounds**: grain ±500, wood ±400, planks ±300, coin ±100, mana ±50, favor ±10, unrest ±10, threat ±10. Outliers must be justified.
+- **Route Preconditions**:
+  - Generate: latest `game_state` required; inserts 1–3 `pending` proposals.
+  - Scry: existing proposal required; overwrites `predicted_delta` conservatively.
+  - Decide: updates `status` to `accepted` or `rejected`; deltas remain untouched.
+  - Tick: applies accepted deltas once, clamps floors, marks proposals `applied`.
+- **Validation**: All inputs pass through zod schemas; repair loops reject invalid JSON.
 
-### Defaults (recommended)
+### Agent Context Payload
 
-- Model: `gpt-4o-mini` or similar JSON-capable small model
-- Temperature: 0.1–0.3 (proposal), 0.0–0.2 (scry)
-- Max tokens: 256 (proposal), 128 (scry)
-- Timeout: 10s (proposal), 6s (scry)
-- Retries: 2 with exponential backoff (250ms, 1s)
+Agents receive:
 
-Delta Semantics
+- Current resources (grain, coin, mana, favor, unrest, threat, and optional wood/planks).
+- Building snapshot (counts per type), logistics routes, storehouse presence.
+- Terrain/adjacency summaries.
+- Active skill modifiers:
+  - `resource_multipliers: Record<Resource, number>`
+  - `building_multipliers: Record<BuildingType, number>`
+  - `upkeep_grain_per_worker_delta: number`
+- Treat modifiers as small tilts; keep forecasts conservative.
 
-- Additive, numeric deltas per resource; negatives are costs.
-- Clamp floors at 0 post-application; do not clamp predicted deltas before storage.
-- Prefer small magnitudes; align benefits with corresponding costs (e.g., coin↓ when grain↑).
+## Agent Responsibilities & Principles
 
-Production Modifiers (skills/logistics/terrain)
-
-- Skills: unlocked skills apply multipliers to specific resources and/or building types and may adjust grain upkeep per worker.
-- Logistics: producers connected to a `storehouse` via routes gain a modest output bonus.
-- Terrain: adjacency affects output (e.g., farms near water, lumber camps in dense forest, shrines near mountains).
-- Agents should consider these modifiers when proposing and scrying; current modifiers are passed to prompts.
+- **JSON Discipline**: Outputs must be strict, parseable JSON. No prose outside JSON payloads.
+- **Determinism First**: Prefer low temperature, constrained schemas, minimal randomness.
+- **Idempotent Writes**: Server routes own writes; never mutate client state directly.
+- **Least Privilege**: Service role keys live only server-side; browsers use anon client for reads.
+- **Validation**: Guard bodies and AI responses with zod; reject or repair invalid data.
+- **Safety Over Cleverness**: Bounded actions, explicit tool lists, refuse out-of-scope asks.
+- **Traceability**: Log prompts, model versions, request IDs with sensitive data redacted.
+- **Conservative Forecasting**: Bias toward stability; small magnitudes; pair benefits with costs (e.g., grain↑ usually costs coin↓ or mana↓).
+- **Clamp After Application**: Floors at 0 applied post-tick; forecasts remain raw.
+- **Skill & Logistics Awareness**: Account for storehouse bonuses, adjacency, and unlocked skills when evaluating deltas.
 
 ## Prompting Standards
 
-- Proposal generation system role: “Roleplay the guild. Output JSON array [{ title, description, predicted_delta }]”
-- Scry system role: “Conservative oracle. Output JSON { predicted_delta, risk_note }”
-- Always include current resources to ground proposals and forecasts
-- Enforce schema via JSON mode / schema when available; otherwise clamp by zod + repair pass
-- Keep titles concise; justify deltas implicitly via description, not extra commentary
-See docs/agents/PROMPTS.md for full examples, JSON Schemas, and repair strategy
+- **Proposal Generation**:
+  - System prompt: “Roleplay the guild. Output JSON array [{ title, description, predicted_delta }]”.
+  - Include current resources, terrain, skills, logistics context.
+  - Recommended model: `gpt-4o-mini`, temperature 0.1–0.3, max tokens ≈256, timeout 10s, retries 2 (250 ms → 1 s backoff).
+- **Scry Forecast**:
+  - System prompt: “Conservative oracle. Output JSON { predicted_delta, risk_note }”.
+  - Temperature 0.0–0.2, max tokens ≈128, timeout 6s, same retry strategy.
+- **Schema Enforcement**:
+  - Use JSON mode or JSON schema features when available; otherwise rely on zod validation plus a repair pass.
+  - Keep titles concise; embed justification inside `description` or `risk_note`.
+- **Debug Workflow**:
+  1. Log request/response payload with redaction.
+  2. Validate via zod.
+  3. If invalid, run deterministic repair prompt; escalate to incident notes if failure rate >1%.
+- **Reference**: `docs/agents/PROMPTS.md` for templates, JSON schemas, and repair strategies.
 
-## API Contracts
+## Efficiency Playbook
 
-- POST `/api/proposals/generate` body: `{ guild?: string }` → inserts proposals for latest state
-- POST `/api/proposals/[id]/scry` body: `{}` → updates `predicted_delta` on proposal
-- POST `/api/proposals/[id]/decide` body: `{ decision: 'accept' | 'reject' }`
-- POST `/api/state/tick` body: `{}` → applies accepted deltas then pressures
-- GET `/api/state` → fetches or creates latest state
-All inputs validated with zod. All outputs are JSON.
-
-Pre/Post Conditions (per route)
-
-- Generate: requires a latest `game_state`; inserts 1–3 `pending` proposals.
-- Scry: requires an existing proposal; overwrites `predicted_delta` conservatively.
-- Decide: flips `status` to `accepted` or `rejected`; never mutates deltas.
-- Tick: applies all `accepted` deltas once, clamps floors, then sets proposals to `applied`.
-
-## Data Shapes
-
-- Proposal: `{ id, state_id, guild, title, description, predicted_delta: Record<string, number>, status }`
-- GameState: `{ id, cycle, resources: { grain, coin, mana, favor, unrest, threat }, updated_at }`
-`predicted_delta` values are numeric and additive; negatives allowed where sensible.
-
-Recommended bounds (soft): grain ±500, wood ±400, planks ±300, coin ±100, mana ±50, favor ±10, unrest ±10, threat ±10. Outliers should be rare and justified.
+- **Prompt Reuse**: Cache static system + instruction prompts; only interpolate dynamic state.
+- **Context Budgeting**: Trim historical context to the last relevant tick; avoid redundant summaries.
+- **Schema Hints**: Provide explicit numeric bounds and unit hints inside prompts to reduce parse errors.
+- **Batching**: Generate multiple proposals per call (1–3) but cap at manageable complexity; do not exceed tick budgets.
+- **Failure Handling**: Implement structured retries (exponential backoff) and fallback summaries for UI if all retries fail.
+- **Latency Targets**: Keep proposal round trips < 2 s median, scry < 1 s. Investigate or degrade gracefully if exceeded.
+- **Logging Hygiene**: Use concise JSON logs with request IDs; avoid verbose dumps in production.
+- **Profiling**: When latency spikes, capture prompt/response size, model latency, and Supabase timings; document findings in runbooks.
+- **Knowledge Updates**: When lore or mechanics change, update prompts, schemas, and this guide in the same PR.
 
 ## Safety & Security
 
-- Secrets only on server: service role client in `server.ts`; never in browser
-- RLS and access: all writes via API routes; anon client read-only UI
-- Guardrails: schema validation, numeric range checks, tool allowlist; refuse unsafe actions
-See docs/agents/SECURITY.md for detailed checklists
+- Secrets remain server-side; browsers receive only anon Supabase keys.
+- Role-based access: All writes flow through API routes; UI uses read-only anon client.
+- Guardrails: Schema validation, numeric range checks, tool allowlists, refusal patterns for unsafe asks.
+- Review `docs/agents/SECURITY.md` for hardening checklists, incident response contacts, and data retention policy.
 
-## Operations
+## Operations & Observability
 
-- Model settings: favor JSON/schema output; low temperature; short context
-- Reliability: timeouts, retries with jitter, idempotent updates
-- Observability: per-request trace IDs; log prompts/responses with PII redaction
-- Cost: cap tokens per call; cache stable prompts; backoff on rate limits
-See docs/agents/OPERATIONS.md for runbooks
+- **Model Settings**: Low temperature, bounded max tokens, concise context.
+- **Reliability**: Timeouts, retries with jitter, idempotent updates.
+- **Rate Limiting**: Handle 429/5xx gracefully with exponential backoff and alerting on sustained errors.
+- **Instrumentation**: Attach trace IDs to requests; emit structured logs to Supabase/Next telemetry.
+- **Metrics**: Track JSON validity rate, latency percentiles, retry counts, proposal acceptance ratios.
+- **Runbooks**: `docs/agents/OPERATIONS.md` covers deployment, scaling, incident handling.
 
-## Evaluation & Testing
+## Testing & Evaluation
 
-- Unit: validate proposal/scry JSON against zod; clamp out-of-range deltas
-- Simulation: run tick sequences to ensure pressures dominate in absence of decrees
-- UI manual: use `/play` to propose → scry → decide → tick
-Targets: ≥99% JSON validity, <1% parse errors, bounded deltas within recommended ranges. Include runs with skill modifiers and storehouse logistics. See docs/agents/EVALUATION.md for harness ideas and checklists
+- **Unit Checks**: Validate proposal and scry JSON via zod; clamp out-of-range deltas.
+- **Simulation**: Run tick sequences ensuring natural pressures dominate without decrees.
+- **Skill Coverage**: Include runs with active skill modifiers, storehouse logistics, terrain variations.
+- **UI Manual Pass**: Navigate `/play`, execute the full council loop (propose → scry → decide → tick).
+- **Targets**: ≥99% JSON validity, <1% parse errors, deltas within recommended bounds.
+- **Artifacts**: Capture prompt/response logs for regression review; store evaluation scripts under `docs/agents/EVALUATION.md` guidance.
 
 ## Extending the Council
 
-- Seasons & Omens: add seasonal flags/table; vary tick pressures
-- Alignments: per-guild or per-proposal traits influencing prompts and deltas
-- New Actions: structured `action_type`, `cost`, `requirements` with schema
-See docs/agents/EXTENSIONS.md for patterns and pitfalls
+- **Seasons & Omens**: Add seasonal flags/tables to vary tick pressures.
+- **Alignments**: Guild or proposal traits influencing prompts and deltas.
+- **New Actions**: Add structured `action_type`, `cost`, `requirements` fields with schema coverage.
+- **Lore Expansions**: Update resource definitions, building catalog, and onboarding flow when adding systems.
+- See `docs/agents/EXTENSIONS.md` for design patterns, pitfalls, and migration notes.
 
-## Workflow
+## Delivery Workflow & Required Checks
 
-- Branch per feature; update DB and API first, then wire UI
-- Version prompts; record model+settings; keep JSON-first discipline
-- Add guards before enabling new agent capabilities in production
+1. **Plan**: Draft architecture/prompt changes, update relevant docs (including this guide if scope touches agents).
+2. **Implement**: Prefer small, reviewable commits; keep JSON schemas in sync with API changes.
+3. **Validate**: Run `npm run lint`, `npm run test`, and `npm run build`. Capture output for PR descriptions.
+4. **Review**: Provide a concise summary and explicit test list in the PR message.
+5. **Deploy**: Follow runbooks; monitor metrics and logs for regressions.
 
-## Quick Checklist
+_For documentation-only updates, explicitly state why automated checks were skipped and ensure link integrity._
 
-- Prompts: JSON-only, include current resources, use guild tone
-- Models: low temp, bounded tokens, short context
-- Validation: zod schemas pass; clamp resource floors to 0
-- Safety: no secrets client-side; writes via server routes only
-- Ops: timeouts, retries, minimal logs with redaction
-- Lint: run `npm run lint <paths>` and avoid `any` types
+## Reference Appendices
 
+### Resources & Modifiers
 
-## Building Catalog (client-visible)
+- Primary resources: grain, coin, mana, favor, unrest, threat. Expanded: wood, planks.
+- Logistics: Producers linked to a Storehouse via routes gain a modest output bonus.
+- Terrain: Farms near water, lumber camps in dense forest, shrines near mountains receive adjacency boosts.
+- Skills: Modify resource multipliers, building outputs, worker upkeep.
 
-- Farm: grain↑ (terrain: water adjacency boosts output)
-- House: workers↑ (consumes grain)
-- Council Hall: unlocks proposals/decrees
-- Trade Post: converts grain→coin (route/tariff influenced)
-- Automation Workshop: coin↑ (consumes mana)
-- Shrine: favor↑ (terrain: mountain adjacency boosts)
-- Lumber Camp: wood↑ (terrain: forest adjacency boosts)
-- Sawmill: planks↑ (consumes wood)
-- Storehouse: logistics hub; boosts connected producers
+### Building Catalog (client-visible)
 
-## Gameplay Onboarding (client)
+- **Farm**: Grain↑; water adjacency boosts output.
+- **House**: Workers↑; consumes grain upkeep.
+- **Council Hall**: Unlocks proposals/decrees.
+- **Trade Post**: Converts grain→coin (routes and tariffs influence yield).
+- **Automation Workshop**: Coin↑; consumes mana.
+- **Shrine**: Favor↑; mountain adjacency boosts effect.
+- **Lumber Camp**: Wood↑; forest adjacency boosts.
+- **Sawmill**: Planks↑; consumes wood.
+- **Storehouse**: Logistics hub; boosts connected producers.
 
-- First-time flow grants one free Farm, House, and Council Hall to accelerate ramp.
-- A minimal questlet surfaces immediate goals (Farm → House → Assign → Council → Proposals → Advance).
-- Agents should assume steady-state rules post-onboarding; freebies are handled client-side.
+### Onboarding Notes
 
-## Agent Context Payloads (expanded)
+- First-time flow grants free Farm, House, Council Hall.
+- Minimal questline introduces Farm → House → Assign → Council → Proposals → Advance.
+- Agents should assume steady-state rules post-onboarding; freebies handled client-side.
 
-- Backend includes the following to proposals/scry prompts:
-  - Current resources (including wood, planks when present)
-  - Snapshot of buildings (counts per type), routes, and storehouse presence
-  - Terrain/adjacency summaries where material
-  - Active skill modifiers:
-    - `resource_multipliers: Record<resource, number>`
-    - `building_multipliers: Record<typeId, number>`
-    - `upkeep_grain_per_worker_delta: number`
-  - Agents should treat modifiers as small tilts and keep forecasts conservative.
+### Success Checklist (Quick Reference)
 
-# User-provided custom instructions
+- Prompts: JSON-only, guild voice, include current resources/context.
+- Models: Low temperature, bounded tokens, short context windows.
+- Validation: Zod schemas pass; clamp resource floors after tick application.
+- Safety: No secrets client-side; server routes handle writes.
+- Ops: Timeouts, retries, minimal redacted logs.
+- Lint/Test/Build: Run required commands before merging.
+
+---
+
+## User-provided custom instructions
 
 Adhere to the best practices of the written languages. Always verify that your code works and is ready to be merged. Make sure to read the AGENTS.md and use the best practices and listen to the rules.
+
+---
+
+By following this guide, agents stay aligned with the game’s lore, operate safely, and deliver reliable council decisions. When in doubt, favor conservative actions, document assumptions, and update this guide so the entire guild of contributors benefits.
