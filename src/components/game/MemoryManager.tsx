@@ -35,7 +35,7 @@ export default function MemoryManager({
   warnAtPercent = 85,
   warningCooldownMs = 60000,
 }: MemoryManagerProps) {
-  const cleanupIntervalRef = useRef<NodeJS.Timeout>();
+  const cleanupIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const lastCleanupRef = useRef<number>(0);
   const lastWarningRef = useRef<number>(0);
   const memoryStatsRef = useRef<MemoryStats>({

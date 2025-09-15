@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import * as PIXI from "pixi.js";
 import { useGameContext } from "./GameContext";
 import logger from "@/lib/logger";
-import { gridToWorld, worldToGrid, TILE_COLORS } from "@/lib/isometric";
+import { worldToGrid } from "@/lib/isometric";
 import { createTileSprite, type GridTile } from "./grid/TileRenderer";
 import { TileOverlay } from "./grid/TileOverlay";
 
@@ -69,14 +69,6 @@ export default function ChunkedIsometricGrid({
     return { chunkX, chunkY };
   }, [chunkSize, tileWidth, tileHeight]);
 
-  // Convert chunk coordinates to world coordinates (grid origin of chunk -> world)
-  const chunkToWorld = useCallback((chunkX: number, chunkY: number) => {
-    const gridX = chunkX * chunkSize;
-    const gridY = chunkY * chunkSize;
-    const { worldX, worldY } = gridToWorld(gridX, gridY, tileWidth, tileHeight);
-    return { worldX, worldY };
-  }, [chunkSize, tileWidth, tileHeight]);
-
   // Load chunk data from API
   const loadChunkData = useCallback(async (chunkX: number, chunkY: number): Promise<ChunkData | null> => {
     try {
@@ -98,21 +90,33 @@ export default function ChunkedIsometricGrid({
     const container = new PIXI.Container();
     container.name = `chunk-${chunkData.chunkX}-${chunkData.chunkY}`;
     container.sortableChildren = true;
-    
+
     const tiles = new Map<string, GridTile>();
-    const { worldX: chunkWorldX, worldY: chunkWorldY } = chunkToWorld(chunkData.chunkX, chunkData.chunkY);
-    
+
+    if (!app?.renderer) {
+      logger.warn(`[GRAPHICS] Renderer unavailable while creating chunk ${chunkData.chunkX},${chunkData.chunkY}`);
+      return { container, tiles };
+    }
+
     // Create tiles for this chunk
     for (let localY = 0; localY < chunkData.chunkSize; localY++) {
       for (let localX = 0; localX < chunkData.chunkSize; localX++) {
         const globalX = chunkData.chunkX * chunkData.chunkSize + localX;
         const globalY = chunkData.chunkY * chunkData.chunkSize + localY;
         const tileType = chunkData.chunk[localY]?.[localX] || 'grass';
-        
+
         // Create tile sprite with global coordinates
-        const tile = createTileSprite(globalX, globalY, container, tileWidth, tileHeight, [[tileType]]);
+        const tile = createTileSprite(
+          globalX,
+          globalY,
+          container,
+          tileWidth,
+          tileHeight,
+          [[tileType]],
+          app.renderer,
+        );
         tile.tileType = tileType;
-        
+
         const key = `${globalX},${globalY}`;
         tiles.set(key, tile);
         container.addChild(tile.sprite);
@@ -120,13 +124,18 @@ export default function ChunkedIsometricGrid({
     }
     
     return { container, tiles };
-  }, [chunkToWorld, tileWidth, tileHeight]);
+  }, [app, tileWidth, tileHeight]);
 
   // Load and render a chunk
   const loadChunk = useCallback(async (chunkX: number, chunkY: number) => {
     const chunkKey = `${chunkX},${chunkY}`;
     const loadedChunks = loadedChunksRef.current;
-    
+
+    if (!app?.renderer) {
+      logger.warn(`[MEMORY] Skipping load for chunk ${chunkKey} - renderer unavailable`);
+      return;
+    }
+
     // Skip if already loaded or loading
     if (loadedChunks.has(chunkKey) || loadingChunksRef.current.has(chunkKey)) {
       logger.debug(`[MEMORY] Skipping chunk ${chunkKey} - already loaded/loading`);
@@ -185,7 +194,7 @@ export default function ChunkedIsometricGrid({
     } finally {
       loadingChunksRef.current.delete(chunkKey);
     }
-  }, [loadChunkData, createChunkContainer]);
+  }, [app, loadChunkData, createChunkContainer]);
 
   // Unload a chunk to free memory
   const unloadChunk = useCallback((chunkKey: string) => {

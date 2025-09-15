@@ -34,7 +34,7 @@ export default function ViewportManager({
   const { viewport, app } = useGameContext();
   const lastBoundsRef = useRef<ViewportBounds>({ x: 0, y: 0, width: 0, height: 0 });
   const lastScaleRef = useRef<number>(1);
-  const updateTimeoutRef = useRef<NodeJS.Timeout>();
+  const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Throttled viewport change handler
   const handleViewportChange = useCallback(() => {
