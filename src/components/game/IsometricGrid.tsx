@@ -8,6 +8,8 @@ import { gridToWorld, TILE_COLORS } from "@/lib/isometric";
 import { createTileSprite, getTileTexture, type GridTile } from "./grid/TileRenderer";
 import { TileOverlay } from "./grid/TileOverlay";
 
+type VisibilityUpdateOptions = { overlayUpdate?: boolean; animationTime?: number };
+
 interface IsometricGridProps {
   gridSize: number;
   tileWidth: number;
@@ -31,6 +33,7 @@ export default function IsometricGrid({
   const centeredRef = useRef<boolean>(false);
   const initializedRef = useRef<boolean>(false);
   const overlayManagerRef = useRef<TileOverlay | null>(null);
+  const updateVisibilityRef = useRef<((options?: VisibilityUpdateOptions) => void) | null>(null);
   const tileTypesRef = useRef<string[][]>(tileTypes);
   useEffect(() => {
     tileTypesRef.current = tileTypes;
@@ -229,6 +232,7 @@ export default function IsometricGrid({
     }
     if (added > 0) {
       logger.debug(`IsometricGrid: added ${added} tiles after gridSize changed to ${gridSize}`);
+      updateVisibilityRef.current?.({ overlayUpdate: true });
     }
   }, [app, gridSize, tileWidth, tileHeight, tileTypes]);
 
@@ -248,6 +252,7 @@ export default function IsometricGrid({
     });
     if (updates > 0) {
       logger.debug(`IsometricGrid: updated ${updates} tiles due to tileTypes change`);
+      updateVisibilityRef.current?.({ overlayUpdate: true });
     }
   }, [app, tileTypes, tileWidth, tileHeight, updateTileSprite]);
 
@@ -255,38 +260,44 @@ export default function IsometricGrid({
   useEffect(() => {
     if (!viewport || !gridContainerRef.current || !app?.ticker) return;
 
-    let lastScale = viewport.scale?.x || 1;
     let isUpdating = false;
-    let t = 0;
     let isTickerActive = false;
+    let overlayAccumulator = 0;
+    let overlayAnimationTime = 0;
+    let selectionPulseTime = 0;
+    const overlayUpdateInterval = 120; // milliseconds between overlay redraws
 
-    const updateVisibilityAndLOD = () => {
+    const updateVisibilityAndLOD = (options: VisibilityUpdateOptions = {}) => {
       if (!viewport || !viewport.scale || isUpdating) return;
-      
+
+      const { overlayUpdate = false, animationTime } = options;
+
       isUpdating = true;
       const scale = viewport.scale.x;
       const tiles = tilesRef.current;
-      
+
       // Get viewport bounds for culling
       const bounds = viewport.getVisibleBounds();
       const padding = Math.max(tileWidth, tileHeight) * 2; // Add padding for smooth scrolling
-      
+
       const visibleLeft = bounds.x - padding;
       const visibleRight = bounds.x + bounds.width + padding;
       const visibleTop = bounds.y - padding;
       const visibleBottom = bounds.y + bounds.height + padding;
-      
-      // Only update line width if scale changed significantly
+
+      const frameTime = animationTime ?? overlayAnimationTime;
+
       tiles.forEach((tile) => {
         // Viewport culling - only show tiles in visible area
-        const isInViewport = tile.worldX >= visibleLeft &&
-                           tile.worldX <= visibleRight &&
-                           tile.worldY >= visibleTop &&
-                           tile.worldY <= visibleBottom;
-        
+        const isInViewport =
+          tile.worldX >= visibleLeft &&
+          tile.worldX <= visibleRight &&
+          tile.worldY >= visibleTop &&
+          tile.worldY <= visibleBottom;
+
         // LOD - hide tiles when zoomed out too far
         const shouldShowTile = scale > 0.15 && isInViewport;
-        
+
         if (tile.sprite.visible !== shouldShowTile) {
           tile.sprite.visible = shouldShowTile;
         }
@@ -295,67 +306,76 @@ export default function IsometricGrid({
         const overlay = tile.overlay;
         if (overlay) {
           overlay.visible = shouldShowTile;
-          if (shouldShowTile) {
+          if (overlayUpdate && shouldShowTile) {
             overlay.clear();
-            if (tile.tileType === 'water') {
-              const r = (tileHeight / 4) + Math.sin(t * 0.005 + (tile.x + tile.y)) * 2;
+            if (tile.tileType === "water") {
+              const wave = frameTime * 0.005 + (tile.x + tile.y);
+              const r = tileHeight / 4 + Math.sin(wave) * 2;
               overlay.fill({ color: 0xffffff, alpha: 0.05 });
               overlay.drawCircle(0, 0, r);
               overlay.fill({ color: 0xffffff, alpha: 0.03 });
               overlay.drawCircle(0, 0, r * 0.6);
-            } else if (tile.tileType === 'forest') {
+            } else if (tile.tileType === "forest") {
+              const sway = Math.sin(frameTime * 0.006 + tile.x * 0.1) * 3;
               overlay.setStrokeStyle({ width: 1, color: 0x14532d, alpha: 0.2 });
-              const sway = Math.sin(t * 0.006 + (tile.x * 0.1)) * 3;
-              overlay.moveTo(-tileWidth/4 + sway, -tileHeight/6);
-              overlay.lineTo(-tileWidth/8 + sway, 0);
-              overlay.lineTo(-tileWidth/4 + sway, tileHeight/6);
+              overlay.moveTo(-tileWidth / 4 + sway, -tileHeight / 6);
+              overlay.lineTo(-tileWidth / 8 + sway, 0);
+              overlay.lineTo(-tileWidth / 4 + sway, tileHeight / 6);
               overlay.stroke();
             }
           }
         }
       });
-      
-      lastScale = scale;
+
       isUpdating = false;
     };
 
-    const throttledUpdate = () => {
-      // Update will be handled by the ticker
-      updateVisibilityAndLOD();
+    updateVisibilityRef.current = updateVisibilityAndLOD;
+
+    const handleViewportChanged = () => {
+      updateVisibilityAndLOD({ overlayUpdate: false });
     };
 
-    // Listen to viewport events with throttling
-    viewport.on('zoomed', throttledUpdate);
-    viewport.on('moved', throttledUpdate);
-    // Global animation ticker using PIXI ticker
-    const tick = () => {
-      t += 16;
-      // Subtle pulse on selection overlay
+    viewport.on("zoomed", handleViewportChanged);
+    viewport.on("moved", handleViewportChanged);
+
+    const tick = (ticker: PIXI.Ticker) => {
+      const deltaMS = ticker.deltaMS;
+      selectionPulseTime += deltaMS;
+
       const sel = overlayManagerRef.current?.selectOverlay;
       if (sel && sel.visible) {
         const base = 0.35;
         const amp = 0.1;
         const w = 0.002;
-        sel.alpha = base + amp * (0.5 + 0.5 * Math.sin(t * w));
+        sel.alpha = base + amp * (0.5 + 0.5 * Math.sin(selectionPulseTime * w));
       }
-      throttledUpdate();
+
+      overlayAccumulator += deltaMS;
+      if (overlayAccumulator >= overlayUpdateInterval) {
+        const steps = Math.floor(overlayAccumulator / overlayUpdateInterval);
+        overlayAccumulator -= steps * overlayUpdateInterval;
+        overlayAnimationTime += steps * overlayUpdateInterval;
+        updateVisibilityAndLOD({ overlayUpdate: true, animationTime: overlayAnimationTime });
+      }
     };
-    
-    if (!isTickerActive) {
-      isTickerActive = true;
-      app.ticker.add(tick);
-    }
-    
-    // Initial update
-    updateVisibilityAndLOD();
+
+    isTickerActive = true;
+    app.ticker.add(tick);
+
+    // Initial update to populate overlay textures and visibility states
+    updateVisibilityAndLOD({ overlayUpdate: true, animationTime: overlayAnimationTime });
 
     return () => {
       if (isTickerActive && app?.ticker) {
         app.ticker.remove(tick);
         isTickerActive = false;
       }
-      viewport.off('zoomed', throttledUpdate);
-      viewport.off('moved', throttledUpdate);
+      viewport.off("zoomed", handleViewportChanged);
+      viewport.off("moved", handleViewportChanged);
+      if (updateVisibilityRef.current === updateVisibilityAndLOD) {
+        updateVisibilityRef.current = null;
+      }
     };
   }, [viewport, app, tileWidth, tileHeight]);
 
