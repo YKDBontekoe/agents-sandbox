@@ -18,6 +18,8 @@ export interface GridTile {
 const textureCache = new Map<string, PIXI.RenderTexture>();
 const MAX_CACHED_TEXTURES = 100;
 
+const ANIMATED_TILE_TYPES = new Set(["water", "forest"]);
+
 // Clean up texture cache when it gets too large
 function cleanupTextureCache() {
   if (textureCache.size > MAX_CACHED_TEXTURES) {
@@ -193,12 +195,17 @@ export function createTileSprite(
   logger.debug(`[TILE_GRAPHICS] Created sprite for ${tileKey} using cached texture`);
 
   // Optional animated overlays per tile type
-  const overlay = new PIXI.Graphics();
-  overlay.zIndex = 5;
-  (overlay as unknown as { eventMode: string }).eventMode = "none";
-  overlay.position.set(worldX, worldY);
-  gridContainer.addChild(overlay);
-  logger.debug(`[TILE_GRAPHICS] Added overlay graphics to grid container for ${tileKey}`);
+  let overlay: PIXI.Graphics | undefined;
+  if (ANIMATED_TILE_TYPES.has(tileType)) {
+    overlay = new PIXI.Graphics();
+    overlay.zIndex = 5;
+    (overlay as unknown as { eventMode: string }).eventMode = "none";
+    overlay.position.set(worldX, worldY);
+    gridContainer.addChild(overlay);
+    logger.debug(`[TILE_GRAPHICS] Added overlay graphics to grid container for ${tileKey}`);
+  } else {
+    logger.debug(`[TILE_GRAPHICS] Skipping overlay allocation for ${tileKey} (${tileType})`);
+  }
 
   const createTime = performance.now() - startTime;
   logger.info(`[TILE_CREATE] Created tile ${tileKey} (${tileType}) in ${createTime.toFixed(2)}ms. Sprite ID: ${sprite.uid}`);
