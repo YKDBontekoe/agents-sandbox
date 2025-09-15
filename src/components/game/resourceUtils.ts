@@ -1,4 +1,3 @@
-/* eslint-disable */
 import type { IconDefinition } from '@fortawesome/fontawesome-svg-core';
 import { ICONS, COLORS, type ResourceType } from '@arcane/ui';
 
