@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import * as PIXI from "pixi.js";
 import { useGameContext } from "./GameContext";
 import logger from "@/lib/logger";
-import { gridToWorld, TILE_COLORS } from "@/lib/isometric";
+import { gridToWorld, TILE_COLORS, worldToGrid } from "@/lib/isometric";
 import { createTileSprite, type GridTile } from "./grid/TileRenderer";
 import { TileOverlay } from "./grid/TileOverlay";
 
@@ -27,7 +27,8 @@ export default function IsometricGrid({
 }: IsometricGridProps) {
   const { viewport, app } = useGameContext();
   const gridContainerRef = useRef<PIXI.Container | null>(null);
-  const tilesRef = useRef<Map<string, GridTile>>(new Map());
+  const tileGridRef = useRef<(GridTile | undefined)[][]>([]);
+  const visibleTilesRef = useRef<Set<string>>(new Set());
   const centeredRef = useRef<boolean>(false);
   const initializedRef = useRef<boolean>(false);
   const overlayManagerRef = useRef<TileOverlay | null>(null);
@@ -66,20 +67,24 @@ export default function IsometricGrid({
     gridContainerRef.current = gridContainer;
 
     // Create initial grid tiles
-    const tiles = new Map<string, GridTile>();
-    
-    for (let x = 0; x < gridSize; x++) {
-      for (let y = 0; y < gridSize; y++) {
+    const tileGrid: (GridTile | undefined)[][] = Array.from({ length: gridSize }, () =>
+      new Array<GridTile | undefined>(gridSize).fill(undefined)
+    );
+    let createdTiles = 0;
+
+    for (let y = 0; y < gridSize; y++) {
+      for (let x = 0; x < gridSize; x++) {
         const tile = createTileSprite(x, y, gridContainer, tileWidth, tileHeight, tileTypes, app.renderer);
-        const key = `${x},${y}`;
-        tiles.set(key, tile);
+        tileGrid[y][x] = tile;
         gridContainer.addChild(tile.sprite);
+        createdTiles++;
       }
     }
-    
-    logger.debug(`Created ${tiles.size} tiles for ${gridSize}x${gridSize} grid`);
+
+    logger.debug(`Created ${createdTiles} tiles for ${gridSize}x${gridSize} grid`);
     logger.debug('Grid container children count:', gridContainer.children.length);
-    tilesRef.current = tiles;
+    tileGridRef.current = tileGrid;
+    visibleTilesRef.current.clear();
 
     overlayManagerRef.current = new TileOverlay(gridContainer, {
       tileWidth,
@@ -157,7 +162,8 @@ export default function IsometricGrid({
       gridContainer.destroy({ children: true });
       viewport.off('zoomed', updateClamp);
       window.removeEventListener('resize', onResize);
-      tilesRef.current.clear();
+      tileGridRef.current = [];
+      visibleTilesRef.current.clear();
       centeredRef.current = false;
       initializedRef.current = false;
     };
@@ -167,14 +173,20 @@ export default function IsometricGrid({
   useEffect(() => {
     const gridContainer = gridContainerRef.current;
     if (!gridContainer || !app?.renderer) return;
-    const tiles = tilesRef.current;
+    const tileGrid = tileGridRef.current;
     let added = 0;
-    for (let x = 0; x < gridSize; x++) {
-      for (let y = 0; y < gridSize; y++) {
-        const key = `${x},${y}`;
-        if (!tiles.has(key)) {
+    for (let y = 0; y < gridSize; y++) {
+      if (!tileGrid[y]) {
+        tileGrid[y] = new Array<GridTile | undefined>(gridSize).fill(undefined);
+      } else if (tileGrid[y].length < gridSize) {
+        tileGrid[y].length = gridSize;
+      }
+
+      for (let x = 0; x < gridSize; x++) {
+        const existing = tileGrid[y][x];
+        if (!existing) {
           const tile = createTileSprite(x, y, gridContainer, tileWidth, tileHeight, tileTypes, app.renderer);
-          tiles.set(key, tile);
+          tileGrid[y][x] = tile;
           gridContainer.addChild(tile.sprite);
           added++;
         }
@@ -189,26 +201,33 @@ export default function IsometricGrid({
   useEffect(() => {
     const gridContainer = gridContainerRef.current;
     if (!gridContainer || !app?.renderer) return;
-    const tiles = tilesRef.current;
+    const tileGrid = tileGridRef.current;
     let updates = 0;
-    tiles.forEach((gridTile, key) => {
-      const nextType = tileTypes[gridTile.y]?.[gridTile.x];
-      if (nextType && nextType !== gridTile.tileType) {
-        gridTile.dispose();
-        const newTile = createTileSprite(
-          gridTile.x,
-          gridTile.y,
-          gridContainer,
-          tileWidth,
-          tileHeight,
-          tileTypes,
-          app.renderer,
-        );
-        tiles.set(key, newTile);
-        gridContainer.addChild(newTile.sprite);
-        updates++;
+
+    for (let y = 0; y < tileGrid.length; y++) {
+      const row = tileGrid[y];
+      if (!row) continue;
+      for (let x = 0; x < row.length; x++) {
+        const gridTile = row[x];
+        if (!gridTile) continue;
+        const nextType = tileTypes[gridTile.y]?.[gridTile.x];
+        if (nextType && nextType !== gridTile.tileType) {
+          gridTile.dispose();
+          const newTile = createTileSprite(
+            gridTile.x,
+            gridTile.y,
+            gridContainer,
+            tileWidth,
+            tileHeight,
+            tileTypes,
+            app.renderer,
+          );
+          row[x] = newTile;
+          gridContainer.addChild(newTile.sprite);
+          updates++;
+        }
       }
-    });
+    }
     if (updates > 0) {
       logger.debug(`IsometricGrid: updated ${updates} tiles due to tileTypes change`);
     }
@@ -228,55 +247,125 @@ export default function IsometricGrid({
       
       isUpdating = true;
       const scale = viewport.scale.x;
-      const tiles = tilesRef.current;
-      
+      const tileGrid = tileGridRef.current;
+      const prevVisible = visibleTilesRef.current;
+      const nextVisible = new Set<string>();
+
+      const hidePreviouslyVisible = () => {
+        prevVisible.forEach((key) => {
+          if (nextVisible.has(key)) {
+            return;
+          }
+          const [xStr, yStr] = key.split(",");
+          const x = Number(xStr);
+          const y = Number(yStr);
+          const tile = tileGrid[y]?.[x];
+          if (!tile) {
+            return;
+          }
+          if (tile.sprite.visible) {
+            tile.sprite.visible = false;
+          }
+          const overlay = tile.overlay;
+          if (overlay) {
+            overlay.visible = false;
+          }
+        });
+      };
+
+      if (!tileGrid.length || gridSize <= 0) {
+        hidePreviouslyVisible();
+        visibleTilesRef.current = nextVisible;
+        lastScale = scale;
+        isUpdating = false;
+        return;
+      }
+
       // Get viewport bounds for culling
       const bounds = viewport.getVisibleBounds();
       const padding = Math.max(tileWidth, tileHeight) * 2; // Add padding for smooth scrolling
-      
+
       const visibleLeft = bounds.x - padding;
       const visibleRight = bounds.x + bounds.width + padding;
       const visibleTop = bounds.y - padding;
       const visibleBottom = bounds.y + bounds.height + padding;
-      
-      // Only update line width if scale changed significantly
-      tiles.forEach((tile) => {
-        // Viewport culling - only show tiles in visible area
-        const isInViewport = tile.worldX >= visibleLeft &&
-                           tile.worldX <= visibleRight &&
-                           tile.worldY >= visibleTop &&
-                           tile.worldY <= visibleBottom;
-        
-        // LOD - hide tiles when zoomed out too far
-        const shouldShowTile = scale > 0.15 && isInViewport;
-        
-        if (tile.sprite.visible !== shouldShowTile) {
-          tile.sprite.visible = shouldShowTile;
-        }
 
-        // Lightweight tile animations via overlay
-        const overlay = tile.overlay;
-        if (overlay) {
-          overlay.visible = shouldShowTile;
-          if (shouldShowTile) {
-            overlay.clear();
-            if (tile.tileType === 'water') {
-              const r = (tileHeight / 4) + Math.sin(t * 0.005 + (tile.x + tile.y)) * 2;
-              overlay.fill({ color: 0xffffff, alpha: 0.05 });
-              overlay.drawCircle(0, 0, r);
-              overlay.fill({ color: 0xffffff, alpha: 0.03 });
-              overlay.drawCircle(0, 0, r * 0.6);
-            } else if (tile.tileType === 'forest') {
-              overlay.setStrokeStyle({ width: 1, color: 0x14532d, alpha: 0.2 });
-              const sway = Math.sin(t * 0.006 + (tile.x * 0.1)) * 3;
-              overlay.moveTo(-tileWidth/4 + sway, -tileHeight/6);
-              overlay.lineTo(-tileWidth/8 + sway, 0);
-              overlay.lineTo(-tileWidth/4 + sway, tileHeight/6);
-              overlay.stroke();
+      const corners = [
+        worldToGrid(visibleLeft, visibleTop, tileWidth, tileHeight),
+        worldToGrid(visibleRight, visibleTop, tileWidth, tileHeight),
+        worldToGrid(visibleLeft, visibleBottom, tileWidth, tileHeight),
+        worldToGrid(visibleRight, visibleBottom, tileWidth, tileHeight),
+      ];
+
+      const gridXValues = corners.map((corner) => corner.gridX);
+      const gridYValues = corners.map((corner) => corner.gridY);
+
+      const minGridX = Math.max(0, Math.floor(Math.min(...gridXValues)));
+      const maxGridX = Math.min(gridSize - 1, Math.ceil(Math.max(...gridXValues)));
+      const minGridY = Math.max(0, Math.floor(Math.min(...gridYValues)));
+      const maxGridY = Math.min(gridSize - 1, Math.ceil(Math.max(...gridYValues)));
+
+      if (minGridX > maxGridX || minGridY > maxGridY) {
+        hidePreviouslyVisible();
+        visibleTilesRef.current = nextVisible;
+        lastScale = scale;
+        isUpdating = false;
+        return;
+      }
+
+      for (let y = minGridY; y <= maxGridY; y++) {
+        const row = tileGrid[y];
+        if (!row) continue;
+        for (let x = minGridX; x <= maxGridX; x++) {
+          const tile = row[x];
+          if (!tile) continue;
+
+          // Viewport culling - only show tiles in visible area
+          const isInViewport =
+            tile.worldX >= visibleLeft &&
+            tile.worldX <= visibleRight &&
+            tile.worldY >= visibleTop &&
+            tile.worldY <= visibleBottom;
+
+          // LOD - hide tiles when zoomed out too far
+          const shouldShowTile = scale > 0.15 && isInViewport;
+          const tileKey = `${x},${y}`;
+
+          if (tile.sprite.visible !== shouldShowTile) {
+            tile.sprite.visible = shouldShowTile;
+          }
+
+          // Lightweight tile animations via overlay
+          const overlay = tile.overlay;
+          if (overlay) {
+            overlay.visible = shouldShowTile;
+            if (shouldShowTile) {
+              overlay.clear();
+              if (tile.tileType === 'water') {
+                const r = tileHeight / 4 + Math.sin(t * 0.005 + (tile.x + tile.y)) * 2;
+                overlay.fill({ color: 0xffffff, alpha: 0.05 });
+                overlay.drawCircle(0, 0, r);
+                overlay.fill({ color: 0xffffff, alpha: 0.03 });
+                overlay.drawCircle(0, 0, r * 0.6);
+              } else if (tile.tileType === 'forest') {
+                overlay.setStrokeStyle({ width: 1, color: 0x14532d, alpha: 0.2 });
+                const sway = Math.sin(t * 0.006 + tile.x * 0.1) * 3;
+                overlay.moveTo(-tileWidth / 4 + sway, -tileHeight / 6);
+                overlay.lineTo(-tileWidth / 8 + sway, 0);
+                overlay.lineTo(-tileWidth / 4 + sway, tileHeight / 6);
+                overlay.stroke();
+              }
             }
           }
+
+          if (shouldShowTile) {
+            nextVisible.add(tileKey);
+          }
         }
-      });
+      }
+
+      hidePreviouslyVisible();
+      visibleTilesRef.current = nextVisible;
       
       lastScale = scale;
       isUpdating = false;
@@ -320,7 +409,7 @@ export default function IsometricGrid({
       viewport.off('zoomed', throttledUpdate);
       viewport.off('moved', throttledUpdate);
     };
-  }, [viewport, app, tileWidth, tileHeight]);
+  }, [viewport, app, tileWidth, tileHeight, gridSize]);
 
   return null; // This component doesn't render React elements
 }
