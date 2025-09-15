@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import * as PIXI from "pixi.js";
 import { useGameContext } from "./GameContext";
 import logger from "@/lib/logger";
 import { gridToWorld } from "@/lib/isometric";
-import { createTileSprite, type GridTile } from "./grid/TileRenderer";
+import { createTileSprite, getTileTexture, type GridTile } from "./grid/TileRenderer";
 import { TileOverlay } from "./grid/TileOverlay";
 
 type VisibilityUpdateOptions = { overlayUpdate?: boolean; animationTime?: number };
@@ -39,6 +39,53 @@ export default function IsometricGrid({
     tileTypesRef.current = tileTypes;
   }, [tileTypes]);
   // no extra refs needed for min zoom snapping; we prevent underflow by clamping minScale to fit
+
+  const updateTileSprite = useCallback(
+    (gridTile: GridTile, nextType: string) => {
+      if (!app?.renderer) {
+        logger.warn(
+          `[TILE_UPDATE] Renderer unavailable when attempting to update tile ${gridTile.x},${gridTile.y}`
+        );
+        return;
+      }
+
+      if (gridTile.sprite.destroyed) {
+        logger.warn(
+          `[TILE_UPDATE] Attempted to update destroyed tile ${gridTile.x},${gridTile.y}`
+        );
+        return;
+      }
+
+      const tileKey = `${gridTile.x},${gridTile.y}`;
+      const previousType = gridTile.tileType;
+
+      const nextTexture = getTileTexture(
+        nextType,
+        tileWidth,
+        tileHeight,
+        app.renderer,
+        tileKey
+      );
+
+      if (gridTile.sprite.texture !== nextTexture) {
+        gridTile.sprite.texture = nextTexture;
+        gridTile.sprite.texture.updateUvs();
+      }
+
+      gridTile.tileType = nextType;
+
+      if (gridTile.overlay && gridTile.overlay.destroyed) {
+        logger.warn(
+          `[TILE_UPDATE] Overlay for tile ${tileKey} was destroyed prior to update and cannot be reused.`
+        );
+      }
+
+      logger.debug(
+        `[TILE_UPDATE] Updated tile ${tileKey} type from ${previousType} to ${nextType}`
+      );
+    },
+    [app, tileHeight, tileWidth]
+  );
 
   // Initialize grid
   useEffect(() => {
@@ -195,21 +242,11 @@ export default function IsometricGrid({
     if (!gridContainer || !app?.renderer) return;
     const tiles = tilesRef.current;
     let updates = 0;
-    tiles.forEach((gridTile, key) => {
-      const nextType = tileTypes[gridTile.y]?.[gridTile.x];
-      if (nextType && nextType !== gridTile.tileType) {
-        gridTile.dispose();
-        const newTile = createTileSprite(
-          gridTile.x,
-          gridTile.y,
-          gridContainer,
-          tileWidth,
-          tileHeight,
-          tileTypes,
-          app.renderer,
-        );
-        tiles.set(key, newTile);
-        gridContainer.addChild(newTile.sprite);
+    tiles.forEach((gridTile) => {
+      const rawType = tileTypes[gridTile.y]?.[gridTile.x];
+      const nextType = rawType ?? "unknown";
+      if (nextType !== gridTile.tileType) {
+        updateTileSprite(gridTile, nextType);
         updates++;
       }
     });
@@ -217,7 +254,7 @@ export default function IsometricGrid({
       logger.debug(`IsometricGrid: updated ${updates} tiles due to tileTypes change`);
       updateVisibilityRef.current?.({ overlayUpdate: true });
     }
-  }, [app, tileTypes, tileWidth, tileHeight]);
+  }, [app, tileTypes, tileWidth, tileHeight, updateTileSprite]);
 
   // Performance optimization: Viewport culling and LOD + lightweight animations
   useEffect(() => {
