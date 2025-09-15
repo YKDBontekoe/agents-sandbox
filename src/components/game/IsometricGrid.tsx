@@ -44,6 +44,10 @@ export default function IsometricGrid({
       logger.warn('IsometricGrid: No viewport available');
       return;
     }
+    if (!app?.renderer) {
+      logger.warn('IsometricGrid: No renderer available');
+      return;
+    }
     if (initializedRef.current) {
       // Avoid re-initializing the grid if already set up
       return;
@@ -66,7 +70,7 @@ export default function IsometricGrid({
     
     for (let x = 0; x < gridSize; x++) {
       for (let y = 0; y < gridSize; y++) {
-        const tile = createTileSprite(x, y, gridContainer, tileWidth, tileHeight, tileTypes);
+        const tile = createTileSprite(x, y, gridContainer, tileWidth, tileHeight, tileTypes, app.renderer);
         const key = `${x},${y}`;
         tiles.set(key, tile);
         gridContainer.addChild(tile.sprite);
@@ -157,19 +161,19 @@ export default function IsometricGrid({
       centeredRef.current = false;
       initializedRef.current = false;
     };
-  }, [viewport, gridSize, tileWidth, tileHeight, tileTypes, onTileHover, onTileClick]);
+  }, [viewport, app, gridSize, tileWidth, tileHeight, tileTypes, onTileHover, onTileClick]);
 
   // Dynamically add missing tiles when gridSize grows
   useEffect(() => {
     const gridContainer = gridContainerRef.current;
-    if (!gridContainer) return;
+    if (!gridContainer || !app?.renderer) return;
     const tiles = tilesRef.current;
     let added = 0;
     for (let x = 0; x < gridSize; x++) {
       for (let y = 0; y < gridSize; y++) {
         const key = `${x},${y}`;
         if (!tiles.has(key)) {
-          const tile = createTileSprite(x, y, gridContainer, tileWidth, tileHeight, tileTypes);
+          const tile = createTileSprite(x, y, gridContainer, tileWidth, tileHeight, tileTypes, app.renderer);
           tiles.set(key, tile);
           gridContainer.addChild(tile.sprite);
           added++;
@@ -179,24 +183,27 @@ export default function IsometricGrid({
     if (added > 0) {
       logger.debug(`IsometricGrid: added ${added} tiles after gridSize changed to ${gridSize}`);
     }
-  }, [gridSize, tileWidth, tileHeight, tileTypes]);
+  }, [app, gridSize, tileWidth, tileHeight, tileTypes]);
 
   // Refresh tile graphics when tileTypes change
   useEffect(() => {
     const gridContainer = gridContainerRef.current;
-    if (!gridContainer) return;
+    if (!gridContainer || !app?.renderer) return;
     const tiles = tilesRef.current;
     let updates = 0;
     tiles.forEach((gridTile, key) => {
       const nextType = tileTypes[gridTile.y]?.[gridTile.x];
       if (nextType && nextType !== gridTile.tileType) {
-          const oldSprite = gridTile.sprite as PIXI.Graphics & { __tex?: PIXI.Graphics };
-          const oldTex = oldSprite.__tex;
-        if (oldTex) {
-          try { gridContainer.removeChild(oldTex); } catch {}
-        }
-        try { gridContainer.removeChild(gridTile.sprite); } catch {}
-        const newTile = createTileSprite(gridTile.x, gridTile.y, gridContainer, tileWidth, tileHeight, tileTypes);
+        gridTile.dispose();
+        const newTile = createTileSprite(
+          gridTile.x,
+          gridTile.y,
+          gridContainer,
+          tileWidth,
+          tileHeight,
+          tileTypes,
+          app.renderer,
+        );
         tiles.set(key, newTile);
         gridContainer.addChild(newTile.sprite);
         updates++;
@@ -205,7 +212,7 @@ export default function IsometricGrid({
     if (updates > 0) {
       logger.debug(`IsometricGrid: updated ${updates} tiles due to tileTypes change`);
     }
-  }, [tileTypes, tileWidth, tileHeight]);
+  }, [app, tileTypes, tileWidth, tileHeight]);
 
   // Performance optimization: Viewport culling and LOD + lightweight animations
   useEffect(() => {
@@ -233,13 +240,11 @@ export default function IsometricGrid({
       const visibleBottom = bounds.y + bounds.height + padding;
       
       // Only update line width if scale changed significantly
-      const scaleChanged = Math.abs(scale - lastScale) > 0.1;
-      
       tiles.forEach((tile) => {
         // Viewport culling - only show tiles in visible area
-        const isInViewport = tile.worldX >= visibleLeft && 
-                           tile.worldX <= visibleRight && 
-                           tile.worldY >= visibleTop && 
+        const isInViewport = tile.worldX >= visibleLeft &&
+                           tile.worldX <= visibleRight &&
+                           tile.worldY >= visibleTop &&
                            tile.worldY <= visibleBottom;
         
         // LOD - hide tiles when zoomed out too far
@@ -248,25 +253,9 @@ export default function IsometricGrid({
         if (tile.sprite.visible !== shouldShowTile) {
           tile.sprite.visible = shouldShowTile;
         }
-        
-        // Only redraw graphics if scale changed significantly and tile is visible
-        if (shouldShowTile && scaleChanged) {
-          const lineWidth = Math.max(0.3, Math.min(2.5, scale * 1.2));
-          tile.sprite.clear();
-          const baseColor = TILE_COLORS[tile.tileType] ?? 0xdde7f7;
-          tile.sprite.setStrokeStyle({ width: lineWidth, color: 0x374151, alpha: 0.8 });
-          tile.sprite.fill({ color: baseColor, alpha: 0.95 });
-          tile.sprite.moveTo(0, -tileHeight / 2);
-          tile.sprite.lineTo(tileWidth / 2, 0);
-          tile.sprite.lineTo(0, tileHeight / 2);
-          tile.sprite.lineTo(-tileWidth / 2, 0);
-          tile.sprite.closePath();
-          tile.sprite.fill();
-          tile.sprite.stroke();
-        }
 
         // Lightweight tile animations via overlay
-          const overlay = (tile.sprite as PIXI.Graphics & { __overlay?: PIXI.Graphics }).__overlay;
+        const overlay = tile.overlay;
         if (overlay) {
           overlay.visible = shouldShowTile;
           if (shouldShowTile) {
