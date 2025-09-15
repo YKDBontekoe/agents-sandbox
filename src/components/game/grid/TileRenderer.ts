@@ -42,7 +42,7 @@ function getTextureCacheKey(tileType: string, tileWidth: number, tileHeight: num
   return `${tileType}-${tileWidth}x${tileHeight}`;
 }
 
-function createTileTexture(
+export function getTileTexture(
   tileType: string,
   tileWidth: number,
   tileHeight: number,
@@ -179,7 +179,7 @@ export function createTileSprite(
     throw new Error(`Renderer is required to create tile sprites. Missing for tile ${tileKey}`);
   }
 
-  const texture = createTileTexture(tileType, tileWidth, tileHeight, renderer, tileKey);
+  const texture = getTileTexture(tileType, tileWidth, tileHeight, renderer, tileKey);
   const sprite = new PIXI.Sprite(texture);
   sprite.anchor.set(0.5, 0.5);
   sprite.position.set(worldX, worldY);
