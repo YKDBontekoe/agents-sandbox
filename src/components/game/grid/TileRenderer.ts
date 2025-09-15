@@ -193,12 +193,15 @@ export function createTileSprite(
   logger.debug(`[TILE_GRAPHICS] Created sprite for ${tileKey} using cached texture`);
 
   // Optional animated overlays per tile type
-  const overlay = new PIXI.Graphics();
-  overlay.zIndex = 5;
-  (overlay as unknown as { eventMode: string }).eventMode = "none";
-  overlay.position.set(worldX, worldY);
-  gridContainer.addChild(overlay);
-  logger.debug(`[TILE_GRAPHICS] Added overlay graphics to grid container for ${tileKey}`);
+  let overlay: PIXI.Graphics | undefined;
+  if (tileType === "water" || tileType === "forest") {
+    overlay = new PIXI.Graphics();
+    overlay.zIndex = 5;
+    (overlay as unknown as { eventMode: string }).eventMode = "none";
+    overlay.position.set(worldX, worldY);
+    gridContainer.addChild(overlay);
+    logger.debug(`[TILE_GRAPHICS] Added overlay graphics to grid container for ${tileKey}`);
+  }
 
   const createTime = performance.now() - startTime;
   logger.info(`[TILE_CREATE] Created tile ${tileKey} (${tileType}) in ${createTime.toFixed(2)}ms. Sprite ID: ${sprite.uid}`);
