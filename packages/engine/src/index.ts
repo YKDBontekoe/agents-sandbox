@@ -249,3 +249,6 @@ export * from './simulation/events';
 
 // Export time system
 export * from './systems/time';
+
+// Export chunk streaming utilities
+export * from './chunks';
