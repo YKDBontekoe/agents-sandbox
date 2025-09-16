@@ -13,6 +13,13 @@ import CityManagementPanel, {
   ServiceType,
 } from '../CityManagementPanel';
 
+export interface ActionPanelCounts {
+  pendingCouncil?: number;
+  pendingEdicts?: number;
+  pendingOmens?: number;
+  pendingSettings?: number;
+}
+
 export interface PanelComposerProps {
   children?: ReactNode;
   gameData: {
@@ -65,6 +72,7 @@ export interface PanelComposerProps {
   };
   onGameAction: (action: string, data?: unknown) => void;
   className?: string;
+  actionPanelCounts?: ActionPanelCounts;
 }
 
 export function PanelComposer({
@@ -73,6 +81,7 @@ export function PanelComposer({
   onGameAction,
   cityManagement,
   className = '',
+  actionPanelCounts,
 }: PanelComposerProps) {
   const { currentPreset } = useHUDLayoutPresets();
 
@@ -154,6 +163,10 @@ export function PanelComposer({
           intervalMs={gameData.time.intervalMs}
           onChangeIntervalMs={(ms) => onGameAction('set-speed', { ms })}
           variant={currentPreset.panelVariants['action-panel'] || 'default'}
+          pendingCouncil={actionPanelCounts?.pendingCouncil}
+          pendingEdicts={actionPanelCounts?.pendingEdicts}
+          pendingOmens={actionPanelCounts?.pendingOmens}
+          pendingSettings={actionPanelCounts?.pendingSettings}
         />
         <div className="mt-2" />
         <ModularSkillTreePanel

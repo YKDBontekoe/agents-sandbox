@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { ResponsivePanel, ResponsiveButton, ResponsiveStack, ResponsiveIcon } from '../ResponsiveHUDPanels';
 import { useHUDPanel } from '../HUDPanelRegistry';
 
-interface ModularActionPanelProps {
+export interface ModularActionPanelProps {
   onOpenCouncil?: () => void;
   onOpenEdicts?: () => void;
   onOpenOmens?: () => void;
@@ -11,6 +11,10 @@ interface ModularActionPanelProps {
   onChangeIntervalMs?: (ms: number) => void;
   variant?: 'default' | 'compact' | 'minimal';
   collapsible?: boolean;
+  pendingCouncil?: number;
+  pendingEdicts?: number;
+  pendingOmens?: number;
+  pendingSettings?: number;
 }
 
 interface ActionItemProps {
@@ -105,15 +109,19 @@ const actionIcons = {
   )
 };
 
-export function ModularActionPanel({ 
-  onOpenCouncil, 
-  onOpenEdicts, 
-  onOpenOmens, 
-  onOpenSettings, 
+export function ModularActionPanel({
+  onOpenCouncil,
+  onOpenEdicts,
+  onOpenOmens,
+  onOpenSettings,
   intervalMs,
   onChangeIntervalMs,
   variant = 'default',
-  collapsible = true 
+  collapsible = true,
+  pendingCouncil,
+  pendingEdicts,
+  pendingOmens,
+  pendingSettings,
 }: ModularActionPanelProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   
@@ -145,27 +153,11 @@ export function ModularActionPanel({
     </svg>
   );
 
-  // Mock data for demonstration - in real app this would come from game state
-  const getActionBadge = (action: string) => {
-    switch (action) {
-      case 'council':
-        return 3; // Number of pending proposals
-      case 'edicts':
-        return undefined; // No pending edicts
-      case 'omens':
-        return 1; // New omen available
-      case 'settings':
-        return undefined; // No notifications
-      default:
-        return undefined;
-    }
-  };
-
   const actions = [
-    { label: 'Council', onClick: onOpenCouncil, icon: actionIcons.council, key: 'council' },
-    { label: 'Edicts', onClick: onOpenEdicts, icon: actionIcons.edicts, key: 'edicts' },
-    { label: 'Omens', onClick: onOpenOmens, icon: actionIcons.omens, key: 'omens' },
-    { label: 'Settings', onClick: onOpenSettings, icon: actionIcons.settings, key: 'settings' }
+    { label: 'Council', onClick: onOpenCouncil, icon: actionIcons.council, key: 'council', badge: pendingCouncil },
+    { label: 'Edicts', onClick: onOpenEdicts, icon: actionIcons.edicts, key: 'edicts', badge: pendingEdicts },
+    { label: 'Omens', onClick: onOpenOmens, icon: actionIcons.omens, key: 'omens', badge: pendingOmens },
+    { label: 'Settings', onClick: onOpenSettings, icon: actionIcons.settings, key: 'settings', badge: pendingSettings }
   ];
 
   return (
@@ -221,7 +213,7 @@ export function ModularActionPanel({
             onClick={action.onClick}
             icon={action.icon}
             variant={variant}
-            badge={getActionBadge(action.key)}
+            badge={action.badge}
           />
         ))}
       </ResponsiveStack>

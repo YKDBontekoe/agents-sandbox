@@ -56,65 +56,19 @@ import { simulationSystem, EnhancedGameState } from '@engine'
 import { VisualIndicator } from '@engine';
 import { TimeSystem, timeSystem, TIME_SPEEDS, type TimeSpeed, GameTime as SystemGameTime } from '@engine';
 
+import type {
+  StoredBuilding,
+  GameState,
+  TradeRoute,
+  Proposal,
+  SeasonalEvent,
+  OmenReading,
+  PlayPageProps,
+} from './types';
+import { usePlayMap } from './hooks/usePlayMap';
+import { useActionPanelCounts } from './hooks/useActionPanelCounts';
+
 type BuildTypeId = keyof typeof SIM_BUILDINGS;
-
-
-
-interface StoredBuilding {
-  id: string;
-  typeId: keyof typeof SIM_BUILDINGS;
-  x: number;
-  y: number;
-  level: number;
-  workers: number;
-  traits?: { waterAdj?: number; mountainAdj?: number; forestAdj?: number };
-}
-
-interface GameState {
-  id: string;
-  cycle: number; // Keep for backward compatibility with server
-  resources: Record<string, number>;
-  workers: number;
-  buildings: StoredBuilding[];
-  routes?: TradeRoute[];
-  edicts?: Record<string, number>;
-  map_size?: number;
-}
-
-interface TradeRoute {
-  id: string;
-  fromId: string;
-  toId: string;
-  length: number;
-}
-
-interface Proposal {
-  id: string;
-  guild: string;
-  title: string;
-  description: string;
-  status: "pending" | "accepted" | "rejected" | "applied";
-  predicted_delta: Record<string, number>;
-}
-
-interface SeasonalEvent {
-  id: string;
-  name: string;
-  description: string;
-  cycle: number;
-}
-
-interface OmenReading {
-  id: string;
-  text: string;
-  type: string;
-  cycle: number;
-}
-
-interface PlayPageProps {
-  initialState?: GameState | null;
-  initialProposals?: Proposal[];
-}
 
 export default function PlayPage({ initialState = null, initialProposals = [] }: PlayPageProps) {
   logger.debug('🚀 PlayPage component mounting/rendering');
@@ -125,86 +79,69 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   const [guild, _setGuild] = useState("Wardens");
   const [error, setError] = useState<string | null>(null);
   
-  // Initialize tileTypes and gridSize early - MUST be before conditional returns
-  const [tileTypes, setTileTypes] = useState<string[][]>([]);
-  const [gridSize, setGridSize] = useState<number | null>(() => {
-    // Priority: initialState.map_size > localStorage > default 32
-    if (initialState?.map_size) {
-      const n = Math.max(8, Math.min(48, initialState.map_size));
-      logger.debug('Initial gridSize from initialState.map_size:', n);
-      return n;
-    }
-    if (typeof window !== 'undefined') {
+  const saveState = useCallback(
+    async (partial: {
+      resources?: Record<string, number>;
+      workers?: number;
+      buildings?: StoredBuilding[];
+      routes?: TradeRoute[];
+      roads?: Array<{ x: number; y: number }>;
+      edicts?: Record<string, number>;
+      map_size?: number;
+    }) => {
+      if (!state) return;
       try {
-        const stored = localStorage.getItem('ad_map_size');
-        if (stored) {
-          const n = Math.max(8, Math.min(48, parseInt(stored, 10) || 32));
-          logger.debug('Initial gridSize from localStorage:', n);
-          return n;
-        }
-      } catch (err) {
-        logger.error('Error reading gridSize from localStorage:', err);
-      }
-    }
-    logger.debug('Initial gridSize fallback to default: 32');
-    return 32;
-  });
-  
-  // Load map data when gridSize changes - MUST be before conditional returns
-  useEffect(() => {
-    logger.debug('🔥 MAP USEEFFECT SETUP - gridSize:', gridSize);
-    async function loadMap() {
-      try {
-        logger.debug('🗺️ USEEFFECT TRIGGERED - gridSize:', gridSize);
-        
-        if (gridSize == null) {
-          logger.debug('❌ SKIPPED - gridSize is null');
-          return;
-        }
-        
-        const url = `/api/map?size=${gridSize}`;
-        logger.debug('🌐 FETCHING:', url);
-        
-        const res = await fetch(url);
-        logger.debug('📡 RESPONSE STATUS:', res.status, res.ok);
-        
-        if (!res.ok) throw new Error('Failed to load map');
-        
-        const data = await res.json();
-        logger.debug('📦 DATA RECEIVED - map length:', data.map?.length);
-        
-        logger.debug('🎯 CALLING setTileTypes with data:', {
-          mapLength: data.map?.length,
-          firstRowLength: data.map?.[0]?.length,
-          sampleData: data.map?.slice(0, 2)
+        const body: {
+          id: string;
+          resources?: Record<string, number>;
+          workers?: number;
+          buildings?: StoredBuilding[];
+          routes?: TradeRoute[];
+          roads?: Array<{ x: number; y: number }>;
+          edicts?: Record<string, number>;
+          map_size?: number;
+        } = { id: state.id };
+        if (partial.resources) body.resources = partial.resources;
+        if (typeof partial.workers === 'number') body.workers = partial.workers;
+        if (partial.buildings) body.buildings = partial.buildings;
+        if (partial.routes) body.routes = partial.routes;
+        if (partial.roads) body.roads = partial.roads;
+        if (partial.edicts) body.edicts = partial.edicts;
+        if (typeof partial.map_size === 'number') body.map_size = partial.map_size;
+        const res = await fetch('/api/state', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
         });
-        logger.debug('🔄 Current tileTypes length before setState:', tileTypes.length);
-        setTileTypes(data.map);
-        logger.debug('✅ setTileTypes CALLED - should trigger tileTypes useEffect');
-        // Check if we're in React StrictMode (double execution)
-        logger.debug('🔍 React StrictMode check - this log should appear once per actual call');
-        
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
       } catch (err) {
-        logger.error('❌ MAP LOAD ERROR:', err);
+        logger.error('Failed to save state:', err);
       }
-    }
-    loadMap();
-  }, [gridSize]);
-  
-  // Monitor tileTypes state changes - MUST be before conditional returns
-  useEffect(() => {
-    logger.debug('🔥 TILETYPES USEEFFECT SETUP');
-    logger.debug('🔍 TILETYPES CHANGED - length:', tileTypes.length, 'firstRowLength:', tileTypes[0]?.length || 0);
-    if (tileTypes.length > 0) {
-      logger.debug('✅ TILETYPES STATE UPDATED SUCCESSFULLY!');
-      // Make a server-side visible log by calling a simple API
-      fetch('/api/debug-log?message=TILETYPES_STATE_UPDATED&length=' + tileTypes.length).catch(() => {});
-    } else {
-      logger.debug('❌ TILETYPES STILL EMPTY');
-      // Make a server-side visible log for empty state too
-      fetch('/api/debug-log?message=TILETYPES_STILL_EMPTY').catch(() => {});
-    }
-  }, [tileTypes]);
+    },
+    [state]
+  );
+
+  const {
+    tileTypes,
+    gridSize,
+    setGridSize,
+    mapSizeModalOpen,
+    setMapSizeModalOpen,
+    pendingMapSize,
+    setPendingMapSize,
+    confirmMapSize,
+    ensureCapacityAround,
+    revealUnknownTiles,
+    citizensCount,
+    setCitizensCount,
+    citizensSeed,
+    setCitizensSeed,
+  } = usePlayMap({
+    initialMapSize: initialState?.map_size ?? null,
+    onPersistMapSize: async (size) => {
+      await saveState({ map_size: size } as any);
+    },
+  });
   
   const [isPaused, setIsPaused] = useState(true);
   const [timeRemaining, setTimeRemaining] = useState(60);
@@ -266,8 +203,6 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   const [requireRoadConfirm, setRequireRoadConfirm] = useState(true);
   const [autoAssignWorkers, setAutoAssignWorkers] = useState<boolean>(true);
   const [pendingRoad, setPendingRoad] = useState<{ tiles: {x:number;y:number}[] } | null>(null);
-  const [citizensCount, setCitizensCount] = useState<number>(8);
-  const [citizensSeed, setCitizensSeed] = useState<number>(() => Math.floor(Math.random()*1e6));
 
   const [selectedTool, setSelectedTool] = useState<ManagementTool>('select');
   const [selectedZoneType, setSelectedZoneType] = useState<ZoneType>('residential');
@@ -276,88 +211,6 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   const [districts, _setDistricts] = useState<District[]>([]);
   const [leylines, setLeylines] = useState<Leyline[]>([]);
 
-  const [mapSizeModalOpen, setMapSizeModalOpen] = useState(true);
-  const [pendingMapSize, setPendingMapSize] = useState<number>(32);
-
-  // Chunk fetching for unknown tiles
-  const fetchChunk = useCallback(async (chunkX: number, chunkY: number, chunkSize: number = 16) => {
-    try {
-      const response = await fetch(`/api/map/chunk?x=${chunkX}&y=${chunkY}&size=${chunkSize}&seed=${citizensSeed}`);
-      if (!response.ok) return null;
-      const data = await response.json();
-      return data.tiles as string[][];
-    } catch (error) {
-      logger.warn('Failed to fetch chunk:', error);
-      return null;
-    }
-  }, [citizensSeed]);
-
-  // Expand map with 'unknown' tiles when interacting near the edges
-  const ensureCapacityAround = useCallback((x: number, y: number, margin: number = 2) => {
-    setTileTypes((prev) => {
-      const rows = prev.length;
-      const cols = rows > 0 ? prev[0].length : 0;
-      const needRows = Math.max(rows, y + 1 + margin);
-      const needCols = Math.max(cols, x + 1 + margin);
-      if (needRows === rows && needCols === cols) return prev;
-      const next: string[][] = new Array(needRows);
-      for (let r = 0; r < needRows; r++) {
-        next[r] = new Array(needCols);
-        for (let c = 0; c < needCols; c++) {
-          const val = (r < rows && c < (prev[r]?.length ?? 0)) ? prev[r][c] : 'unknown';
-          next[r][c] = val || 'unknown';
-        }
-      }
-      return next;
-    });
-  }, []);
-
-  // Replace unknown tiles with generated terrain
-  const revealUnknownTiles = useCallback(async (centerX: number, centerY: number, radius: number = 8) => {
-    const chunkSize = 16;
-    const chunksToFetch = new Set<string>();
-    
-    // Determine which chunks need fetching
-    for (let dy = -radius; dy <= radius; dy++) {
-      for (let dx = -radius; dx <= radius; dx++) {
-        const tx = centerX + dx;
-        const ty = centerY + dy;
-        if (tx < 0 || ty < 0) continue;
-        
-        const chunkX = Math.floor(tx / chunkSize);
-        const chunkY = Math.floor(ty / chunkSize);
-        chunksToFetch.add(`${chunkX},${chunkY}`);
-      }
-    }
-
-    // Fetch and apply chunks
-    for (const chunkKey of chunksToFetch) {
-      const [chunkX, chunkY] = chunkKey.split(',').map(Number);
-      const chunkData = await fetchChunk(chunkX, chunkY, chunkSize);
-      if (!chunkData) continue;
-
-      setTileTypes(prev => {
-        const next = prev.map(row => [...row]);
-        const startX = chunkX * chunkSize;
-        const startY = chunkY * chunkSize;
-        
-        for (let cy = 0; cy < chunkData.length; cy++) {
-          for (let cx = 0; cx < chunkData[cy].length; cx++) {
-            const worldX = startX + cx;
-            const worldY = startY + cy;
-            
-            if (worldY >= 0 && worldY < next.length && worldX >= 0 && worldX < next[worldY].length) {
-              if (next[worldY][worldX] === 'unknown') {
-                next[worldY][worldX] = chunkData[cy][cx];
-              }
-            }
-          }
-        }
-        
-        return next;
-      });
-    }
-  }, [fetchChunk]);
 
   const [routeDraftFrom, setRouteDraftFrom] = useState<string | null>(null);
   const [edicts, setEdicts] = useState<Record<string, number>>({ tariffs: 50, patrols: 0 });
@@ -443,45 +296,6 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   }, [initialState?.map_size, gridSize]);
 
   // Load map data when gridSize changes - MUST be before conditional returns
-  useEffect(() => {
-    logger.debug('🔥 MAP USEEFFECT SETUP - gridSize:', gridSize);
-    async function loadMap() {
-      try {
-        logger.debug('🗺️ USEEFFECT TRIGGERED - gridSize:', gridSize);
-        
-        if (gridSize == null) {
-          logger.debug('❌ SKIPPED - gridSize is null');
-          return;
-        }
-        
-        const url = `/api/map?size=${gridSize}`;
-        logger.debug('🌐 FETCHING:', url);
-        
-        const res = await fetch(url);
-        logger.debug('📡 RESPONSE STATUS:', res.status, res.ok);
-        
-        if (!res.ok) throw new Error('Failed to load map');
-        
-        const data = await res.json();
-        logger.debug('📦 DATA RECEIVED - map length:', data.map?.length);
-        
-        logger.debug('🎯 CALLING setTileTypes');
-        setTileTypes(data.map);
-        logger.debug('✅ setTileTypes CALLED');
-        
-      } catch (err) {
-        logger.error('❌ MAP LOAD ERROR:', err);
-      }
-    }
-    loadMap();
-  }, [gridSize]);
-  
-  // Monitor tileTypes state changes - MUST be before conditional returns
-  useEffect(() => {
-    logger.debug('🔥 TILETYPES USEEFFECT SETUP');
-    logger.debug('🔍 TILETYPES CHANGED - length:', tileTypes.length);
-  }, [tileTypes]);
-  
   // Listen for skill unlock events to deduct costs && persist
   useEffect(() => {
     const onUnlock = async (e: any) => {
@@ -536,40 +350,6 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     }, 5000);
     return () => clearInterval(cleanup);
   }, []);
-
-  const saveState = useCallback(async (partial: { resources?: Record<string, number>; workers?: number; buildings?: StoredBuilding[]; routes?: TradeRoute[]; roads?: Array<{x:number;y:number}>; edicts?: Record<string, number>; map_size?: number }) => {
-    if (!state) return;
-    try {
-      const body: { id: string; resources?: Record<string, number>; workers?: number; buildings?: StoredBuilding[]; routes?: TradeRoute[]; roads?: Array<{x:number;y:number}>; edicts?: Record<string, number>; map_size?: number } = { id: state.id };
-      if (partial.resources) body.resources = partial.resources;
-      if (typeof partial.workers === 'number') body.workers = partial.workers;
-      if (partial.buildings) body.buildings = partial.buildings;
-      if (partial.routes) body.routes = partial.routes;
-      if (partial.roads) body.roads = partial.roads;
-      if (partial.edicts) body.edicts = partial.edicts;
-      if (typeof partial.map_size === 'number') body.map_size = partial.map_size;
-      const res = await fetch('/api/state', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    } catch (err) {
-      logger.error('Failed to save state:', err);
-    }
-  }, [state]);
-
-  const confirmMapSize = useCallback(async () => {
-    // Limit map size to prevent performance issues - max 48 for stability
-    const n = Math.max(8, Math.min(48, Number(pendingMapSize) || 24));
-    setGridSize(n);
-    try { localStorage.setItem('ad_map_size', String(n)); } catch {}
-    // Save map size to game state for persistence
-    if (state) {
-      await saveState({ map_size: n } as any);
-    }
-    setMapSizeModalOpen(false);
-  }, [pendingMapSize, state, saveState]);
 
   const computeRoadPath = useCallback((sx:number, sy:number, tx:number, ty:number): Array<{x:number;y:number}> => {
     // Lightweight Dijkstra with road preference
@@ -651,6 +431,9 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   const totalEdictCost = useMemo(() => Object.keys(pendingEdictChanges).length * 1, [pendingEdictChanges]);
   const [upcomingEvents, _setUpcomingEvents] = useState<SeasonalEvent[]>([]);
   const [omenReadings, _setOmenReadings] = useState<OmenReading[]>([]);
+
+  const { pendingCouncil: pendingProposalCount, pendingOmens: availableOmenCount } =
+    useActionPanelCounts(proposals, omenReadings);
 
   useEffect(() => {
     const onStartRoute = (e: any) => {
@@ -1695,6 +1478,10 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
               resourceChanges,
               workforce: { total: totalWorkers, idle: idleWorkers, needed: neededWorkers },
               time: { ...gameTime, isPaused, intervalMs: Number((state as any)?.tick_interval_ms ?? 60000) }
+            }}
+            actionPanelCounts={{
+              pendingCouncil: pendingProposalCount,
+              pendingOmens: availableOmenCount,
             }}
             cityManagement={{
               stats: {
