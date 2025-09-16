@@ -282,6 +282,19 @@ export default function ConstellationSkillTree({ tree, unlocked, onUnlock, color
     return m;
   }, [layout.nodes]);
 
+  const dependentsById = useMemo(() => {
+    const map = new Map<string, string[]>();
+    tree.nodes.forEach((node) => {
+      (node.requires || []).forEach((reqId) => {
+        if (!map.has(reqId)) {
+          map.set(reqId, []);
+        }
+        map.get(reqId)!.push(node.id);
+      });
+    });
+    return map;
+  }, [tree.nodes]);
+
   // Focus on a node id when provided
   useEffect(() => {
     if (!focusNodeId) return;
@@ -299,39 +312,63 @@ export default function ConstellationSkillTree({ tree, unlocked, onUnlock, color
   // Compute highlight sets for hover (ancestors and dependents)
   useEffect(() => {
     const targetId = hover ? hover.node.id : (selected ? selected.node.id : null);
-    if (!targetId) { setHighlightNodes(new Set()); setHighlightEdges(new Set()); return; }
-    const nodeId = targetId;
+    if (!targetId) {
+      setHighlightNodes(new Set());
+      setHighlightEdges(new Set());
+      return;
+    }
+
     const nodeSet = new Set<string>();
     const edgeSet = new Set<string>();
+    const syntheticEdgeSet = new Set<string>();
 
-    // ancestors (requirements)
     const visitAnc = (id: string) => {
-      const node = tree.nodes.find(n => n.id === id);
-      if (!node) return;
+      if (nodeSet.has(id)) return;
       nodeSet.add(id);
-      (node.requires || []).forEach(req => {
-        nodeSet.add(req);
+      const layoutNode = layoutById.get(id);
+      const skillNode = layoutNode?.node;
+      if (!skillNode) return;
+      (skillNode.requires || []).forEach((req) => {
         edgeSet.add(`${req}->${id}`);
         visitAnc(req);
       });
     };
-    visitAnc(nodeId);
+    visitAnc(targetId);
 
-    // dependents (who require this node)
     const visitDep = (id: string) => {
-      tree.nodes.forEach(n => {
-        if ((n.requires || []).includes(id)) {
-          nodeSet.add(n.id);
-          edgeSet.add(`${id}->${n.id}`);
-          visitDep(n.id);
+      const dependents = dependentsById.get(id);
+      if (!dependents) return;
+      dependents.forEach((depId) => {
+        edgeSet.add(`${id}->${depId}`);
+        if (!nodeSet.has(depId)) {
+          nodeSet.add(depId);
+          visitDep(depId);
         }
       });
     };
-    visitDep(nodeId);
+    visitDep(targetId);
 
-    setHighlightNodes(nodeSet);
-    setHighlightEdges(edgeSet);
-  }, [hover, selected, tree.nodes]);
+    tree.edges.forEach((edge) => {
+      const toNode = layoutById.get(edge.to)?.node;
+      if (toNode?.requires?.includes(edge.from)) {
+        return;
+      }
+
+      if (edge.from === targetId || edge.to === targetId) {
+        syntheticEdgeSet.add(`bridge:${edge.from}->${edge.to}`);
+        nodeSet.add(edge.from);
+        nodeSet.add(edge.to);
+        return;
+      }
+
+      if (nodeSet.has(edge.from) && nodeSet.has(edge.to)) {
+        syntheticEdgeSet.add(`bridge:${edge.from}->${edge.to}`);
+      }
+    });
+
+    setHighlightNodes(new Set(nodeSet));
+    setHighlightEdges(new Set([...edgeSet, ...syntheticEdgeSet]));
+  }, [hover, selected, tree.edges, layoutById, dependentsById]);
 
   // Enhanced animation loop with smooth transitions
   useAnimationFrame(useCallback((dt: number) => {
@@ -443,7 +480,7 @@ export default function ConstellationSkillTree({ tree, unlocked, onUnlock, color
     });
 
     drawParticles(ctx, particleSystemRef.current.getParticles(), time);
-    drawConnections(ctx, layout, unlocked, highlightEdges, time, checkUnlock);
+    drawConnections(ctx, layout, tree.edges, unlocked, highlightEdges, time, checkUnlock);
 
     // Draw category sector arcs (very subtle)
     ctx.save();
@@ -680,7 +717,7 @@ export default function ConstellationSkillTree({ tree, unlocked, onUnlock, color
     });
 
     ctx.restore();
-  }, [layout, unlocked, hover, selected, pan, zoom, time, starField, colorFor, size, canAfford, checkUnlock, highlightEdges, highlightNodes, nodeTransitions]);
+  }, [layout, tree.edges, unlocked, hover, selected, pan, zoom, time, starField, colorFor, size, canAfford, checkUnlock, highlightEdges, highlightNodes, nodeTransitions]);
 
   // Mouse event handlers
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
