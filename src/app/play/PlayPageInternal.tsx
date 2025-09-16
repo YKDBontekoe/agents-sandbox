@@ -64,6 +64,15 @@ type BuildTypeId = keyof typeof SIM_BUILDINGS;
 const ISO_TILE_WIDTH = 64;
 const ISO_TILE_HEIGHT = 32;
 
+const indicatorDurationToMs = (duration: number): number => {
+  if (!Number.isFinite(duration) || duration <= 0) {
+    return 0;
+  }
+  return duration > 100 ? duration : duration * 1000;
+};
+
+const nowMs = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
+
 const arraysEqual = (a: string[], b: string[]) =>
   a.length === b.length && a.every((value, index) => value === b[index]);
 
@@ -264,6 +273,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   const acceptedNoticeKeyRef = useRef<string | null>(null);
   const [markers, setMarkers] = useState<{ id: string; x: number; y: number; label?: string }[]>([]);
   const [visualIndicators, setVisualIndicators] = useState<VisualIndicator[]>([]);
+  const indicatorExpiryRef = useRef<Map<string, number>>(new Map());
   const [enhancedGameState, setEnhancedGameState] = useState<EnhancedGameState | null>(null);
   const notify = useNotify();
   const lastMemoryToastRef = useRef<{ time: number; lastShownMB: number }>({ time: 0, lastShownMB: 0 });
@@ -277,7 +287,66 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   const [placedBuildings, setPlacedBuildings] = useState<StoredBuilding[]>([]);
   const [routes, setRoutes] = useState<TradeRoute[]>([]);
   const [roads, setRoads] = useState<Array<{x:number;y:number}>>([]);
-  
+
+  useEffect(() => {
+    const expiryMap = indicatorExpiryRef.current;
+    const activeIds = new Set<string>();
+    const timestamp = nowMs();
+
+    for (const indicator of visualIndicators) {
+      activeIds.add(indicator.id);
+      const durationMs = indicatorDurationToMs(indicator.duration);
+      if (durationMs <= 0) {
+        expiryMap.delete(indicator.id);
+        continue;
+      }
+      if (!expiryMap.has(indicator.id)) {
+        expiryMap.set(indicator.id, timestamp + durationMs);
+      }
+    }
+
+    for (const id of Array.from(expiryMap.keys())) {
+      if (!activeIds.has(id)) {
+        expiryMap.delete(id);
+      }
+    }
+  }, [visualIndicators]);
+
+  useEffect(() => {
+    if (!visualIndicators.length) {
+      indicatorExpiryRef.current.clear();
+      return;
+    }
+
+    const interval = window.setInterval(() => {
+      const expiryMap = indicatorExpiryRef.current;
+
+      setVisualIndicators((current) => {
+        if (current.length === 0) {
+          return current;
+        }
+
+        const now = nowMs();
+        let changed = false;
+        const filtered = current.filter(indicator => {
+          const expiresAt = expiryMap.get(indicator.id);
+          if (expiresAt !== undefined && expiresAt <= now) {
+            expiryMap.delete(indicator.id);
+            changed = true;
+            return false;
+          }
+          return true;
+        });
+
+        return changed ? filtered : current;
+      });
+    }, 250);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [visualIndicators.length]);
+
   // Initialize TimeSystem
   const timeSystemRef = useRef<TimeSystem | null>(null);
   if (!timeSystemRef.current) {
@@ -1607,6 +1676,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
               acceptedNoticeKey={acceptedNoticeKeyRef.current}
               clickEffectKey={clickEffectKey}
               markers={markers}
+              visualIndicators={visualIndicators}
               districts={districts}
               leylines={leylines}
               selectedLeyline={selectedLeyline}

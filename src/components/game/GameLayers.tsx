@@ -15,9 +15,12 @@ import AmbientLayer from './AmbientLayer';
 import SeasonalLayer from './SeasonalLayer';
 import MarkersLayer from './MarkersLayer';
 import EnhancedVisualEffectsLayer from './EnhancedVisualEffectsLayer';
+import VisualIndicatorLayer from './VisualIndicatorLayer';
 import { SIM_BUILDINGS, BUILDABLE_TILES } from './simCatalog';
 import { canAfford, type SimResources } from './resourceUtils';
 import type { GameResources } from './hud/types';
+
+import type { VisualIndicator } from '@engine';
 
 import type { BuildTypeId } from './panels/TileInfoPanel';
 
@@ -60,6 +63,7 @@ export interface GameLayersProps {
   acceptedNoticeKey: string | null;
   clickEffectKey: string | null;
   markers: Marker[];
+  visualIndicators: VisualIndicator[];
   districts: District[];
   leylines: Leyline[];
   selectedLeyline: Leyline | null;
@@ -97,6 +101,7 @@ const GameLayers: React.FC<GameLayersProps> = ({
   acceptedNoticeKey,
   clickEffectKey,
   markers,
+  visualIndicators,
   districts,
   leylines,
   selectedLeyline,
@@ -192,6 +197,7 @@ const GameLayers: React.FC<GameLayersProps> = ({
       )}
       <AmbientLayer tileTypes={tileTypes} />
       <SeasonalLayer season={((cycle % 4 === 0 ? 'spring' : (cycle % 4 === 1 ? 'summer' : (cycle % 4 === 2 ? 'autumn' : 'winter'))))} />
+      <VisualIndicatorLayer indicators={visualIndicators} />
       <MarkersLayer markers={markers.map(m => ({ id: m.id, gridX: m.x, gridY: m.y, label: m.label }))} />
       <EnhancedVisualEffectsLayer
         buildings={buildingsForLayer}
