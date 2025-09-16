@@ -233,6 +233,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   const [visualIndicators, setVisualIndicators] = useState<VisualIndicator[]>([]);
   const [enhancedGameState, setEnhancedGameState] = useState<EnhancedGameState | null>(null);
   const notify = useNotify();
+  const hasLoadedInitialDataRef = useRef(false);
   const lastMemoryToastRef = useRef<{ time: number; lastShownMB: number }>({ time: 0, lastShownMB: 0 });
   // building hover details disabled in stable mode
   const [gameMode, setGameMode] = useState<'casual' | 'advanced'>('casual');
@@ -966,17 +967,33 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     if (!res.ok) throw new Error(json.error || "Failed to fetch proposals");
     setProposals(json.proposals || []);
   }, []);
-  
-  // Fetch initial state if not provided
-  useEffect(() => {
-    if (!initialState && !state) {
-      console.log('🔄 No initial state provided, fetching from API...');
-      fetchState().catch((err) => {
-        console.error('❌ Failed to fetch initial state:', err);
-        setError(err.message || 'Failed to load game state');
-      });
+
+  const loadInitialData = useCallback(async () => {
+    if (hasLoadedInitialDataRef.current) {
+      return;
     }
-  }, [initialState, state, fetchState]);
+
+    hasLoadedInitialDataRef.current = true;
+
+    try {
+      if (!state) {
+        logger.debug('🔄 No initial state present, fetching from API...');
+        await fetchState();
+      }
+      await fetchProposals();
+    } catch (error) {
+      hasLoadedInitialDataRef.current = false;
+      throw error;
+    }
+  }, [state, fetchState, fetchProposals]);
+
+  useEffect(() => {
+    loadInitialData().catch((e: unknown) => {
+      const message = e instanceof Error ? e.message : String(e);
+      logger.error('Failed to connect to database:', message);
+      setError(message);
+    });
+  }, [loadInitialData]);
 
   const tick = useCallback(async () => {
     setLoading(true);
@@ -1100,20 +1117,6 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
       setLoading(false);
     }
   }, [proposals, selectedTile, fetchProposals, generateId]);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        if (!state) await fetchState();
-        await fetchProposals();
-      } catch (e: unknown) {
-        const message = e instanceof Error ? e.message : String(e);
-        logger.error('Failed to connect to database:', message);
-        setError(message);
-      }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   // Real-time heartbeat: drive countdown and server ticks
   useEffect(() => {
