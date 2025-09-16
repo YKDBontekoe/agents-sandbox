@@ -101,10 +101,10 @@ export default function ConstellationSkillTree({ tree, unlocked, onUnlock, color
     const nodesByConstellation: Record<string, ConstellationNode[]> = {};
 
     // Organize nodes by category into constellations
-    tree.nodes.forEach((node, index) => {
+    tree.nodes.forEach((node) => {
       const constellation = {
         economic: 'Merchant',
-        military: 'Warrior', 
+        military: 'Warrior',
         mystical: 'Mystic',
         infrastructure: 'Builder',
         diplomatic: 'Diplomat',
@@ -114,6 +114,9 @@ export default function ConstellationSkillTree({ tree, unlocked, onUnlock, color
       if (!nodesByConstellation[constellation]) {
         nodesByConstellation[constellation] = [];
       }
+      const tier = typeof node.tier === 'number' && Number.isFinite(node.tier)
+        ? node.tier
+        : 0;
       nodesByConstellation[constellation].push({
         node,
         gridX: 0,
@@ -121,7 +124,7 @@ export default function ConstellationSkillTree({ tree, unlocked, onUnlock, color
         x: 0,
         y: 0,
         constellation,
-        tier: Math.floor(index / 6)
+        tier
       });
     });
 
@@ -145,7 +148,10 @@ export default function ConstellationSkillTree({ tree, unlocked, onUnlock, color
       // Arrange nodes in a spiral pattern within each constellation
       constellationNodes.forEach((cNode, nodeIndex) => {
         const angle = (nodeIndex / constellationNodes.length) * Math.PI * 2;
-        const radius = Math.min(80 + (cNode.tier * 40), 160);
+        const tier = typeof cNode.tier === 'number' && Number.isFinite(cNode.tier)
+          ? cNode.tier
+          : 0;
+        const radius = Math.min(80 + (tier * 40), 160);
         
         cNode.gridX = Math.round(centerX + Math.cos(angle) * radius);
         cNode.gridY = Math.round(centerY + Math.sin(angle) * radius);
