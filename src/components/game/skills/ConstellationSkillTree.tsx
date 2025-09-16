@@ -39,6 +39,7 @@ export default function ConstellationSkillTree({ tree, unlocked, onUnlock, color
   const particleSystemRef = useRef<ParticleSystem>(new ParticleSystem());
   const [highlightNodes, setHighlightNodes] = useState<Set<string>>(new Set());
   const [highlightEdges, setHighlightEdges] = useState<Set<string>>(new Set());
+  const lastAutoFitRadius = useRef<number | null>(null);
   const [nodeTransitions, setNodeTransitions] = useState<Map<string, {
     scale: number;
     opacity: number;
@@ -97,9 +98,9 @@ export default function ConstellationSkillTree({ tree, unlocked, onUnlock, color
       'Diplomat': { color: '#ff9ff3', theme: 'social' }
     };
 
-    const constellationSpacing = 450; // Increased constellation spacing
     const nodes: ConstellationNode[] = [];
     const nodesByConstellation: Record<string, ConstellationNode[]> = {};
+    let highestTierInNodes = 0;
 
     // Organize nodes by category into constellations
     tree.nodes.forEach((node) => {
@@ -115,9 +116,12 @@ export default function ConstellationSkillTree({ tree, unlocked, onUnlock, color
       if (!nodesByConstellation[constellation]) {
         nodesByConstellation[constellation] = [];
       }
+
       const tier = typeof node.tier === 'number' && Number.isFinite(node.tier)
-        ? node.tier
+        ? Math.max(0, Math.floor(node.tier))
         : 0;
+      highestTierInNodes = Math.max(highestTierInNodes, tier);
+
       nodesByConstellation[constellation].push({
         node,
         gridX: 0,
@@ -128,6 +132,22 @@ export default function ConstellationSkillTree({ tree, unlocked, onUnlock, color
         tier
       });
     });
+
+    const layoutMaxTier = typeof tree.layout?.maxTier === 'number' && Number.isFinite(tree.layout.maxTier)
+      ? Math.max(0, Math.floor(tree.layout.maxTier))
+      : highestTierInNodes;
+    const maxTier = Math.max(0, highestTierInNodes, layoutMaxTier);
+    const tierCount = Math.max(1, maxTier + 1);
+
+    const baseRingRadius = 80;
+    const minRingGap = 60;
+    const maxRingGap = 140;
+    const gapDenominator = Math.max(1, tierCount - 1);
+    const adaptiveGap = tierCount > 1 ? 320 / gapDenominator : maxRingGap;
+    const ringGap = Math.min(maxRingGap, Math.max(minRingGap, adaptiveGap));
+    const radiusByTier = Array.from({ length: tierCount }, (_, tierIndex) => baseRingRadius + tierIndex * ringGap);
+    const maxConstellationRadius = radiusByTier[radiusByTier.length - 1] ?? baseRingRadius;
+    const constellationSpacing = Math.max(450, maxConstellationRadius * 2 + 160);
 
     // Position constellations in a hexagonal pattern
     const constellationPositions = [
@@ -150,22 +170,33 @@ export default function ConstellationSkillTree({ tree, unlocked, onUnlock, color
       constellationNodes.forEach((cNode, nodeIndex) => {
         const angle = (nodeIndex / constellationNodes.length) * Math.PI * 2;
         const tier = typeof cNode.tier === 'number' && Number.isFinite(cNode.tier)
-          ? cNode.tier
+          ? Math.max(0, Math.floor(cNode.tier))
           : 0;
-        const radius = Math.min(80 + (tier * 40), 160);
-        
+        const radius = radiusByTier[tier] ?? (baseRingRadius + tier * ringGap);
+
         cNode.gridX = Math.round(centerX + Math.cos(angle) * radius);
         cNode.gridY = Math.round(centerY + Math.sin(angle) * radius);
         cNode.x = cNode.gridX;
         cNode.y = cNode.gridY;
-        
+
         nodes.push(cNode);
       });
-      
+
       constellationIndex++;
     });
 
-    return { nodes, constellations };
+    return {
+      nodes,
+      constellations,
+      metrics: {
+        baseRingRadius,
+        ringGap,
+        radiusByTier,
+        maxConstellationRadius,
+        maxTier,
+        constellationSpacing
+      }
+    };
   }, [tree]);
 
   // Unified unlock check with exclusivity and additional conditions
@@ -875,7 +906,7 @@ export default function ConstellationSkillTree({ tree, unlocked, onUnlock, color
   
   const fitToView = useCallback(() => {
     if (layout.nodes.length === 0) return;
-    
+
     // Calculate bounding box of all nodes
     const bounds = layout.nodes.reduce((acc, node) => {
       return {
@@ -907,6 +938,25 @@ export default function ConstellationSkillTree({ tree, unlocked, onUnlock, color
       });
     }
   }, [layout.nodes, size]);
+
+  useEffect(() => {
+    if (layout.nodes.length === 0) return;
+
+    const maxRadius = layout.metrics?.maxConstellationRadius ?? 0;
+    const prevRadius = lastAutoFitRadius.current;
+
+    if (focusNodeId) {
+      lastAutoFitRadius.current = maxRadius;
+      return;
+    }
+
+    if (prevRadius === null || maxRadius > prevRadius + 1) {
+      lastAutoFitRadius.current = maxRadius;
+      fitToView();
+    } else if (prevRadius !== maxRadius) {
+      lastAutoFitRadius.current = maxRadius;
+    }
+  }, [fitToView, focusNodeId, layout.metrics?.maxConstellationRadius, layout.nodes.length]);
 
   // Resize handler
   useEffect(() => {
