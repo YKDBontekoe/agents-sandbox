@@ -819,16 +819,18 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     });
   }, [state]);
 
-  // Greedy auto-assign idle workers to best buildings by marginal yield
-  useEffect(() => {
-    if (!autoAssignWorkers) return;
+  const stateWorkers = state?.workers ?? 0;
+  const stateCycle = state?.cycle ?? 0;
+
+  const autoAssignIdleWorkers = useCallback(() => {
     if (!simResources) return;
     let idle = simResources.workers || 0;
     if (idle <= 0) return;
-    // Work on local copies; batch a single save at end
+
     const updatedBuildings = [...placedBuildings];
-    let safety = 100; // guard against infinite loop
-    // Base weights per resource value
+    if (updatedBuildings.length === 0) return;
+
+    let safety = 100;
     const scoreWeights: Record<string, number> = {
       grain: 3,
       wood: 2,
@@ -837,85 +839,95 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
       favor: 0.4,
       mana: 0,
     };
-    const routesArr = routes || [];
-    const edictsApplied = edicts;
-    const season = ((state?.cycle ?? 0) % 4 === 0 ? 'spring' : ((state?.cycle ?? 0) % 4 === 1 ? 'summer' : ((state?.cycle ?? 0) % 4 === 2 ? 'autumn' : 'winter')));
 
-    // Adjust priorities by season and policy
-    // Grain is more critical in winter; wood a bit higher in autumn; coin more valuable with high tariffs
+    const routesArr = routes ?? [];
+    const edictsApplied = edicts;
+    const cycleMod = stateCycle % 4;
+    const season = cycleMod === 0 ? 'spring' : cycleMod === 1 ? 'summer' : cycleMod === 2 ? 'autumn' : 'winter';
+
     const tariffs = Math.max(0, Math.min(100, Number(edictsApplied['tariffs'] ?? 50)));
-    const coinBoost = 1 + (tariffs - 50) / 100 * 0.6; // [-0.3, +0.3]
+    const coinBoost = 1 + ((tariffs - 50) / 100) * 0.6;
     if (season === 'winter') scoreWeights.grain += 1.2;
     if (season === 'autumn') scoreWeights.wood += 0.6;
     if (season === 'summer') scoreWeights.planks += 0.4;
     scoreWeights.coin *= coinBoost;
 
     const marginalScore = (idx: number): number => {
-      const b = updatedBuildings[idx];
-      const def = SIM_BUILDINGS[b.typeId];
+      const building = updatedBuildings[idx];
+      const def = SIM_BUILDINGS[building.typeId];
       if (!def) return -Infinity;
+
       const capBase = def.workCapacity ?? 0;
-      // account for level scaling similar to projection
-      const level = Math.max(1, Number(b.level ?? 1));
+      const level = Math.max(1, Number(building.level ?? 1));
       const levelCapScale = 1 + 0.25 * (level - 1);
       const cap = Math.round(capBase * levelCapScale);
       if (cap <= 0) return -Infinity;
-      if ((b.workers || 0) >= cap) return -Infinity;
+      if ((building.workers || 0) >= cap) return -Infinity;
 
       const base = projectCycleDeltas(
         { ...simResources },
         updatedBuildings,
         routesArr,
         SIM_BUILDINGS,
-        { totalWorkers: (state?.workers || 0), edicts: edictsApplied }
+        { totalWorkers: stateWorkers, edicts: edictsApplied }
       ).updated;
-      // simulate +1 worker on this building only
+
       const temp = [...updatedBuildings];
-      temp[idx] = { ...temp[idx], workers: (temp[idx].workers || 0) + 1 } as any;
+      temp[idx] = { ...temp[idx], workers: (temp[idx].workers || 0) + 1 } as StoredBuilding;
+
       const next = projectCycleDeltas(
         { ...simResources },
         temp,
         routesArr,
         SIM_BUILDINGS,
-        { totalWorkers: (state?.workers || 0), edicts: edictsApplied }
+        { totalWorkers: stateWorkers, edicts: edictsApplied }
       ).updated;
 
       let score = 0;
-      for (const [k, w] of Object.entries(scoreWeights)) {
-        const delta = (next as any)[k] - (base as any)[k];
-        score += (delta || 0) * (w as number);
+      for (const [resource, weight] of Object.entries(scoreWeights)) {
+        const delta = (next as any)[resource] - (base as any)[resource];
+        score += (delta || 0) * (weight as number);
       }
-      // bias toward resolving current shortages
-      if ((simResources.grain || 0) < 50 && b.typeId === 'farm') score += 5;
-      if ((simResources.wood || 0) < 30 && b.typeId === 'lumber_camp') score += 3;
-      if ((simResources.planks || 0) < 20 && b.typeId === 'sawmill') score += 2;
-      // Slight policy-aware bonus
-      if (tariffs > 70 && (b.typeId === 'trade_post')) score += 1.5;
+
+      if ((simResources.grain || 0) < 50 && building.typeId === 'farm') score += 5;
+      if ((simResources.wood || 0) < 30 && building.typeId === 'lumber_camp') score += 3;
+      if ((simResources.planks || 0) < 20 && building.typeId === 'sawmill') score += 2;
+      if (tariffs > 70 && building.typeId === 'trade_post') score += 1.5;
+
       return score;
     };
 
     while (idle > 0 && safety-- > 0) {
-      // find best index
       let bestIdx = -1;
       let bestScore = 0;
       for (let i = 0; i < updatedBuildings.length; i++) {
-        const s = marginalScore(i);
-        if (s > bestScore) { bestScore = s; bestIdx = i; }
+        const score = marginalScore(i);
+        if (score > bestScore) {
+          bestScore = score;
+          bestIdx = i;
+        }
       }
       if (bestIdx === -1) break;
-      // assign 1 worker
-      updatedBuildings[bestIdx] = { ...updatedBuildings[bestIdx], workers: (updatedBuildings[bestIdx].workers || 0) + 1 } as any;
+
+      updatedBuildings[bestIdx] = {
+        ...updatedBuildings[bestIdx],
+        workers: (updatedBuildings[bestIdx].workers || 0) + 1,
+      } as StoredBuilding;
       idle -= 1;
     }
 
     if (idle !== (simResources.workers || 0)) {
-      // apply local updates and persist
       setPlacedBuildings(updatedBuildings);
-      setSimResources(prev => prev ? { ...prev, workers: idle } : prev);
-      saveState({ buildings: updatedBuildings }).catch(()=>{});
+      setSimResources(prev => (prev ? { ...prev, workers: idle } : prev));
+      saveState({ buildings: updatedBuildings }).catch(() => {});
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoAssignWorkers, simResources?.workers]);
+  }, [simResources, placedBuildings, routes, edicts, stateCycle, stateWorkers, saveState]);
+
+  // Greedy auto-assign idle workers to best buildings by marginal yield
+  useEffect(() => {
+    if (!autoAssignWorkers) return;
+    autoAssignIdleWorkers();
+  }, [autoAssignWorkers, autoAssignIdleWorkers]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
