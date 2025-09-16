@@ -1,3 +1,16 @@
+import type { EventImpact } from '@engine';
+
+export interface SeasonalEventResponse {
+  id: string;
+  label: string;
+  description: string;
+  cost: Partial<Record<string, number>>;
+  effect?: Partial<EventImpact>;
+  effectHints: string[];
+  isAffordable: boolean;
+  missingResources: string[];
+}
+
 export interface SeasonalEvent {
   id: string;
   name: string;
@@ -12,6 +25,7 @@ export interface SeasonalEvent {
   }[];
   duration?: number; // cycles, if ongoing
   isRevealed: boolean; // false for hidden/uncertain events
+  responses?: SeasonalEventResponse[];
 }
 
 export interface OmenReading {

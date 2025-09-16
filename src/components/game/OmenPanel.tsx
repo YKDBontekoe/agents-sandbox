@@ -17,6 +17,8 @@ export interface OmenPanelProps {
   canRequestReading: boolean;
   readingCost: number;
   currentMana: number;
+  onRespondToEvent?: (eventId: string, responseId: string) => void | Promise<void>;
+  respondingTo?: { eventId: string; responseId: string } | null;
 }
 
 const TimelineView: React.FC<{
@@ -77,7 +79,9 @@ export const OmenPanel: React.FC<OmenPanelProps> = ({
   onRequestReading,
   canRequestReading,
   readingCost,
-  currentMana
+  currentMana,
+  onRespondToEvent,
+  respondingTo
 }) => {
   const revealedEvents = upcomingEvents.filter(e => e.isRevealed);
   const hiddenEvents = upcomingEvents.filter(e => !e.isRevealed);
@@ -163,7 +167,13 @@ export const OmenPanel: React.FC<OmenPanelProps> = ({
                     </h3>
                     <div className="grid gap-4">
                       {imminentEvents.map(event => (
-                        <EventCard key={event.id} event={event} currentCycle={currentCycle} />
+                        <EventCard
+                          key={event.id}
+                          event={event}
+                          currentCycle={currentCycle}
+                          onRespond={onRespondToEvent}
+                          pendingResponse={respondingTo}
+                        />
                       ))}
                     </div>
                   </div>
@@ -178,7 +188,13 @@ export const OmenPanel: React.FC<OmenPanelProps> = ({
                         .filter(e => !imminentEvents.some(ie => ie.id === e.id))
                         .slice(0, 6)
                         .map(event => (
-                          <EventCard key={event.id} event={event} currentCycle={currentCycle} />
+                          <EventCard
+                            key={event.id}
+                            event={event}
+                            currentCycle={currentCycle}
+                            onRespond={onRespondToEvent}
+                            pendingResponse={respondingTo}
+                          />
                         ))}
                     </div>
                   </div>
@@ -190,7 +206,13 @@ export const OmenPanel: React.FC<OmenPanelProps> = ({
                     <h3 className="text-lg font-semibold text-gray-400 mb-4">❓ Mysterious Portents</h3>
                     <div className="grid gap-4">
                       {hiddenEvents.slice(0, 3).map(event => (
-                        <EventCard key={event.id} event={event} currentCycle={currentCycle} />
+                        <EventCard
+                          key={event.id}
+                          event={event}
+                          currentCycle={currentCycle}
+                          onRespond={onRespondToEvent}
+                          pendingResponse={respondingTo}
+                        />
                       ))}
                     </div>
                   </div>

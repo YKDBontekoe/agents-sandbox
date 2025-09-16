@@ -48,12 +48,14 @@ import type { Notification } from '@/components/game/hud/types';
 import { useIdGenerator } from '@/hooks/useIdGenerator';
 import CityManagementPanel from '@/components/game/CityManagementPanel';
 import type { CityStats, ManagementTool, ZoneType, ServiceType } from '@/components/game/CityManagementPanel';
+import OmenPanel from '@/components/game/OmenPanel';
+import type { SeasonalEvent, OmenReading } from '@/components/game/omen/types';
 // (settings && other panels are currently not rendered on this page)
 // layout preferences not used on this page
 import type { GameResources, GameTime } from '@/components/game/hud/types';
 import type { CategoryType } from '@arcane/ui';
-import { simulationSystem, EnhancedGameState } from '@engine'
-import { VisualIndicator } from '@engine';
+import { simulationSystem, EnhancedGameState } from '@engine';
+import { VisualIndicator, type ActiveEvent, type EventImpact } from '@engine';
 import { pauseSimulation, resumeSimulation } from './simulationControls';
 import { TimeSystem, timeSystem, TIME_SPEEDS, GameTime as SystemGameTime, type TimeSpeed } from '@engine';
 import { intervalMsToTimeSpeed, sanitizeIntervalMs } from './timeSpeedUtils';
@@ -62,6 +64,247 @@ type BuildTypeId = keyof typeof SIM_BUILDINGS;
 
 const ISO_TILE_WIDTH = 64;
 const ISO_TILE_HEIGHT = 32;
+
+const SEASONS: SeasonalEvent['season'][] = ['spring', 'summer', 'autumn', 'winter'];
+
+const RESOURCE_LABELS: Record<string, string> = {
+  grain: 'Grain',
+  coin: 'Coin',
+  mana: 'Mana',
+  favor: 'Favor',
+  wood: 'Wood',
+  planks: 'Planks',
+  workers: 'Workers',
+  happiness: 'Happiness',
+  stress: 'Stress',
+  motivation: 'Motivation',
+  conditionChange: 'Condition',
+  efficiencyMultiplier: 'Efficiency',
+  maintenanceCostMultiplier: 'Maintenance Cost',
+  growthRate: 'Growth Rate',
+  tradeMultiplier: 'Trade',
+  wageMultiplier: 'Wages',
+  unrest: 'Unrest',
+  threat: 'Threat',
+};
+
+const formatResourceLabel = (key: string): string => (
+  RESOURCE_LABELS[key] ?? key.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase())
+);
+
+const normalizeProbability = (probability?: number): number => {
+  if (probability == null) return 0;
+  if (probability > 1) return Math.round(Math.min(probability, 100));
+  return Math.round(Math.max(0, Math.min(1, probability)) * 100);
+};
+
+const cycleToSeason = (cycle: number): SeasonalEvent['season'] => (
+  SEASONS[Math.abs(cycle) % SEASONS.length]
+);
+
+const categorizeEventType = (event: ActiveEvent): SeasonalEvent['type'] => {
+  if (event.iconType === 'positive') return 'blessing';
+  if (event.iconType === 'neutral') return 'neutral';
+  if (event.iconType === 'critical') return 'crisis';
+  return 'curse';
+};
+
+const formatPercentChange = (multiplier: number): string | null => {
+  if (!Number.isFinite(multiplier) || multiplier === 1) return null;
+  const delta = Math.round((multiplier - 1) * 100);
+  if (delta === 0) return null;
+  return `${delta > 0 ? '+' : ''}${delta}%`;
+};
+
+const summarizeImpactEffects = (impact: EventImpact): { resource: string; impact: string }[] => {
+  const summaries: { resource: string; impact: string }[] = [];
+
+  if (impact.resources) {
+    for (const [resource, amount] of Object.entries(impact.resources)) {
+      const value = Number(amount ?? 0);
+      if (!value) continue;
+      summaries.push({
+        resource: formatResourceLabel(resource),
+        impact: `${value > 0 ? '+' : ''}${value}`,
+      });
+    }
+  }
+
+  if (impact.citizenMood) {
+    for (const [moodKey, amount] of Object.entries(impact.citizenMood)) {
+      const value = Number(amount ?? 0);
+      if (!value) continue;
+      summaries.push({
+        resource: formatResourceLabel(moodKey),
+        impact: `${value > 0 ? '+' : ''}${value}`,
+      });
+    }
+  }
+
+  if (impact.buildingEffects) {
+    const { conditionChange, efficiencyMultiplier, maintenanceCostMultiplier } = impact.buildingEffects;
+    if (conditionChange && conditionChange !== 0) {
+      summaries.push({ resource: 'Building Condition', impact: `${conditionChange > 0 ? '+' : ''}${conditionChange}` });
+    }
+    const efficiency = formatPercentChange(Number(efficiencyMultiplier ?? 1));
+    if (efficiency) {
+      summaries.push({ resource: 'Efficiency', impact: efficiency });
+    }
+    const maintenance = formatPercentChange(Number(maintenanceCostMultiplier ?? 1));
+    if (maintenance) {
+      summaries.push({ resource: 'Maintenance Cost', impact: maintenance });
+    }
+  }
+
+  if (impact.economicEffects) {
+    const { growthRate, tradeMultiplier, wageMultiplier } = impact.economicEffects;
+    if (growthRate && growthRate !== 0) {
+      summaries.push({ resource: 'Growth Rate', impact: `${growthRate > 0 ? '+' : ''}${growthRate}` });
+    }
+    const trade = formatPercentChange(Number(tradeMultiplier ?? 1));
+    if (trade) {
+      summaries.push({ resource: 'Trade', impact: trade });
+    }
+    const wages = formatPercentChange(Number(wageMultiplier ?? 1));
+    if (wages) {
+      summaries.push({ resource: 'Wages', impact: wages });
+    }
+  }
+
+  return summaries;
+};
+
+const summarizeResponseEffect = (effect?: Partial<EventImpact>): string[] => {
+  if (!effect) return [];
+  const hints: string[] = [];
+
+  if (effect.resources) {
+    for (const [resource, amount] of Object.entries(effect.resources)) {
+      const value = Number(amount ?? 0);
+      if (!value) continue;
+      hints.push(`${formatResourceLabel(resource)} ${value > 0 ? '+' : ''}${value}`);
+    }
+  }
+
+  if (effect.citizenMood) {
+    for (const [moodKey, amount] of Object.entries(effect.citizenMood)) {
+      const value = Number(amount ?? 0);
+      if (!value) continue;
+      hints.push(`${formatResourceLabel(moodKey)} ${value > 0 ? '+' : ''}${value}`);
+    }
+  }
+
+  if (effect.buildingEffects) {
+    const { conditionChange, efficiencyMultiplier, maintenanceCostMultiplier } = effect.buildingEffects;
+    if (conditionChange && conditionChange !== 0) {
+      hints.push(`Building Condition ${conditionChange > 0 ? '+' : ''}${conditionChange}`);
+    }
+    const efficiency = formatPercentChange(Number(efficiencyMultiplier ?? 1));
+    if (efficiency) {
+      hints.push(`Efficiency ${efficiency}`);
+    }
+    const maintenance = formatPercentChange(Number(maintenanceCostMultiplier ?? 1));
+    if (maintenance) {
+      hints.push(`Maintenance Cost ${maintenance}`);
+    }
+  }
+
+  if (effect.economicEffects) {
+    const { growthRate, tradeMultiplier, wageMultiplier } = effect.economicEffects;
+    if (growthRate && growthRate !== 0) {
+      hints.push(`Growth Rate ${growthRate > 0 ? '+' : ''}${growthRate}`);
+    }
+    const trade = formatPercentChange(Number(tradeMultiplier ?? 1));
+    if (trade) {
+      hints.push(`Trade ${trade}`);
+    }
+    const wages = formatPercentChange(Number(wageMultiplier ?? 1));
+    if (wages) {
+      hints.push(`Wages ${wages}`);
+    }
+  }
+
+  if (typeof effect.duration === 'number' && effect.duration !== 0) {
+    hints.push(`Duration ${effect.duration > 0 ? '+' : ''}${effect.duration} cycles`);
+  }
+
+  return hints;
+};
+
+const computeAffordability = (
+  cost: Partial<Record<string, number>> | undefined,
+  resources: Record<string, number>,
+  simResources: SimResources | null,
+  workers: number,
+): { isAffordable: boolean; missingResources: string[] } => {
+  if (!cost) return { isAffordable: true, missingResources: [] };
+  const missing: string[] = [];
+  for (const [resource, amount] of Object.entries(cost)) {
+    const required = Number(amount ?? 0);
+    if (required <= 0) continue;
+
+    let available = 0;
+    if (resource === 'workers') {
+      available = workers;
+    } else if (Object.prototype.hasOwnProperty.call(resources, resource)) {
+      available = Number(resources[resource as keyof typeof resources] ?? 0);
+    } else if (simResources && resource in simResources) {
+      const key = resource as keyof SimResources;
+      available = Number(simResources[key] ?? 0);
+    }
+
+    if (available < required) {
+      missing.push(resource);
+    }
+  }
+
+  return { isAffordable: missing.length === 0, missingResources: missing };
+};
+
+const convertActiveEventToSeasonal = (
+  event: ActiveEvent,
+  options: {
+    currentCycle: number;
+    resources: Record<string, number>;
+    simResources: SimResources | null;
+    workers: number;
+    consumedKeys: Set<string>;
+  }
+): SeasonalEvent => {
+  const { currentCycle, resources, simResources, workers, consumedKeys } = options;
+  const baseEffects = summarizeImpactEffects(event.impact);
+  const responses = event.responses
+    ? event.responses
+        .filter(response => !consumedKeys.has(`${event.id}:${response.id}`))
+        .map(response => {
+          const { isAffordable, missingResources } = computeAffordability(response.cost, resources, simResources, workers);
+          return {
+            id: response.id,
+            label: response.label,
+            description: response.description,
+            cost: response.cost ?? {},
+            effect: response.effect,
+            effectHints: summarizeResponseEffect(response.effect),
+            isAffordable,
+            missingResources,
+          };
+        })
+    : undefined;
+
+  return {
+    id: event.id,
+    name: event.title,
+    description: event.description,
+    type: categorizeEventType(event),
+    season: cycleToSeason(event.startCycle),
+    cycleOffset: Math.max(0, event.startCycle - currentCycle),
+    probability: normalizeProbability(event.impact.probability),
+    effects: baseEffects,
+    duration: event.impact.duration,
+    isRevealed: true,
+    responses,
+  };
+};
 
 
 
@@ -100,20 +343,6 @@ interface Proposal {
   description: string;
   status: "pending" | "accepted" | "rejected" | "applied";
   predicted_delta: Record<string, number>;
-}
-
-interface SeasonalEvent {
-  id: string;
-  name: string;
-  description: string;
-  cycle: number;
-}
-
-interface OmenReading {
-  id: string;
-  text: string;
-  type: string;
-  cycle: number;
 }
 
 interface PlayPageProps {
@@ -250,7 +479,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   }, []);
   const [tutorialFree, setTutorialFree] = useState<Partial<Record<BuildTypeId, number>>>({ farm: 1, house: 1, council_hall: 1 });
   const [isEdictsOpen, setIsEdictsOpen] = useState(false);
-  const [, setIsOmensOpen] = useState(false);
+  const [isOmensOpen, setIsOmensOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [dismissedGuide, setDismissedGuide] = useState(false);
   const [acceptedNotice, setAcceptedNotice] = useState<{ title: string; delta: Record<string, number> } | null>(null);
@@ -685,8 +914,10 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     },
   ]), [edicts]);
   const totalEdictCost = useMemo(() => Object.keys(pendingEdictChanges).length * 1, [pendingEdictChanges]);
-  const [upcomingEvents, _setUpcomingEvents] = useState<SeasonalEvent[]>([]);
-  const [omenReadings, _setOmenReadings] = useState<OmenReading[]>([]);
+  const [upcomingEvents, setUpcomingEvents] = useState<SeasonalEvent[]>([]);
+  const [omenReadings, setOmenReadings] = useState<OmenReading[]>([]);
+  const [consumedEventResponses, setConsumedEventResponses] = useState<string[]>([]);
+  const [respondingToEvent, setRespondingToEvent] = useState<{ eventId: string; responseId: string } | null>(null);
 
   useEffect(() => {
     const onStartRoute = (e: any) => {
@@ -854,6 +1085,53 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
       planks: (state.resources as any).planks || 0,
     });
   }, [state]);
+
+  useEffect(() => {
+    if (!state || !simResources) return;
+    try {
+      const simulationInput = {
+        buildings: state.buildings || [],
+        resources: simResources,
+        gameTime: timeSystem.getCurrentTime(),
+      };
+      const enhancedState = simulationSystem.updateSimulation(simulationInput, 1.0);
+      setEnhancedGameState(enhancedState);
+      const indicators = simulationSystem.generateVisualIndicators(enhancedState);
+      setVisualIndicators(indicators);
+    } catch (simError) {
+      logger.warn('Simulation system update failed:', simError);
+    }
+  }, [state, simResources, timeSystem]);
+
+  useEffect(() => {
+    if (!enhancedGameState) {
+      setUpcomingEvents([]);
+      return;
+    }
+
+    const consumedSet = new Set(consumedEventResponses);
+    const mappedEvents = enhancedGameState.activeEvents.map(event =>
+      convertActiveEventToSeasonal(event, {
+        currentCycle: state?.cycle ?? 0,
+        resources: state?.resources ?? {},
+        simResources,
+        workers: state?.workers ?? 0,
+        consumedKeys: consumedSet,
+      })
+    );
+    setUpcomingEvents(mappedEvents);
+
+    const validKeys = new Set<string>();
+    enhancedGameState.activeEvents.forEach(event => {
+      event.responses?.forEach(response => {
+        validKeys.add(`${event.id}:${response.id}`);
+      });
+    });
+    const filteredConsumed = consumedEventResponses.filter(key => validKeys.has(key));
+    if (filteredConsumed.length !== consumedEventResponses.length) {
+      setConsumedEventResponses(filteredConsumed);
+    }
+  }, [enhancedGameState, state?.cycle, state?.resources, state?.workers, simResources, consumedEventResponses]);
 
   const stateWorkers = state?.workers ?? 0;
   const stateCycle = state?.cycle ?? 0;
@@ -1081,6 +1359,152 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     }
   }, [fetchProposals]);
 
+  const handleRespondToEvent = useCallback(async (eventId: string, responseId: string) => {
+    if (!state || !enhancedGameState) {
+      notify({ type: 'error', title: 'Event Unavailable', message: 'Unable to resolve this omen right now.' });
+      return;
+    }
+
+    const event = enhancedGameState.activeEvents.find(e => e.id === eventId);
+    const response = event?.responses?.find(r => r.id === responseId);
+    if (!event || !response) {
+      notify({ type: 'warning', title: 'Response Unavailable', message: 'This omen response is no longer available.' });
+      return;
+    }
+
+    setRespondingToEvent({ eventId, responseId });
+
+    try {
+      const result = simulationSystem.handlePlayerAction(
+        { type: 'respond_to_event', params: { eventId, responseId } },
+        enhancedGameState
+      );
+
+      if (!result.success) {
+        notify({ type: 'error', title: 'Event Response Failed', message: result.message || 'The omens resisted intervention.' });
+        return;
+      }
+
+      const costEntries = Object.entries(response.cost || {});
+      const hasCost = costEntries.some(([, value]) => Number(value ?? 0) > 0);
+      const nextResources: Record<string, number> = { ...state.resources };
+      const updatedSimResources = simResources ? { ...simResources } as SimResources : null;
+      let nextWorkers = state.workers ?? 0;
+      let workersChanged = false;
+
+      for (const [resource, amount] of costEntries) {
+        const value = Number(amount ?? 0);
+        if (value <= 0) continue;
+
+        if (resource === 'workers') {
+          nextWorkers = Math.max(0, nextWorkers - value);
+          workersChanged = true;
+          if (updatedSimResources) {
+            updatedSimResources.workers = Math.max(0, updatedSimResources.workers - value);
+          }
+        } else {
+          nextResources[resource] = Math.max(0, Number(nextResources[resource] ?? 0) - value);
+          if (updatedSimResources && Object.prototype.hasOwnProperty.call(updatedSimResources, resource)) {
+            const key = resource as keyof SimResources;
+            updatedSimResources[key] = Math.max(0, Number(updatedSimResources[key] ?? 0) - value);
+          }
+        }
+      }
+
+      const assignedWorkers = placedBuildings.reduce((sum, b) => sum + (b.workers || 0), 0);
+      if (updatedSimResources) {
+        updatedSimResources.workers = Math.max(0, nextWorkers - assignedWorkers);
+      }
+
+      if (hasCost) {
+        setState(prev => {
+          if (!prev) return prev;
+          const updated: GameState = {
+            ...prev,
+            resources: nextResources,
+            ...(workersChanged ? { workers: nextWorkers } : {}),
+          };
+          return updated;
+        });
+      }
+
+      if (hasCost) {
+        if (updatedSimResources) {
+          setSimResources(updatedSimResources);
+        } else if (!simResources) {
+          const fallbackSim: SimResources = {
+            grain: Number(nextResources.grain ?? 0),
+            coin: Number(nextResources.coin ?? 0),
+            mana: Number(nextResources.mana ?? 0),
+            favor: Number(nextResources.favor ?? 0),
+            wood: Number((nextResources as any).wood ?? 0),
+            planks: Number((nextResources as any).planks ?? 0),
+            workers: Math.max(0, nextWorkers - assignedWorkers),
+          };
+          setSimResources(fallbackSim);
+        }
+      }
+
+      if (hasCost) {
+        const payload: Parameters<typeof saveState>[0] = { resources: nextResources };
+        if (workersChanged) payload.workers = nextWorkers;
+        await saveState(payload);
+      }
+
+      const nextActiveEvents = enhancedGameState.activeEvents.map(ev => (
+        ev.id === eventId
+          ? { ...ev, responses: ev.responses?.filter(r => r.id !== responseId) }
+          : ev
+      ));
+
+      const nextEnhancedResources: SimResources = (() => {
+        if (updatedSimResources && hasCost) {
+          return { ...updatedSimResources };
+        }
+        const base = { ...enhancedGameState.resources } as SimResources;
+        for (const [resource, amount] of costEntries) {
+          const value = Number(amount ?? 0);
+          if (value <= 0) continue;
+          if (resource === 'workers') {
+            base.workers = Math.max(0, nextWorkers - assignedWorkers);
+          } else if (Object.prototype.hasOwnProperty.call(base, resource)) {
+            const key = resource as keyof SimResources;
+            base[key] = Math.max(0, Number(base[key] ?? 0) - value);
+          }
+        }
+        if (!hasCost) {
+          base.workers = Math.max(0, nextWorkers - assignedWorkers);
+        }
+        return base;
+      })();
+
+      setEnhancedGameState({
+        ...enhancedGameState,
+        resources: nextEnhancedResources,
+        activeEvents: nextActiveEvents,
+      });
+
+      setConsumedEventResponses(prev => {
+        const key = `${eventId}:${responseId}`;
+        return prev.includes(key) ? prev : [...prev, key];
+      });
+
+      const hints = summarizeResponseEffect(response.effect);
+      const successMessage = hints.length > 0 ? hints.join(' • ') : result.message || 'Response applied.';
+      notify({
+        type: 'success',
+        title: response.label || event.title,
+        message: successMessage,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      logger.error('Failed to resolve event response:', message);
+      notify({ type: 'error', title: 'Event Response Failed', message });
+    } finally {
+      setRespondingToEvent(null);
+    }
+  }, [state, enhancedGameState, simResources, notify, saveState, placedBuildings]);
+
   // Council actions
   const generate = useCallback(async () => {
     try {
@@ -1293,10 +1717,10 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   };
 
   const currentTime = timeSystem.getCurrentTime();
-  const gameTime: GameTime = { 
+  const gameTime: GameTime = {
     cycle: Math.floor(currentTime.totalMinutes / 60), // Convert to legacy cycle for HUD compatibility
-    season: 'spring', // TODO: Implement seasons based on currentTime.month
-    timeRemaining 
+    season: cycleToSeason(stateCycle),
+    timeRemaining
   };
   const totalAssigned = placedBuildings.reduce((sum, b) => sum + b.workers, 0);
   const totalWorkers = totalAssigned + (simResources?.workers ?? 0);
@@ -2142,6 +2566,19 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
         onScryProposal={scry}
         onGenerateProposals={async () => { await generate(); if (onboardingStep === 5) setOnboardingStep(6); }}
         canGenerateProposals={true}
+      />
+      <OmenPanel
+        isOpen={isOmensOpen}
+        onClose={() => setIsOmensOpen(false)}
+        upcomingEvents={upcomingEvents}
+        omenReadings={omenReadings}
+        currentCycle={state.cycle}
+        currentSeason={cycleToSeason(state.cycle)}
+        canRequestReading={false}
+        readingCost={20}
+        currentMana={resources.mana}
+        onRespondToEvent={handleRespondToEvent}
+        respondingTo={respondingToEvent}
       />
       <SettingsPanel
         isOpen={isSettingsOpen}
