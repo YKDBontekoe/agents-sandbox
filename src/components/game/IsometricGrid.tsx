@@ -35,9 +35,17 @@ export default function IsometricGrid({
   const overlayManagerRef = useRef<TileOverlay | null>(null);
   const updateVisibilityRef = useRef<((options?: VisibilityUpdateOptions) => void) | null>(null);
   const tileTypesRef = useRef<string[][]>(tileTypes);
+  const onTileHoverRef = useRef<typeof onTileHover>(onTileHover);
+  const onTileClickRef = useRef<typeof onTileClick>(onTileClick);
   useEffect(() => {
     tileTypesRef.current = tileTypes;
   }, [tileTypes]);
+  useEffect(() => {
+    onTileHoverRef.current = onTileHover;
+  }, [onTileHover]);
+  useEffect(() => {
+    onTileClickRef.current = onTileClick;
+  }, [onTileClick]);
   // no extra refs needed for min zoom snapping; we prevent underflow by clamping minScale to fit
 
   const updateTileSprite = useCallback(
@@ -117,10 +125,19 @@ export default function IsometricGrid({
 
     // Create initial grid tiles
     const tiles = new Map<string, GridTile>();
-    
+    const initialTileTypes = tileTypesRef.current;
+
     for (let x = 0; x < gridSize; x++) {
       for (let y = 0; y < gridSize; y++) {
-        const tile = createTileSprite(x, y, gridContainer, tileWidth, tileHeight, tileTypes, app.renderer);
+        const tile = createTileSprite(
+          x,
+          y,
+          gridContainer,
+          tileWidth,
+          tileHeight,
+          initialTileTypes,
+          app.renderer,
+        );
         const key = `${x},${y}`;
         tiles.set(key, tile);
         gridContainer.addChild(tile.sprite);
@@ -135,8 +152,12 @@ export default function IsometricGrid({
       tileWidth,
       tileHeight,
       getTileType: (x, y) => tileTypesRef.current[y]?.[x],
-      onTileHover,
-      onTileClick,
+      onTileHover: (x, y, tileType) => {
+        onTileHoverRef.current?.(x, y, tileType);
+      },
+      onTileClick: (x, y, tileType) => {
+        onTileClickRef.current?.(x, y, tileType);
+      },
     });
 
     // Compute world bounds for clamping based on isometric grid extents
@@ -211,7 +232,7 @@ export default function IsometricGrid({
       centeredRef.current = false;
       initializedRef.current = false;
     };
-  }, [viewport, app, gridSize, tileWidth, tileHeight, tileTypes, onTileHover, onTileClick]);
+  }, [viewport, app, gridSize, tileWidth, tileHeight]);
 
   // Dynamically add missing tiles when gridSize grows
   useEffect(() => {

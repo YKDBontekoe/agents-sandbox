@@ -4,6 +4,7 @@ import ConstellationSkillTree from './ConstellationSkillTree';
 import { generateSkillTree } from './generate';
 import type { SkillNode } from './types';
 import { useSkillTreeFrontierExpansion } from './useSkillTreeFrontierExpansion';
+import { sanitizeSkillList, skillsListToRecord, readSkillCache, writeSkillCache, recordToSkillList } from './storage';
 
 interface SkillTreeModalProps {
   isOpen: boolean;
@@ -12,22 +13,20 @@ interface SkillTreeModalProps {
 }
 
 export default function SkillTreeModal({ isOpen, onClose, resources }: SkillTreeModalProps) {
-  const [seed] = useState<number>(12345);
+  const defaultSeed = 12345;
+  const [seed, setSeed] = useState<number>(defaultSeed);
   const [query, setQuery] = useState('');
   const [focusNodeId, setFocusNodeId] = useState<string | undefined>(undefined);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [stateId, setStateId] = useState<string | null>(null);
   const [pinned, setPinned] = useState<string[]>([]);
-  const [unlocked, setUnlocked] = useState<Record<string, boolean>>(() => {
-    if (typeof window === 'undefined') return {};
-    try { 
-      return JSON.parse(localStorage.getItem('ad_skills_unlocked') || '{}'); 
-    } catch { 
-      return {}; 
-    }
-  });
+  const [unlocked, setUnlocked] = useState<Record<string, boolean>>({});
 
-  const [tree, setTree] = useState(() => generateSkillTree(seed, 10));
+  const [tree, setTree] = useState(() => generateSkillTree(defaultSeed, 10));
+
+  useEffect(() => {
+    setTree(generateSkillTree(seed, 10));
+  }, [seed]);
 
   useSkillTreeFrontierExpansion({
     tree,
@@ -63,41 +62,69 @@ export default function SkillTreeModal({ isOpen, onClose, resources }: SkillTree
   }, [tree, unlocked]);
 
   const plannedPath = useMemo(() => selectedNodeId ? computePathTo(selectedNodeId) : [], [selectedNodeId, computePathTo]);
+  const plannedNodes = useMemo(() => {
+    if (!selectedNodeId) return plannedPath;
+    const target = tree.nodes.find(n => n.id === selectedNodeId);
+    if (!target) return plannedPath;
+    return [...plannedPath, target];
+  }, [selectedNodeId, plannedPath, tree]);
   const plannedCost = useMemo(() => {
-    return plannedPath.reduce<{ coin: number; mana: number; favor: number }>((acc, n) => ({
+    return plannedNodes.reduce<{ coin: number; mana: number; favor: number }>((acc, n) => ({
       coin: acc.coin + (n.cost.coin || 0),
       mana: acc.mana + (n.cost.mana || 0),
       favor: acc.favor + (n.cost.favor || 0)
     }), { coin: 0, mana: 0, favor: 0 });
-  }, [plannedPath]);
+  }, [plannedNodes]);
 
   // Simulate spend: find failing step id given current resources
   const failingNodeId = useMemo(() => {
-    if (!resources || !selectedNodeId) return null;
-    const target = tree.nodes.find(n => n.id === selectedNodeId);
-    const path = [...plannedPath, ...(target ? [target] : [])];
+    if (!resources || plannedNodes.length === 0) return null;
     let coin = resources.coin || 0, mana = resources.mana || 0, favor = resources.favor || 0;
-    for (const n of path) {
+    for (const n of plannedNodes) {
       const c: { coin?: number; mana?: number; favor?: number } = n.cost || {};
       const needCoin = c.coin || 0, needMana = c.mana || 0, needFavor = c.favor || 0;
       if (coin < needCoin || mana < needMana || favor < needFavor) return n.id;
       coin -= needCoin; mana -= needMana; favor -= needFavor;
     }
     return null;
-  }, [resources, selectedNodeId, plannedPath, tree.nodes]);
+  }, [resources, plannedNodes]);
 
   // Load state and pinned targets on open
   useEffect(() => {
+    writeSkillCache(recordToSkillList(unlocked));
+  }, [unlocked]);
+
+  useEffect(() => {
     if (!isOpen) return;
+    let cancelled = false;
+
     (async () => {
       try {
         const res = await fetch('/api/state');
-        if (!res.ok) return;
-        const data: { id?: string; pinned_skill_targets?: string[] } = await res.json();
-        setStateId(data.id || null);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data: { id?: string; pinned_skill_targets?: string[]; skills?: unknown; skill_tree_seed?: unknown } = await res.json();
+        if (cancelled) return;
+
+        setStateId(typeof data.id === 'string' ? data.id : null);
         if (Array.isArray(data.pinned_skill_targets)) setPinned(data.pinned_skill_targets);
-      } catch {}
+        if (typeof data.skill_tree_seed === 'number') setSeed(data.skill_tree_seed);
+
+        if (Array.isArray(data.skills)) {
+          const normalized = sanitizeSkillList(data.skills);
+          setUnlocked(skillsListToRecord(normalized));
+        } else {
+          setUnlocked(readSkillCache());
+        }
+      } catch {
+        if (!cancelled) {
+          setUnlocked(readSkillCache());
+        }
+      }
     })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [isOpen]);
 
   const pinSelected = useCallback(async () => {
@@ -177,14 +204,17 @@ export default function SkillTreeModal({ isOpen, onClose, resources }: SkillTree
                   )}
                 </div>
                 {/* Path cost summary */}
-                {selectedNodeId && plannedPath.length > 0 && (
+                {plannedNodes.length > 0 && (
                   <div className="hidden md:flex items-center gap-2 text-xs bg-gray-800/70 border border-gray-700 rounded px-2 py-1 text-gray-200">
-                    <span>Path: {plannedPath.length} steps</span>
+                    <span>Unlock plan: {plannedNodes.length} {plannedNodes.length === 1 ? 'node' : 'nodes'}</span>
+                    {plannedPath.length > 0 && (
+                      <span>• prerequisites: {plannedPath.length}</span>
+                    )}
                     <span>• 🜚 {plannedCost.coin}</span>
                     <span>• ✨ {plannedCost.mana}</span>
                     <span>• ☼ {plannedCost.favor}</span>
                     {failingNodeId && (
-                      <span className="text-red-300">• fails at step: {plannedPath.findIndex(n => n.id === failingNodeId) + 1}</span>
+                      <span className="text-red-300">• fails at step: {plannedNodes.findIndex(n => n.id === failingNodeId) + 1}</span>
                     )}
                   </div>
                 )}

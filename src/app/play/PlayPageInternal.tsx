@@ -30,6 +30,7 @@ import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
 import { generateSkillTree } from '@/components/game/skills/generate';
 import { accumulateEffects } from '@/components/game/skills/progression';
 import type { SkillNode } from '@/components/game/skills/types';
+import { sanitizeSkillList, readSkillCache, recordToSkillList, writeSkillCache } from '@/components/game/skills/storage';
 import TileTooltip from '@/components/game/TileTooltip';
 import SettingsPanel from '@/components/game/SettingsPanel';
 import type { AssignLine } from '@/components/game/AssignmentLinesLayer';
@@ -63,6 +64,9 @@ type BuildTypeId = keyof typeof SIM_BUILDINGS;
 const ISO_TILE_WIDTH = 64;
 const ISO_TILE_HEIGHT = 32;
 
+const arraysEqual = (a: string[], b: string[]) =>
+  a.length === b.length && a.every((value, index) => value === b[index]);
+
 
 
 interface StoredBuilding {
@@ -84,6 +88,9 @@ interface GameState {
   routes?: TradeRoute[];
   edicts?: Record<string, number>;
   map_size?: number;
+  skills?: string[];
+  skill_tree_seed?: number;
+  pinned_skill_targets?: string[];
 }
 
 interface TradeRoute {
@@ -433,9 +440,21 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   };
 
   const [unlockedSkillIds, setUnlockedSkillIds] = useState<string[]>(() => {
+    const skillsFromProps = Array.isArray(initialState?.skills)
+      ? sanitizeSkillList(initialState?.skills)
+      : null;
+
+    if (skillsFromProps !== null) {
+      return skillsFromProps;
+    }
+
     if (typeof window === 'undefined') return [];
-    try { return Object.keys(JSON.parse(localStorage.getItem('ad_skills_unlocked') || '{}')).filter(k => JSON.parse(localStorage.getItem('ad_skills_unlocked') || '{}')[k]); } catch { return []; }
+
+    return recordToSkillList(readSkillCache());
   });
+  useEffect(() => {
+    writeSkillCache(unlockedSkillIds);
+  }, [unlockedSkillIds]);
   useEffect(() => {
     logger.debug('localStorage useEffect running, window defined:', typeof window !== 'undefined');
     if (typeof window === 'undefined') return;
@@ -518,6 +537,34 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     logger.debug('🔍 TILETYPES CHANGED - length:', tileTypes.length);
   }, [tileTypes]);
   
+  // Listen for skill unlock events to deduct costs && persist
+  useEffect(() => {
+    const onUnlock = async (e: any) => {
+      const n = e.detail as SkillNode;
+      if (unlockedSkillIds.includes(n.id)) return;
+      const needed = { coin: n.cost.coin || 0, mana: n.cost.mana || 0, favor: n.cost.favor || 0 } as Record<string, number>;
+      const have = { coin: state?.resources.coin || 0, mana: state?.resources.mana || 0, favor: state?.resources.favor || 0 } as Record<string, number>;
+      if (have.coin < needed.coin || have.mana < needed.mana || have.favor < needed.favor) return;
+      const newResServer = { ...state!.resources } as Record<string, number>;
+      newResServer.coin = Math.max(0, newResServer.coin - needed.coin);
+      newResServer.mana = Math.max(0, newResServer.mana - needed.mana);
+      newResServer.favor = Math.max(0, newResServer.favor - needed.favor);
+      const nextSkills = [...unlockedSkillIds, n.id];
+      setState(prev => prev ? { ...prev, resources: newResServer, skills: nextSkills as any } : prev);
+      await saveState({ resources: newResServer, buildings: placedBuildings, routes, workers: state?.workers, skills: nextSkills } as any);
+      setUnlockedSkillIds(nextSkills);
+      notify({ type: 'success', title: 'Skill Unlocked', message: n.title })
+    };
+    window.addEventListener('ad_unlock_skill', onUnlock as any);
+    return () => window.removeEventListener('ad_unlock_skill', onUnlock as any);
+  }, [state, unlockedSkillIds]);
+  const syncSkillsFromServer = useCallback((value: unknown) => {
+    if (!Array.isArray(value)) return;
+
+    const normalized = sanitizeSkillList(value);
+    setUnlockedSkillIds(prev => (arraysEqual(prev, normalized) ? prev : normalized));
+  }, [setUnlockedSkillIds]);
+
   const [selectedTile, setSelectedTile] = useState<{ x: number; y: number; tileType?: string } | null>(null);
   const [hoverTile, setHoverTile] = useState<{ x: number; y: number; tileType?: string } | null>(null);
   const [previewTypeId, setPreviewTypeId] = useState<BuildTypeId | null>(null);
@@ -548,10 +595,10 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     return () => clearInterval(cleanup);
   }, []);
 
-  const saveState = useCallback(async (partial: { resources?: Record<string, number>; workers?: number; buildings?: StoredBuilding[]; routes?: TradeRoute[]; roads?: Array<{x:number;y:number}>; edicts?: Record<string, number>; map_size?: number }) => {
+  const saveState = useCallback(async (partial: { resources?: Record<string, number>; workers?: number; buildings?: StoredBuilding[]; routes?: TradeRoute[]; roads?: Array<{x:number;y:number}>; edicts?: Record<string, number>; map_size?: number; skills?: string[] }) => {
     if (!state) return;
     try {
-      const body: { id: string; resources?: Record<string, number>; workers?: number; buildings?: StoredBuilding[]; routes?: TradeRoute[]; roads?: Array<{x:number;y:number}>; edicts?: Record<string, number>; map_size?: number } = { id: state.id };
+      const body: { id: string; resources?: Record<string, number>; workers?: number; buildings?: StoredBuilding[]; routes?: TradeRoute[]; roads?: Array<{x:number;y:number}>; edicts?: Record<string, number>; map_size?: number; skills?: string[] } = { id: state.id };
       if (partial.resources) body.resources = partial.resources;
       if (typeof partial.workers === 'number') body.workers = partial.workers;
       if (partial.buildings) body.buildings = partial.buildings;
@@ -559,6 +606,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
       if (partial.roads) body.roads = partial.roads;
       if (partial.edicts) body.edicts = partial.edicts;
       if (typeof partial.map_size === 'number') body.map_size = partial.map_size;
+      if (partial.skills !== undefined) body.skills = partial.skills;
       const res = await fetch('/api/state', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -1003,7 +1051,22 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
       }
       throw new Error(msg);
     }
-    setState({ ...json, workers: json.workers ?? 0, buildings: json.buildings ?? [], routes: (json as any).routes ?? [], roads: (json as any).roads ?? [], citizens_seed: (json as any).citizens_seed, citizens_count: (json as any).citizens_count });
+    const rawSkills = (json as any).skills;
+    const sanitizedSkills = Array.isArray(rawSkills) ? sanitizeSkillList(rawSkills) : undefined;
+
+    setState({
+      ...json,
+      workers: json.workers ?? 0,
+      buildings: json.buildings ?? [],
+      routes: (json as any).routes ?? [],
+      roads: (json as any).roads ?? [],
+      citizens_seed: (json as any).citizens_seed,
+      citizens_count: (json as any).citizens_count,
+      ...(sanitizedSkills !== undefined ? { skills: sanitizedSkills } : {}),
+    });
+    if (sanitizedSkills !== undefined) {
+      syncSkillsFromServer(sanitizedSkills);
+    }
     try { setIsPaused(!(json as any).auto_ticking); } catch {}
     try { setRoads(((json as any).roads as Array<{x:number;y:number}>) ?? []); } catch {}
     try { if ((json as any).citizens_count) setCitizensCount((json as any).citizens_count); } catch {}
@@ -1018,7 +1081,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
         setMapSizeModalOpen(false);
       }
     } catch {}
-  }, []);
+  }, [syncSkillsFromServer]);
 
   const fetchProposals = useCallback(async () => {
     const res = await fetch("/api/proposals");
@@ -1046,6 +1109,11 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Failed to tick");
       const serverState: GameState = { ...json.state, workers: json.state.workers ?? 0, buildings: json.state.buildings ?? [] };
+      const tickSkills = Array.isArray((json.state as any)?.skills) ? sanitizeSkillList((json.state as any).skills) : undefined;
+      if (tickSkills !== undefined) {
+        serverState.skills = tickSkills;
+        syncSkillsFromServer(tickSkills);
+      }
       setState(serverState);
       const assigned = serverState.buildings.reduce((sum, b) => sum + (b.workers || 0), 0);
       const simRes: SimResources = {
@@ -1091,7 +1159,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     } finally {
       setLoading(false);
     }
-  }, [fetchProposals]);
+  }, [fetchProposals, syncSkillsFromServer]);
 
   // Council actions
   const generate = useCallback(async () => {
@@ -1225,7 +1293,12 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
       .on('postgres_changes', { event: '*', schema: 'public', table: 'game_state' }, (payload: { new?: unknown }) => {
         const next = payload?.new as GameState | undefined;
         if (next && typeof next === 'object') {
-          setState(next);
+          const realtimeSkills = Array.isArray((next as any).skills) ? sanitizeSkillList((next as any).skills) : undefined;
+          const patchedNext = realtimeSkills !== undefined ? { ...next, skills: realtimeSkills } : next;
+          setState(patchedNext as GameState);
+          if (realtimeSkills !== undefined) {
+            syncSkillsFromServer(realtimeSkills);
+          }
           try { setIsPaused(!(next as any).auto_ticking); } catch {}
           const assigned = (next.buildings || []).reduce((sum, b) => sum + (b.workers || 0), 0);
           setPlacedBuildings(next.buildings || []);
@@ -1249,7 +1322,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
       .subscribe();
 
     return () => { if (client && channel) client.removeChannel(channel); };
-  }, [fetchState, fetchProposals]);
+  }, [fetchState, fetchProposals, syncSkillsFromServer]);
 
   useEffect(() => {
     if (acceptedNotice) {
@@ -1281,6 +1354,8 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     unrest: state?.resources?.unrest ?? 0,
     threat: state?.resources?.threat ?? 0,
   };
+
+  const skillTreeSeed = typeof state?.skill_tree_seed === 'number' ? state.skill_tree_seed : 12345;
 
   const currentTime = timeSystem.getCurrentTime();
   const gameTime: GameTime = {
@@ -1325,7 +1400,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     if (!simResources) {
       return { grain: 0, wood: 0, planks: 0, coin: 0, mana: 0, favor: 0, unrest: 0, threat: 0 } as any;
     }
-    const tree = generateSkillTree(12345);
+    const tree = generateSkillTree(skillTreeSeed);
     const unlocked = tree.nodes.filter(n => unlockedSkillIds.includes(n.id));
     const acc = accumulateEffects(unlocked);
     const { updated } = projectCycleDeltas(simResources, placedBuildings, routes, SIM_BUILDINGS, {
@@ -1347,7 +1422,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
       unrest: 0,
       threat: 0,
     } as any;
-  }, [simResources, placedBuildings, routes, totalWorkers, edicts, unlockedSkillIds]);
+  }, [simResources, placedBuildings, routes, totalWorkers, edicts, unlockedSkillIds, skillTreeSeed]);
 
   // Shared PIXI context for Game + HUD (so HUD panels can access viewport)
   const [pixiApp, setPixiApp] = useState<PIXI.Application | null>(null);
@@ -2096,7 +2171,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
               tutorialFree={tutorialFree}
               onConsumeTutorialFree={(typeId) => setTutorialFree(prev => ({ ...prev, [typeId]: Math.max(0, (prev[typeId] || 0) - 1) }))}
               onTutorialProgress={(evt) => { if (evt.type === 'openedCouncil' && onboardingStep === 4) setOnboardingStep(5); }}
-              allowFineSawmill={(accumulateEffects(generateSkillTree(12345).nodes.filter(n => unlockedSkillIds.includes(n.id))).bldMul['sawmill'] ?? 1) > 1}
+              allowFineSawmill={(accumulateEffects(generateSkillTree(skillTreeSeed).nodes.filter(n => unlockedSkillIds.includes(n.id))).bldMul['sawmill'] ?? 1) > 1}
               onSetRecipe={async (buildingId, recipe) => {
                 const idx = placedBuildings.findIndex(b => b.id === buildingId);
                 if (idx === -1) return;
