@@ -9,6 +9,11 @@ export interface GridTile {
   worldX: number;
   worldY: number;
   tileType: string;
+  biome?: string;
+  climate?: string;
+  height?: number;
+  temperature?: number;
+  moisture?: number;
   sprite: PIXI.Sprite;
   overlay?: PIXI.Graphics;
   dispose: () => void; // Add cleanup method
@@ -18,7 +23,7 @@ export interface GridTile {
 const textureCache = new Map<string, PIXI.RenderTexture>();
 const MAX_CACHED_TEXTURES = 100;
 
-const ANIMATED_TILE_TYPES = new Set(["water", "forest"]);
+const ANIMATED_TILE_TYPES = new Set(["water", "forest", "river"]);
 
 // Clean up texture cache when it gets too large
 function cleanupTextureCache() {
@@ -107,7 +112,7 @@ export function getTileTexture(
   detailGraphic.position.set(tileWidth / 2, tileHeight / 2);
   (detailGraphic as unknown as { eventMode: string }).eventMode = "none";
 
-  if (tileType === "water") {
+  if (tileType === "water" || tileType === "river") {
     detailGraphic.setStrokeStyle({ width: 1, color: 0x93c5fd, alpha: 0.35 });
     const y0 = -tileHeight * 0.12;
     const y1 = 0;
@@ -167,6 +172,7 @@ export function createTileSprite(
   tileHeight: number,
   tileTypes: string[][],
   renderer: Renderer,
+  options?: { tileTypeOverride?: string },
 ): GridTile {
   const startTime = performance.now();
   const tileKey = `${gridX},${gridY}`;
@@ -174,7 +180,7 @@ export function createTileSprite(
   logger.debug(`[TILE_CREATE] Starting creation of tile ${tileKey}`);
 
   const { worldX, worldY } = gridToWorld(gridX, gridY, tileWidth, tileHeight);
-  const tileType = tileTypes[gridY]?.[gridX] || "unknown";
+  const tileType = options?.tileTypeOverride ?? (tileTypes[gridY]?.[gridX] || "unknown");
 
   logger.debug(`[TILE_CREATE] Creating tile ${tileKey} (${tileType}) at world position (${worldX}, ${worldY})`);
   if (!renderer) {
