@@ -23,6 +23,20 @@ export interface WorkforceInfo {
   needed: number;
 }
 
+export type NotificationActionKind =
+  | 'open-council'
+  | 'open-edicts'
+  | 'open-settings'
+  | 'focus-tile'
+  | 'navigate'
+  | (string & {});
+
+export interface NotificationAction {
+  kind: NotificationActionKind;
+  label?: string;
+  payload?: Record<string, unknown>;
+}
+
 export interface Notification {
   id: string;
   type: 'info' | 'warning' | 'error' | 'success';
@@ -31,11 +45,7 @@ export interface Notification {
   timestamp: number;
   persistent?: boolean;
   read?: boolean;
-  action?: {
-    kind: 'open-council' | 'open-edicts' | 'open-settings' | 'focus-tile' | 'navigate' | string;
-    label?: string;
-    payload?: any;
-  };
+  action?: NotificationAction;
 }
 
 export interface GameHUDProps {
