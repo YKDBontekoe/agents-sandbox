@@ -24,8 +24,6 @@ export default function ConstellationSkillTree({ tree, unlocked, onUnlock, color
   const [selected, setSelected] = useState<ConstellationNode | null>(null);
   const [pan, setPan] = useState<Vec2>({ x: 0, y: 0 });
   const [zoom, setZoom] = useState<number>(0.8); // Start slightly zoomed out for better overview
-  const [targetZoom, setTargetZoom] = useState<number>(0.8);
-  const [isZooming, setIsZooming] = useState<boolean>(false);
   const [tooltip, setTooltip] = useState<TooltipState>({
     visible: false,
     x: 0,
@@ -57,6 +55,23 @@ export default function ConstellationSkillTree({ tree, unlocked, onUnlock, color
     start: { x: 0, y: 0 },
     startPan: { x: 0, y: 0 }
   });
+  const zoomAnimationRef = useRef<number | null>(null);
+  const latestZoomRef = useRef(zoom);
+
+  const clearZoomAnimation = useCallback(() => {
+    if (zoomAnimationRef.current !== null) {
+      cancelAnimationFrame(zoomAnimationRef.current);
+      zoomAnimationRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    latestZoomRef.current = zoom;
+  }, [zoom]);
+
+  useEffect(() => () => {
+    clearZoomAnimation();
+  }, [clearZoomAnimation]);
 
   // Easing functions for smooth transitions
   const easeOutCubic = (t: number): number => 1 - Math.pow(1 - t, 3);
@@ -247,11 +262,13 @@ export default function ConstellationSkillTree({ tree, unlocked, onUnlock, color
     const n = layoutById.get(focusNodeId);
     if (!n) return;
     // Center and zoom to node
-    const targetZoom = Math.min(2.5, Math.max(0.7, 1.4));
-    setZoom(targetZoom);
+    clearZoomAnimation();
+    const focusZoom = Math.min(2.5, Math.max(0.7, 1.4));
+    latestZoomRef.current = focusZoom;
+    setZoom(focusZoom);
     setPan({ x: -n.x, y: -n.y });
     setSelected(n);
-  }, [focusNodeId, layoutById]);
+  }, [clearZoomAnimation, focusNodeId, layoutById]);
 
   // Compute highlight sets for hover (ancestors and dependents)
   useEffect(() => {
@@ -826,56 +843,66 @@ export default function ConstellationSkillTree({ tree, unlocked, onUnlock, color
     }
   }, [hover, onUnlock, checkUnlock, selected, updateNodeTransition, colorFor, onSelectNode]);
 
+  const animateZoomTo = useCallback((nextTarget: number) => {
+    clearZoomAnimation();
+
+    const step = () => {
+      let shouldContinue = true;
+      setZoom(prev => {
+        const diff = nextTarget - prev;
+        if (Math.abs(diff) <= 0.001) {
+          latestZoomRef.current = nextTarget;
+          shouldContinue = false;
+          return nextTarget;
+        }
+        const next = prev + diff * 0.2;
+        latestZoomRef.current = next;
+        return next;
+      });
+
+      if (shouldContinue) {
+        zoomAnimationRef.current = requestAnimationFrame(step);
+      } else {
+        zoomAnimationRef.current = null;
+      }
+    };
+
+    zoomAnimationRef.current = requestAnimationFrame(step);
+  }, [clearZoomAnimation]);
+
   // Enhanced zoom with smooth animation and better limits
   const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
+    const currentZoom = latestZoomRef.current;
     const zoomFactor = e.deltaY > 0 ? 0.92 : 1.08; // Smoother zoom increments
-    const newZoom = Math.max(0.2, Math.min(4.0, zoom * zoomFactor)); // Extended zoom range
-    
-    setTargetZoom(newZoom);
-    setIsZooming(true);
-    
-    // Smooth zoom animation
-    const animateZoom = () => {
-      setZoom(prev => {
-        const diff = newZoom - prev;
-        if (Math.abs(diff) < 0.01) {
-          setIsZooming(false);
-          return newZoom;
-        }
-        return prev + diff * 0.15; // Smooth interpolation
-      });
-    };
-    
-    if (!isZooming) {
-      const zoomInterval = setInterval(() => {
-        animateZoom();
-        if (Math.abs(zoom - newZoom) < 0.01) {
-          clearInterval(zoomInterval);
-          setIsZooming(false);
-        }
-      }, 16); // 60fps animation
-    }
-  }, [zoom, isZooming]);
+    const newZoom = Math.max(0.2, Math.min(4.0, currentZoom * zoomFactor)); // Extended zoom range
+
+    animateZoomTo(newZoom);
+  }, [animateZoomTo]);
   
   // Zoom control functions
   const zoomIn = useCallback(() => {
-    const newZoom = Math.min(4.0, zoom * 1.2);
-    setTargetZoom(newZoom);
+    clearZoomAnimation();
+    const currentZoom = latestZoomRef.current;
+    const newZoom = Math.min(4.0, currentZoom * 1.2);
+    latestZoomRef.current = newZoom;
     setZoom(newZoom);
-  }, [zoom]);
-  
+  }, [clearZoomAnimation]);
+
   const zoomOut = useCallback(() => {
-    const newZoom = Math.max(0.2, zoom * 0.8);
-    setTargetZoom(newZoom);
+    clearZoomAnimation();
+    const currentZoom = latestZoomRef.current;
+    const newZoom = Math.max(0.2, currentZoom * 0.8);
+    latestZoomRef.current = newZoom;
     setZoom(newZoom);
-  }, [zoom]);
-  
+  }, [clearZoomAnimation]);
+
   const resetZoom = useCallback(() => {
-    setTargetZoom(1.0);
+    clearZoomAnimation();
+    latestZoomRef.current = 1.0;
     setZoom(1.0);
     setPan({ x: 0, y: 0 });
-  }, []);
+  }, [clearZoomAnimation]);
   
   const fitToView = useCallback(() => {
     if (layout.nodes.length === 0) return;
@@ -903,14 +930,15 @@ export default function ConstellationSkillTree({ tree, unlocked, onUnlock, color
       const centerX = (bounds.minX + bounds.maxX) / 2;
       const centerY = (bounds.minY + bounds.maxY) / 2;
       
+      clearZoomAnimation();
+      latestZoomRef.current = newZoom;
       setZoom(newZoom);
-      setTargetZoom(newZoom);
       setPan({
         x: -centerX * newZoom,
         y: -centerY * newZoom
       });
     }
-  }, [layout.nodes, size]);
+  }, [clearZoomAnimation, layout.nodes, size]);
 
   useEffect(() => {
     if (layout.nodes.length === 0) return;
