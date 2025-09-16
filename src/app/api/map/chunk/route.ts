@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createWorldGenerator } from '@/lib/world/generator';
+import { createWorldGenerator } from '@engine';
 
 const DEFAULT_CHUNK_SIZE = 32;
 const MIN_CHUNK_SIZE = 8;
