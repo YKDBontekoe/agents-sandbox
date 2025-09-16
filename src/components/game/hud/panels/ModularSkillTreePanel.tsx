@@ -1,8 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ResponsivePanel, ResponsiveButton } from '../ResponsiveHUDPanels';
 import { useHUDPanel } from '../HUDPanelRegistry';
-import { generateSkillTree } from '../../skills/generate';
-import type { SkillNode } from '../../skills/types';
+import { generateSkillTree, expandSkillTree } from '../../skills/generate';
+import type { SkillNode, SkillTree } from '../../skills/types';
 import SkillTreeModal from '../../skills/SkillTreeModal';
 
 interface ModularSkillTreePanelProps {
@@ -13,6 +13,7 @@ interface ModularSkillTreePanelProps {
 }
 
 export function ModularSkillTreePanel({ seed = 12345, onUnlock, variant = 'compact', resources }: ModularSkillTreePanelProps) {
+  const INITIAL_TIER_COUNT = 10;
   const [open, setOpen] = useState(false);
   const [trend, setTrend] = useState<SkillNode['category'] | null>(null);
   useEffect(() => {
@@ -30,7 +31,38 @@ export function ModularSkillTreePanel({ seed = 12345, onUnlock, variant = 'compa
     props: { seed, variant }
   });
 
-  const tree = useMemo(() => generateSkillTree(seed), [seed]);
+  const [tree, setTree] = useState<SkillTree>(() => generateSkillTree(seed, INITIAL_TIER_COUNT));
+
+  useEffect(() => {
+    setTree(generateSkillTree(seed, INITIAL_TIER_COUNT));
+  }, [seed]);
+
+  const expandTree = useCallback((additionalTiers: number = 4) => {
+    setTree(prev => {
+      const layoutCopy = prev.layout
+        ? {
+            ...prev.layout,
+            tiers: Object.entries(prev.layout.tiers).reduce((acc, [tierKey, nodes]) => {
+              acc[Number(tierKey)] = [...nodes];
+              return acc;
+            }, {} as Record<number, SkillNode[]>),
+            categoryDistribution: Object.entries(prev.layout.categoryDistribution).reduce((acc, [category, values]) => {
+              acc[category] = [...values];
+              return acc;
+            }, {} as Record<string, number[]>),
+          }
+        : undefined;
+
+      const next: SkillTree = {
+        ...prev,
+        nodes: [...prev.nodes],
+        edges: [...prev.edges],
+        layout: layoutCopy,
+      };
+
+      return expandSkillTree(next, seed, additionalTiers);
+    });
+  }, [seed]);
   const [query, setQuery] = useState('');
   const [showAll, setShowAll] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<Record<SkillNode['category'], boolean>>({
@@ -46,7 +78,7 @@ export function ModularSkillTreePanel({ seed = 12345, onUnlock, variant = 'compa
     try { localStorage.setItem('ad_skills_unlocked', JSON.stringify(unlocked)); } catch {}
   }, [unlocked]);
 
-  const canUnlock = (n: SkillNode) => {
+  const canUnlock = useCallback((n: SkillNode) => {
     // prerequisites
     if ((n.requires || []).some(r => !unlocked[r])) return false;
     // exclusivity
@@ -74,7 +106,7 @@ export function ModularSkillTreePanel({ seed = 12345, onUnlock, variant = 'compa
       }
     }
     return true;
-  };
+  }, [tree, unlocked]);
 
   const handleUnlock = (n: SkillNode) => {
     if (!canUnlock(n)) return;
@@ -82,7 +114,7 @@ export function ModularSkillTreePanel({ seed = 12345, onUnlock, variant = 'compa
     setUnlocked(prev => ({ ...prev, [n.id]: true }));
   };
 
-  const available = useMemo(() => tree.nodes.filter(n => canUnlock(n) && !unlocked[n.id]), [tree, unlocked]);
+  const available = useMemo(() => tree.nodes.filter(n => canUnlock(n) && !unlocked[n.id]), [tree, unlocked, canUnlock]);
   const unlockedCount = useMemo(() => Object.values(unlocked).filter(Boolean).length, [unlocked]);
   const filtered = useMemo(() => {
     const base = available.filter(n => categoryFilter[n.category]);
@@ -248,7 +280,13 @@ export function ModularSkillTreePanel({ seed = 12345, onUnlock, variant = 'compa
         </div>
       )}
       {open && (
-        <SkillTreeModal isOpen={open} onClose={() => setOpen(false)} resources={resources} />
+        <SkillTreeModal
+          isOpen={open}
+          onClose={() => setOpen(false)}
+          resources={resources}
+          tree={tree}
+          onRequestExpand={expandTree}
+        />
       )}
     </ResponsivePanel>
   );

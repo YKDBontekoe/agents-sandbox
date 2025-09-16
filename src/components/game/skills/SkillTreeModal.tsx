@@ -1,17 +1,17 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import ConstellationSkillTree from './ConstellationSkillTree';
-import { generateSkillTree, expandSkillTree } from './generate';
-import type { SkillNode } from './types';
+import type { SkillNode, SkillTree } from './types';
 
 interface SkillTreeModalProps {
   isOpen: boolean;
   onClose: () => void;
   resources?: { coin?: number; mana?: number; favor?: number };
+  tree: SkillTree;
+  onRequestExpand?: (additionalTiers?: number) => void;
 }
 
-export default function SkillTreeModal({ isOpen, onClose, resources }: SkillTreeModalProps) {
-  const [seed] = useState<number>(12345);
+export default function SkillTreeModal({ isOpen, onClose, resources, tree, onRequestExpand }: SkillTreeModalProps) {
   const [query, setQuery] = useState('');
   const [focusNodeId, setFocusNodeId] = useState<string | undefined>(undefined);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -26,7 +26,6 @@ export default function SkillTreeModal({ isOpen, onClose, resources }: SkillTree
     }
   });
 
-  const [tree, setTree] = useState(() => generateSkillTree(seed, 10));
   const matches = useMemo(() => {
     if (!query) return [] as { id: string; title: string }[];
     const q = query.toLowerCase();
@@ -127,13 +126,31 @@ export default function SkillTreeModal({ isOpen, onClose, resources }: SkillTree
   };
 
   const colorFor = (cat: SkillNode['category']) => ({
-    economic: '#0ea5e9', 
-    military: '#ef4444', 
-    mystical: '#a855f7', 
-    infrastructure: '#22c55e', 
-    diplomatic: '#f59e0b', 
+    economic: '#0ea5e9',
+    military: '#ef4444',
+    mystical: '#a855f7',
+    infrastructure: '#22c55e',
+    diplomatic: '#f59e0b',
     social: '#64748b'
   }[cat] || '#64748b');
+
+  const lastExpansionRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    if (!selectedNodeId || !tree.layout) return;
+    const selected = tree.nodes.find(n => n.id === selectedNodeId);
+    if (!selected || typeof selected.tier !== 'number') return;
+    const { maxTier } = tree.layout;
+    if (typeof maxTier !== 'number') return;
+    if (maxTier < 2) return;
+    if (selected.tier >= (maxTier - 2)) {
+      if (lastExpansionRef.current !== maxTier) {
+        lastExpansionRef.current = maxTier;
+        onRequestExpand?.(4);
+      }
+    }
+  }, [selectedNodeId, tree, onRequestExpand, isOpen]);
 
   if (!isOpen) return null;
 
@@ -209,18 +226,6 @@ export default function SkillTreeModal({ isOpen, onClose, resources }: SkillTree
                   resources={resources}
                 />
               </div>
-              {/* Lazy expansion when reaching near the frontier */}
-              {(() => {
-                if (!selectedNodeId) return null;
-                const selected = tree.nodes.find(n => n.id === selectedNodeId);
-                if (!selected || typeof selected.tier !== 'number' || !tree.layout) return null;
-                const nearFrontier = selected.tier >= (tree.layout.maxTier - 2);
-                if (nearFrontier) {
-                  // Expand deterministically
-                  setTimeout(() => { setTree(prev => expandSkillTree({ ...prev, nodes: [...prev.nodes], edges: [...prev.edges], layout: { ...prev.layout, tiers: { ...prev.layout!.tiers }, categoryDistribution: { ...prev.layout!.categoryDistribution }, maxTier: prev.layout!.maxTier || 0 } }, seed, 4)); }, 0);
-                }
-                return null;
-              })()}
           </div>
         </Dialog.Content>
       </Dialog.Portal>
