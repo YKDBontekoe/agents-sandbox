@@ -19,6 +19,11 @@ export interface GameContext {
     resource_multipliers: Record<string, number>
     building_multipliers: Record<string, number>
     upkeep_grain_per_worker_delta: number
+    global_building_output_multiplier: number
+    global_resource_output_multiplier: number
+    route_coin_output_multiplier: number
+    patrol_coin_upkeep_multiplier: number
+    building_input_multiplier: number
   }
 }
 
@@ -53,6 +58,11 @@ export function buildGameContext(state: unknown): GameContext {
     resource_multipliers: {},
     building_multipliers: {},
     upkeep_grain_per_worker_delta: 0,
+    global_building_output_multiplier: 1,
+    global_resource_output_multiplier: 1,
+    route_coin_output_multiplier: 1,
+    patrol_coin_upkeep_multiplier: 1,
+    building_input_multiplier: 1,
   }
   const skills: string[] = Array.isArray(stateObj.skills) ? stateObj.skills : []
   if (skills.length > 0) {
@@ -64,6 +74,11 @@ export function buildGameContext(state: unknown): GameContext {
         resource_multipliers: acc.resMul,
         building_multipliers: acc.bldMul,
         upkeep_grain_per_worker_delta: acc.upkeepDelta,
+        global_building_output_multiplier: acc.globalBuildingMultiplier,
+        global_resource_output_multiplier: acc.globalResourceMultiplier,
+        route_coin_output_multiplier: acc.routeCoinMultiplier,
+        patrol_coin_upkeep_multiplier: acc.patrolCoinUpkeepMultiplier,
+        building_input_multiplier: acc.buildingInputMultiplier,
       }
     } catch {
       // ignore skill tree errors

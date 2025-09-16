@@ -192,3 +192,47 @@ describe('server tick production parity', () => {
     expect(server).toEqual(updated);
   });
 });
+
+describe('projectCycleDeltas modifiers', () => {
+  it('scales route coin output by multiplier', () => {
+    const base: SimResources = { grain: 0, coin: 0, mana: 0, favor: 0, workers: 0, wood: 0, planks: 0 };
+    const buildings = [
+      { id: 'hub', typeId: 'storehouse' },
+      { id: 'farm', typeId: 'farm', workers: 0 },
+    ];
+    const routes = [{ fromId: 'hub', toId: 'farm', length: 8 }];
+    const normal = projectCycleDeltas(base, buildings as any, routes, SIM_BUILDINGS, { totalWorkers: 0 });
+    const boosted = projectCycleDeltas(base, buildings as any, routes, SIM_BUILDINGS, {
+      totalWorkers: 0,
+      modifiers: { routeCoinOutputMultiplier: 1.5 },
+    });
+    expect(normal.updated.coin).toBe(Math.max(1, Math.round(8 * 0.5 * (0.8 + 50 * 0.006))));
+    expect(boosted.updated.coin).toBe(Math.max(1, Math.round(8 * 0.5 * (0.8 + 50 * 0.006) * 1.5)));
+  });
+
+  it('reduces building input consumption when multiplier is below 1', () => {
+    const base: SimResources = { grain: 0, coin: 10, mana: 0, favor: 0, workers: 5, wood: 0, planks: 0 };
+    const buildings = [{ typeId: 'farm', workers: 5 }];
+    const normal = projectCycleDeltas(base, buildings as any, [], SIM_BUILDINGS, { totalWorkers: 5 });
+    const reduced = projectCycleDeltas(base, buildings as any, [], SIM_BUILDINGS, {
+      totalWorkers: 5,
+      modifiers: { buildingInputMultiplier: 0.5 },
+    });
+    expect(normal.updated.coin).toBe(9);
+    expect(reduced.updated.coin).toBeCloseTo(9.5, 5);
+  });
+
+  it('applies global building and resource multipliers to outputs', () => {
+    const base: SimResources = { grain: 0, coin: 10, mana: 0, favor: 0, workers: 5, wood: 0, planks: 0 };
+    const buildings = [{ typeId: 'farm', workers: 5 }];
+    const normal = projectCycleDeltas(base, buildings as any, [], SIM_BUILDINGS, { totalWorkers: 5 });
+    const boosted = projectCycleDeltas(base, buildings as any, [], SIM_BUILDINGS, {
+      totalWorkers: 5,
+      modifiers: {
+        globalBuildingOutputMultiplier: 1.2,
+        globalResourceOutputMultiplier: 1.1,
+      },
+    });
+    expect(boosted.updated.grain).toBeGreaterThan(normal.updated.grain);
+  });
+});

@@ -26,6 +26,11 @@ describe('buildGameContext', () => {
         resource_multipliers: {},
         building_multipliers: {},
         upkeep_grain_per_worker_delta: 0,
+        global_building_output_multiplier: 1,
+        global_resource_output_multiplier: 1,
+        route_coin_output_multiplier: 1,
+        patrol_coin_upkeep_multiplier: 1,
+        building_input_multiplier: 1,
       },
     })
   })
@@ -41,6 +46,11 @@ describe('buildGameContext', () => {
       resource_multipliers: expected.resMul,
       building_multipliers: expected.bldMul,
       upkeep_grain_per_worker_delta: expected.upkeepDelta,
+      global_building_output_multiplier: expected.globalBuildingMultiplier,
+      global_resource_output_multiplier: expected.globalResourceMultiplier,
+      route_coin_output_multiplier: expected.routeCoinMultiplier,
+      patrol_coin_upkeep_multiplier: expected.patrolCoinUpkeepMultiplier,
+      building_input_multiplier: expected.buildingInputMultiplier,
     })
   })
 })

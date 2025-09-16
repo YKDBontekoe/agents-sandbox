@@ -1,5 +1,16 @@
 import { Achievement, QualityChallenge, SkillNode, SkillTree } from './types';
 
+export interface AccumulatedSkillEffects {
+  resMul: Record<string, number>;
+  bldMul: Record<string, number>;
+  upkeepDelta: number;
+  globalBuildingMultiplier: number;
+  globalResourceMultiplier: number;
+  routeCoinMultiplier: number;
+  patrolCoinUpkeepMultiplier: number;
+  buildingInputMultiplier: number;
+}
+
 export function evaluateAchievements(tree: SkillTree, unlockedIds: string[]): Achievement[] {
   if (!tree.progressionData) return [];
   return tree.progressionData.achievements.map(a => ({
@@ -36,10 +47,15 @@ export function evaluateChallenges(tree: SkillTree, unlockedIds: string[]): Qual
   });
 }
 
-export function accumulateEffects(unlocked: SkillNode[]): { resMul: Record<string, number>; bldMul: Record<string, number>; upkeepDelta: number } {
+export function accumulateEffects(unlocked: SkillNode[]): AccumulatedSkillEffects {
   const resMul: Record<string, number> = {};
   const bldMul: Record<string, number> = {};
   let upkeepDelta = 0;
+  let globalBuildingMultiplier = 1;
+  let globalResourceMultiplier = 1;
+  let routeCoinMultiplier = 1;
+  let patrolCoinUpkeepMultiplier = 1;
+  let buildingInputMultiplier = 1;
   unlocked.forEach((s) => {
     s.effects.forEach((e) => {
       if (e.kind === 'resource_multiplier') {
@@ -56,6 +72,84 @@ export function accumulateEffects(unlocked: SkillNode[]): { resMul: Record<strin
         });
       }
     });
+    if (s.specialAbility) {
+      const ability = s.specialAbility;
+      const power = Math.max(0, ability.power);
+      switch (ability.id) {
+        case 'golden_touch': {
+          const factor = power > 0 ? power : 2;
+          ['trade_post', 'automation_workshop'].forEach(typeId => {
+            bldMul[typeId] = (bldMul[typeId] ?? 1) * factor;
+          });
+          break;
+        }
+        case 'market_insight': {
+          const factor = power > 0 ? power : 1.25;
+          routeCoinMultiplier *= factor;
+          bldMul['trade_post'] = (bldMul['trade_post'] ?? 1) * (1 + 0.1 * power);
+          break;
+        }
+        case 'battle_fury': {
+          const relief = Math.min(0.2, 0.2 * power);
+          upkeepDelta -= relief;
+          break;
+        }
+        case 'fortress_shield': {
+          patrolCoinUpkeepMultiplier = 0;
+          break;
+        }
+        case 'mana_storm': {
+          const factor = power > 0 ? power : 3;
+          resMul['mana'] = (resMul['mana'] ?? 1) * factor;
+          globalResourceMultiplier *= 1 + 0.05 * power;
+          break;
+        }
+        case 'arcane_mastery': {
+          const manaBoost = 1 + 0.15 * power;
+          const shrineBoost = 1 + 0.1 * power;
+          resMul['mana'] = (resMul['mana'] ?? 1) * manaBoost;
+          bldMul['shrine'] = (bldMul['shrine'] ?? 1) * shrineBoost;
+          break;
+        }
+        case 'rapid_construction': {
+          const materialBoost = 1 + 0.25 * power;
+          resMul['wood'] = (resMul['wood'] ?? 1) * materialBoost;
+          resMul['planks'] = (resMul['planks'] ?? 1) * materialBoost;
+          globalBuildingMultiplier *= 1 + 0.05 * power;
+          break;
+        }
+        case 'efficiency_boost': {
+          const boost = 1 + 0.2 * power;
+          globalBuildingMultiplier *= boost;
+          break;
+        }
+        case 'silver_tongue': {
+          const factor = power > 0 ? power : 1.5;
+          resMul['favor'] = (resMul['favor'] ?? 1) * factor;
+          break;
+        }
+        case 'peace_treaty': {
+          const relief = 0.03 * power;
+          upkeepDelta -= relief;
+          const costFactor = Math.max(0.6, 1 - 0.15 * power);
+          buildingInputMultiplier *= costFactor;
+          break;
+        }
+        case 'festival_spirit': {
+          const celebration = 1 + 0.08 * power;
+          globalResourceMultiplier *= celebration;
+          break;
+        }
+        case 'unity_bond': {
+          const factor = power > 0 ? Math.min(1, ability.power) : 0.8;
+          buildingInputMultiplier *= factor;
+          upkeepDelta -= 0.02 * Math.max(1 - factor, 0);
+          break;
+        }
+        default:
+          break;
+      }
+    }
   });
 
   const byCat: Record<SkillNode['category'], number> = {
@@ -82,5 +176,14 @@ export function accumulateEffects(unlocked: SkillNode[]): { resMul: Record<strin
   if (unlocked.some(n => n.quality === 'legendary')) {
     resMul['coin'] = (resMul['coin'] ?? 1) * 1.02;
   }
-  return { resMul, bldMul, upkeepDelta };
+  return {
+    resMul,
+    bldMul,
+    upkeepDelta,
+    globalBuildingMultiplier,
+    globalResourceMultiplier,
+    routeCoinMultiplier,
+    patrolCoinUpkeepMultiplier,
+    buildingInputMultiplier,
+  };
 }

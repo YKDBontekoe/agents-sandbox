@@ -1323,6 +1323,11 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
         resourceOutputMultiplier: acc.resMul as any,
         buildingOutputMultiplier: acc.bldMul,
         upkeepGrainPerWorkerDelta: acc.upkeepDelta,
+        globalBuildingOutputMultiplier: acc.globalBuildingMultiplier,
+        globalResourceOutputMultiplier: acc.globalResourceMultiplier,
+        routeCoinOutputMultiplier: acc.routeCoinMultiplier,
+        patrolCoinUpkeepMultiplier: acc.patrolCoinUpkeepMultiplier,
+        buildingInputMultiplier: acc.buildingInputMultiplier,
       }
     });
     return {
