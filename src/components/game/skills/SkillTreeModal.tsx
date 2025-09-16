@@ -4,6 +4,7 @@ import ConstellationSkillTree from './ConstellationSkillTree';
 import { generateSkillTree } from './generate';
 import type { SkillNode } from './types';
 import { useSkillTreeFrontierExpansion } from './useSkillTreeFrontierExpansion';
+import { sanitizeSkillList, skillsListToRecord, readSkillCache, writeSkillCache, recordToSkillList } from './storage';
 
 interface SkillTreeModalProps {
   isOpen: boolean;
@@ -12,22 +13,20 @@ interface SkillTreeModalProps {
 }
 
 export default function SkillTreeModal({ isOpen, onClose, resources }: SkillTreeModalProps) {
-  const [seed] = useState<number>(12345);
+  const defaultSeed = 12345;
+  const [seed, setSeed] = useState<number>(defaultSeed);
   const [query, setQuery] = useState('');
   const [focusNodeId, setFocusNodeId] = useState<string | undefined>(undefined);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [stateId, setStateId] = useState<string | null>(null);
   const [pinned, setPinned] = useState<string[]>([]);
-  const [unlocked, setUnlocked] = useState<Record<string, boolean>>(() => {
-    if (typeof window === 'undefined') return {};
-    try { 
-      return JSON.parse(localStorage.getItem('ad_skills_unlocked') || '{}'); 
-    } catch { 
-      return {}; 
-    }
-  });
+  const [unlocked, setUnlocked] = useState<Record<string, boolean>>({});
 
-  const [tree, setTree] = useState(() => generateSkillTree(seed, 10));
+  const [tree, setTree] = useState(() => generateSkillTree(defaultSeed, 10));
+
+  useEffect(() => {
+    setTree(generateSkillTree(seed, 10));
+  }, [seed]);
 
   useSkillTreeFrontierExpansion({
     tree,
@@ -88,16 +87,40 @@ export default function SkillTreeModal({ isOpen, onClose, resources }: SkillTree
 
   // Load state and pinned targets on open
   useEffect(() => {
+    writeSkillCache(recordToSkillList(unlocked));
+  }, [unlocked]);
+
+  useEffect(() => {
     if (!isOpen) return;
+    let cancelled = false;
+
     (async () => {
       try {
         const res = await fetch('/api/state');
-        if (!res.ok) return;
-        const data: { id?: string; pinned_skill_targets?: string[] } = await res.json();
-        setStateId(data.id || null);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data: { id?: string; pinned_skill_targets?: string[]; skills?: unknown; skill_tree_seed?: unknown } = await res.json();
+        if (cancelled) return;
+
+        setStateId(typeof data.id === 'string' ? data.id : null);
         if (Array.isArray(data.pinned_skill_targets)) setPinned(data.pinned_skill_targets);
-      } catch {}
+        if (typeof data.skill_tree_seed === 'number') setSeed(data.skill_tree_seed);
+
+        if (Array.isArray(data.skills)) {
+          const normalized = sanitizeSkillList(data.skills);
+          setUnlocked(skillsListToRecord(normalized));
+        } else {
+          setUnlocked(readSkillCache());
+        }
+      } catch {
+        if (!cancelled) {
+          setUnlocked(readSkillCache());
+        }
+      }
     })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [isOpen]);
 
   const pinSelected = useCallback(async () => {
