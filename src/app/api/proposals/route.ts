@@ -3,6 +3,8 @@ import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { SupabaseUnitOfWork } from '@arcane/infrastructure/supabase'
 import logger from '@/lib/logger'
 import { config } from '@/infrastructure/config'
+import { createRequestMetadata } from '@/lib/logging/requestMetadata'
+import { createErrorMetadata } from '@/lib/logging/errorMetadata'
 
 export async function GET(req: NextRequest) {
   try {
@@ -20,7 +22,11 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ proposals })
   } catch (error) {
-    logger.error('Supabase connection error in proposals route:', error)
+    const request = createRequestMetadata(req)
+    logger.error('Supabase connection error in proposals route', {
+      error: createErrorMetadata(error),
+      request,
+    })
     return NextResponse.json(
       { error: 'Service unavailable - database not configured' },
       { status: 503 }

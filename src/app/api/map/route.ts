@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+import logger from '@/lib/logger'
+import { createRequestMetadata } from '@/lib/logging/requestMetadata'
 
 // Returns a size x size grid of tile type strings
 export async function GET(req: NextRequest) {
@@ -8,15 +10,18 @@ export async function GET(req: NextRequest) {
   const size = Math.max(4, Math.min(100, Number(sizeParam ?? 20)))
   const seed = Number(seedParam ?? 12345)
   
-  console.log('🗺️ [API] Map endpoint called:', {
-    sizeParam,
-    size,
-    seedParam,
-    seed,
-    url: req.url,
-    timestamp: new Date().toISOString(),
-    userAgent: req.headers.get('user-agent')?.substring(0, 50)
+  const requestMetadata = createRequestMetadata(req, {
+    query: {
+      size: sizeParam ?? undefined,
+      seed: seedParam ?? undefined,
+    },
+    resolved: {
+      size,
+      seed,
+    },
   })
+
+  logger.info('🗺️ [API] Map endpoint called', requestMetadata)
 
   // Simple seeded RNG (mulberry32)
   function mulberry32(a: number) {
@@ -74,11 +79,14 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  console.log('🗺️ [API] Generated map:', { 
-    size: map.length, 
-    firstRowLength: map[0]?.length, 
-    sampleTiles: map.slice(0, 2).map(row => row.slice(0, 3)),
-    totalTiles: map.length * (map[0]?.length || 0)
+  logger.debug('🗺️ [API] Generated map summary', {
+    request: requestMetadata,
+    mapSummary: {
+      height: map.length,
+      width: map[0]?.length ?? 0,
+      sampleTiles: map.slice(0, 2).map(row => row.slice(0, 3)),
+      totalTiles: map.length * (map[0]?.length ?? 0),
+    },
   })
   
   return NextResponse.json({ map })

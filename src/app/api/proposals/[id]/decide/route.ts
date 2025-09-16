@@ -3,6 +3,9 @@ import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { SupabaseUnitOfWork } from '@arcane/infrastructure/supabase'
 import { z } from 'zod'
 import { config } from '@/infrastructure/config'
+import logger from '@/lib/logger'
+import { createRequestMetadata } from '@/lib/logging/requestMetadata'
+import { createErrorMetadata } from '@/lib/logging/errorMetadata'
 
 interface RouteContext {
   params: Promise<{ id: string }>
@@ -40,6 +43,13 @@ export async function POST(req: NextRequest, context: RouteContext) {
   try {
     await uow.proposals.update(id, { status })
   } catch (upErr: unknown) {
+    const request = createRequestMetadata(req, {
+      extras: { proposalId: id, decision },
+    })
+    logger.error('Failed to update proposal decision', {
+      error: createErrorMetadata(upErr),
+      request,
+    })
     const message = upErr instanceof Error ? upErr.message : String(upErr)
     return NextResponse.json({ error: message }, { status: 500 })
   }

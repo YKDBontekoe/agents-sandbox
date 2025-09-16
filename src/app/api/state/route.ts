@@ -5,8 +5,10 @@ import logger from '@/lib/logger'
 import { z } from 'zod'
 import type { GameState } from '@engine'
 import { config } from '@/infrastructure/config'
+import { createRequestMetadata } from '@/lib/logging/requestMetadata'
+import { createErrorMetadata } from '@/lib/logging/errorMetadata'
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     const supabase = createSupabaseServerClient(config)
     const uow = new SupabaseUnitOfWork(supabase)
@@ -39,7 +41,11 @@ export async function GET() {
 
     return NextResponse.json(state)
   } catch (error) {
-    logger.error('Supabase connection error:', error)
+    const request = createRequestMetadata(req)
+    logger.error('Supabase connection error', {
+      error: createErrorMetadata(error),
+      request,
+    })
     return NextResponse.json(
       { error: 'Service unavailable - database not configured' },
       { status: 503 }
@@ -97,20 +103,31 @@ export async function PATCH(req: NextRequest) {
     const data = await uow.gameStates.update(id, updates as Partial<GameState>)
     return NextResponse.json(data)
   } catch (error: unknown) {
+    const request = createRequestMetadata(req)
+    const errorMetadata = createErrorMetadata(error)
+    logger.error('Supabase update error', {
+      error: errorMetadata,
+      request,
+    })
+
     let message = 'Unknown error'
     let details = ''
-    
+
     if (error instanceof Error) {
       message = error.message
-      details = error.stack || ''
+      details = error.stack ?? ''
     } else if (typeof error === 'object' && error !== null) {
-      message = JSON.stringify(error, null, 2)
-    } else {
+      try {
+        message = JSON.stringify(error)
+      } catch {
+        message = String(error)
+      }
+    } else if (typeof error === 'string') {
+      message = error
+    } else if (typeof error === 'number' || typeof error === 'boolean') {
       message = String(error)
     }
-    
-    logger.error('Supabase update error:', { message, details, error })
-    console.error('Full error object:', error)
+
     return NextResponse.json({ error: message, details }, { status: 500 })
   }
 }

@@ -9,6 +9,9 @@ import { generateSkillTree } from '@/components/game/skills/generate'
 import { accumulateEffects } from '@/components/game/skills/progression'
 import { rateLimit } from '@/middleware/rateLimit'
 import { buildGameContext } from '@/lib/gameContext'
+import logger from '@/lib/logger'
+import { createRequestMetadata } from '@/lib/logging/requestMetadata'
+import { createErrorMetadata } from '@/lib/logging/errorMetadata'
 
 interface GameState {
   id: string
@@ -51,6 +54,9 @@ export async function POST(req: NextRequest) {
     )
   }
   const { guild = 'Wardens' } = parsedBody.data
+  const requestMetadata = createRequestMetadata(req, {
+    extras: { guild },
+  })
 
   // Get latest state
   const state = await uow.gameStates.getLatest()
@@ -95,6 +101,10 @@ export async function POST(req: NextRequest) {
       const inserted = await uow.proposals.create(rows)
       return NextResponse.json(inserted)
     } catch (insErr: unknown) {
+      logger.error('Failed to create fallback proposals', {
+        error: createErrorMetadata(insErr),
+        request: requestMetadata,
+      })
       const message = insErr instanceof Error ? insErr.message : String(insErr)
       return NextResponse.json({ error: message }, { status: 500 })
     }
@@ -158,6 +168,10 @@ Return JSON array, each item: { title, description, predicted_delta: {resource:n
     const inserted = await uow.proposals.create(rows)
     return NextResponse.json(inserted)
   } catch (insErr: unknown) {
+    logger.error('Failed to persist generated proposals', {
+      error: createErrorMetadata(insErr),
+      request: requestMetadata,
+    })
     const message = insErr instanceof Error ? insErr.message : String(insErr)
     return NextResponse.json({ error: message }, { status: 500 })
   }
