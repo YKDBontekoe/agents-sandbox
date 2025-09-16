@@ -90,10 +90,17 @@ export interface SkillTree {
 
 export type Vec2 = { x: number; y: number };
 
+export type SkillUnlockError =
+  | { type: 'requirements'; reasons: string[] }
+  | { type: 'cost' }
+  | { type: 'server'; message?: string };
+
 export interface ConstellationSkillTreeProps {
   tree: SkillTree;
   unlocked: Record<string, boolean>;
-  onUnlock: (node: SkillNode) => void;
+  attemptUnlock?: (node: SkillNode) => Promise<boolean>;
+  onUnlock?: (node: SkillNode) => void;
+  onUnlockError?: (node: SkillNode, error: SkillUnlockError) => void;
   colorFor: (category: SkillNode['category']) => string;
   focusNodeId?: string;
   resources?: { coin?: number; mana?: number; favor?: number };

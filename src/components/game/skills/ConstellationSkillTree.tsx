@@ -7,6 +7,7 @@ import type {
   StarField,
   ConstellationNode,
   TooltipState,
+  SkillUnlockError,
 } from './types';
 import { useAnimationFrame } from './hooks';
 import {
@@ -15,7 +16,17 @@ import {
   drawConnections,
 } from './effects';
 
-export default function ConstellationSkillTree({ tree, unlocked, onUnlock, colorFor, focusNodeId, resources, onSelectNode }: ConstellationSkillTreeProps) {
+export default function ConstellationSkillTree({
+  tree,
+  unlocked,
+  attemptUnlock,
+  onUnlock,
+  onUnlockError,
+  colorFor,
+  focusNodeId,
+  resources,
+  onSelectNode,
+}: ConstellationSkillTreeProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [size, setSize] = useState<{w:number;h:number}>({ w: 1200, h: 800 });
   const [hover, setHover] = useState<ConstellationNode | null>(null);
@@ -760,13 +771,19 @@ export default function ConstellationSkillTree({ tree, unlocked, onUnlock, color
     dragRef.current.dragging = false;
   }, []);
 
-  const handleClick = useCallback(() => {
+  const handleClick = useCallback(async () => {
     if (dragRef.current.dragging) return;
 
     if (hover) {
       const { node } = hover;
-      const { ok: canUnlock } = checkUnlock(node);
-      
+      const unlockCheck = checkUnlock(node);
+      const affordable = canAfford(node);
+
+      const reportError = (error: SkillUnlockError) => {
+        if (!error) return;
+        onUnlockError?.(node, error);
+      };
+
       // Clear previous selection transitions
       if (selected) {
         updateNodeTransition(selected.node.id, {
@@ -774,32 +791,57 @@ export default function ConstellationSkillTree({ tree, unlocked, onUnlock, color
           glowIntensity: 0
         });
       }
-      
-      if (canUnlock) {
-        // Create unlock particle effect
-        const nodeColor = colorFor(node.category);
-        particleSystemRef.current.addParticles(
-          hover.x,
-          hover.y,
-          'unlock',
-          8,
-          nodeColor
-        );
-        onUnlock(node);
-        
-        // Apply unlock transition with elastic effect
-        updateNodeTransition(node.id, {
-          scale: 1.3,
-          glowIntensity: 1.2
-        });
+
+      let handled = false;
+      if (!unlockCheck.ok) {
+        reportError({ type: 'requirements', reasons: unlockCheck.reasons });
+      } else if (!affordable) {
+        reportError({ type: 'cost' });
       } else {
-        // Apply selection transition
+        let success = true;
+        let failure: SkillUnlockError | null = null;
+        if (attemptUnlock) {
+          try {
+            success = await attemptUnlock(node);
+            if (!success) {
+              failure = { type: 'server' };
+            }
+          } catch (err) {
+            success = false;
+            failure = {
+              type: 'server',
+              message: err instanceof Error ? err.message : undefined,
+            };
+          }
+        }
+
+        if (success) {
+          handled = true;
+          const nodeColor = colorFor(node.category);
+          particleSystemRef.current.addParticles(
+            hover.x,
+            hover.y,
+            'unlock',
+            8,
+            nodeColor
+          );
+          onUnlock?.(node);
+          updateNodeTransition(node.id, {
+            scale: 1.3,
+            glowIntensity: 1.2
+          });
+        } else {
+          reportError(failure ?? { type: 'server' });
+        }
+      }
+
+      if (!handled) {
         updateNodeTransition(node.id, {
           scale: 1.15,
           glowIntensity: 0.9
         });
       }
-      
+
       setSelected(hover);
       onSelectNode?.(node.id);
     } else {
@@ -813,7 +855,7 @@ export default function ConstellationSkillTree({ tree, unlocked, onUnlock, color
       setSelected(null);
       onSelectNode?.(null);
     }
-  }, [hover, onUnlock, checkUnlock, selected, updateNodeTransition, colorFor, onSelectNode]);
+  }, [hover, attemptUnlock, checkUnlock, selected, updateNodeTransition, colorFor, onUnlock, onUnlockError, onSelectNode, canAfford]);
 
   // Enhanced zoom with smooth animation and better limits
   const handleWheel = useCallback((e: React.WheelEvent) => {

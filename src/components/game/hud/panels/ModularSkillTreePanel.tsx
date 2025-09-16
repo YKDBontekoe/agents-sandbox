@@ -1,18 +1,32 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { ResponsivePanel, ResponsiveButton } from '../ResponsiveHUDPanels';
 import { useHUDPanel } from '../HUDPanelRegistry';
 import { generateSkillTree } from '../../skills/generate';
 import type { SkillNode } from '../../skills/types';
 import SkillTreeModal from '../../skills/SkillTreeModal';
+import type { Notification } from '../../hud/types';
+
+type NotifyFn = (
+  notification: Omit<Notification, 'id' | 'timestamp'> & { id?: string; dedupeKey?: string; dedupeMs?: number }
+) => void;
 
 interface ModularSkillTreePanelProps {
   seed?: number;
-  onUnlock?: (node: SkillNode) => boolean; // return true if unlocked
   variant?: 'default' | 'compact' | 'minimal';
   resources?: { coin?: number; mana?: number; favor?: number };
+  unlockedIds: string[];
+  attemptUnlock?: (node: SkillNode) => Promise<boolean>;
+  notify?: NotifyFn;
 }
 
-export function ModularSkillTreePanel({ seed = 12345, onUnlock, variant = 'compact', resources }: ModularSkillTreePanelProps) {
+export function ModularSkillTreePanel({
+  seed = 12345,
+  variant = 'compact',
+  resources,
+  unlockedIds,
+  attemptUnlock,
+  notify,
+}: ModularSkillTreePanelProps) {
   const [open, setOpen] = useState(false);
   const [trend, setTrend] = useState<SkillNode['category'] | null>(null);
   useEffect(() => {
@@ -37,53 +51,85 @@ export function ModularSkillTreePanel({ seed = 12345, onUnlock, variant = 'compa
     economic: true, military: true, mystical: true, infrastructure: true, diplomatic: true, social: true,
   });
   const toggleCat = (c: SkillNode['category']) => setCategoryFilter(prev => ({ ...prev, [c]: !prev[c] }));
-  const [unlocked, setUnlocked] = useState<Record<string, boolean>>(() => {
-    if (typeof window === 'undefined') return {};
-    try { return JSON.parse(localStorage.getItem('ad_skills_unlocked') || '{}'); } catch { return {}; }
-  });
+  const unlockedSet = useMemo(() => new Set(unlockedIds), [unlockedIds]);
 
-  useEffect(() => {
-    try { localStorage.setItem('ad_skills_unlocked', JSON.stringify(unlocked)); } catch {}
-  }, [unlocked]);
-
-  const canUnlock = (n: SkillNode) => {
-    // prerequisites
-    if ((n.requires || []).some(r => !unlocked[r])) return false;
-    // exclusivity
+  const evaluateUnlock = useCallback((n: SkillNode) => {
+    const reasons: string[] = [];
+    (n.requires || []).forEach(req => {
+      if (!unlockedSet.has(req)) {
+        const reqNode = tree.nodes.find(nn => nn.id === req);
+        reasons.push(`Requires: ${reqNode?.title ?? req}`);
+      }
+    });
     if (n.exclusiveGroup) {
-      const taken = tree.nodes.find(x => x.exclusiveGroup === n.exclusiveGroup && x.id !== n.id && unlocked[x.id]);
-      if (taken) return false;
+      const taken = tree.nodes.find(x => x.exclusiveGroup === n.exclusiveGroup && x.id !== n.id && unlockedSet.has(x.id));
+      if (taken) reasons.push(`Path chosen: ${taken.title}`);
     }
-    // extra conditions
     if (n.unlockConditions && n.unlockConditions.length) {
-      const unlockedIds = Object.keys(unlocked).filter(k => unlocked[k]);
-      const byCat: Record<SkillNode['category'], number> = { economic:0,military:0,mystical:0,infrastructure:0,diplomatic:0,social:0 };
-      unlockedIds.forEach(id => {
-        const node = tree.nodes.find(nn => nn.id === id);
-        if (node) byCat[node.category] = (byCat[node.category] || 0) + 1;
+      const unlockedList = tree.nodes.filter(node => unlockedSet.has(node.id));
+      const byCat: Record<SkillNode['category'], number> = { economic:0, military:0, mystical:0, infrastructure:0, diplomatic:0, social:0 };
+      unlockedList.forEach(node => {
+        byCat[node.category] = (byCat[node.category] || 0) + 1;
       });
-      const highestTier = unlockedIds.reduce((m, id) => {
-        const node = tree.nodes.find(nn => nn.id === id);
-        return node && typeof node.tier === 'number' ? Math.max(m, node.tier) : m;
-      }, -1);
+      const highestTier = unlockedList.reduce((max, node) => (typeof node.tier === 'number' ? Math.max(max, node.tier) : max), -1);
       for (const cond of n.unlockConditions) {
-        if (cond.type === 'min_unlocked' && unlockedIds.length < cond.value) return false;
-        if (cond.type === 'category_unlocked_at_least' && (byCat[cond.category] || 0) < cond.value) return false;
-        if (cond.type === 'max_unlocked_in_category' && (byCat[cond.category] || 0) > cond.value) return false;
-        if (cond.type === 'tier_before_required' && highestTier < cond.tier) return false;
+        if (cond.type === 'min_unlocked' && unlockedList.length < cond.value) reasons.push(`Unlock at least ${cond.value} skills`);
+        if (cond.type === 'category_unlocked_at_least' && (byCat[cond.category] || 0) < cond.value) reasons.push(`Unlock ${cond.value} ${cond.category} skills`);
+        if (cond.type === 'max_unlocked_in_category' && (byCat[cond.category] || 0) > cond.value) reasons.push(`Too many in ${cond.category}: max ${cond.value}`);
+        if (cond.type === 'tier_before_required' && highestTier < cond.tier) reasons.push(`Reach tier ${cond.tier} first`);
       }
     }
+    return { ok: reasons.length === 0, reasons };
+  }, [tree.nodes, unlockedSet]);
+
+  const canAfford = useCallback((n: SkillNode) => {
+    if (!resources) return true;
+    const costs = n.cost || {};
+    if (typeof costs.coin === 'number' && (resources.coin || 0) < costs.coin) return false;
+    if (typeof costs.mana === 'number' && (resources.mana || 0) < costs.mana) return false;
+    if (typeof costs.favor === 'number' && (resources.favor || 0) < costs.favor) return false;
     return true;
-  };
+  }, [resources]);
 
-  const handleUnlock = (n: SkillNode) => {
-    if (!canUnlock(n)) return;
-    try { window.dispatchEvent(new CustomEvent('ad_unlock_skill', { detail: n })); } catch {}
-    setUnlocked(prev => ({ ...prev, [n.id]: true }));
-  };
+  const handleUnlock = useCallback(async (n: SkillNode) => {
+    if (unlockedSet.has(n.id)) {
+      return;
+    }
+    const status = evaluateUnlock(n);
+    if (!status.ok) {
+      const message = status.reasons.join(', ') || 'Prerequisites not met.';
+      notify?.({ type: 'info', title: 'Skill locked', message, dedupeKey: `skill-locked-${n.id}` });
+      return;
+    }
+    if (!canAfford(n)) {
+      const costs: string[] = [];
+      if (n.cost?.coin) costs.push(`${n.cost.coin} coin`);
+      if (n.cost?.mana) costs.push(`${n.cost.mana} mana`);
+      if (n.cost?.favor) costs.push(`${n.cost.favor} favor`);
+      const message = `Insufficient resources to unlock ${n.title}${costs.length ? ` (${costs.join(', ')})` : ''}.`;
+      notify?.({ type: 'error', title: 'Unable to unlock skill', message, dedupeKey: `skill-cost-${n.id}` });
+      return;
+    }
+    if (!attemptUnlock) {
+      notify?.({ type: 'error', title: 'Unlock unavailable', message: 'Skill unlock is not available right now.', dedupeKey: `skill-unavailable-${n.id}` });
+      return;
+    }
+    try {
+      const success = await attemptUnlock(n);
+      if (!success) {
+        notify?.({ type: 'error', title: 'Unlock failed', message: 'The archivists rejected the purchase. Please try again.', dedupeKey: `skill-fail-${n.id}` });
+      }
+    } catch (err) {
+      notify?.({ type: 'error', title: 'Unlock failed', message: err instanceof Error ? err.message : 'An unexpected error occurred.', dedupeKey: `skill-fail-${n.id}` });
+    }
+  }, [attemptUnlock, canAfford, evaluateUnlock, notify, unlockedSet]);
 
-  const available = useMemo(() => tree.nodes.filter(n => canUnlock(n) && !unlocked[n.id]), [tree, unlocked]);
-  const unlockedCount = useMemo(() => Object.values(unlocked).filter(Boolean).length, [unlocked]);
+  const available = useMemo(() => tree.nodes.filter(n => {
+    if (unlockedSet.has(n.id)) return false;
+    const status = evaluateUnlock(n);
+    return status.ok;
+  }), [tree.nodes, evaluateUnlock, unlockedSet]);
+  const unlockedCount = unlockedIds.length;
   const filtered = useMemo(() => {
     const base = available.filter(n => categoryFilter[n.category]);
     if (!query) return base;
@@ -228,9 +274,11 @@ export function ModularSkillTreePanel({ seed = 12345, onUnlock, variant = 'compa
                   </div>
                 </div>
                 <div className="flex-shrink-0">
-                  <ResponsiveButton 
-                    onClick={() => handleUnlock(n)} 
-                    variant='primary' 
+                  <ResponsiveButton
+                    onClick={() => {
+                      void handleUnlock(n);
+                    }}
+                    variant='primary'
                     size={{ mobile: 'xs', tablet: 'xs', desktop: 'sm', wide: 'sm' }}
                     className="shadow-sm hover:shadow-md transition-shadow"
                   >
@@ -248,7 +296,14 @@ export function ModularSkillTreePanel({ seed = 12345, onUnlock, variant = 'compa
         </div>
       )}
       {open && (
-        <SkillTreeModal isOpen={open} onClose={() => setOpen(false)} resources={resources} />
+        <SkillTreeModal
+          isOpen={open}
+          onClose={() => setOpen(false)}
+          resources={resources}
+          unlockedIds={unlockedIds}
+          attemptUnlock={attemptUnlock}
+          notify={notify}
+        />
       )}
     </ResponsivePanel>
   );

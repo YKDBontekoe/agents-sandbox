@@ -2,29 +2,37 @@ import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import ConstellationSkillTree from './ConstellationSkillTree';
 import { generateSkillTree, expandSkillTree } from './generate';
-import type { SkillNode } from './types';
+import type { SkillNode, SkillUnlockError } from './types';
+import type { Notification } from '../hud/types';
+
+type NotifyFn = (
+  notification: Omit<Notification, 'id' | 'timestamp'> & { id?: string; dedupeKey?: string; dedupeMs?: number }
+) => void;
 
 interface SkillTreeModalProps {
   isOpen: boolean;
   onClose: () => void;
   resources?: { coin?: number; mana?: number; favor?: number };
+  unlockedIds: string[];
+  attemptUnlock?: (node: SkillNode) => Promise<boolean>;
+  notify?: NotifyFn;
 }
 
-export default function SkillTreeModal({ isOpen, onClose, resources }: SkillTreeModalProps) {
+export default function SkillTreeModal({
+  isOpen,
+  onClose,
+  resources,
+  unlockedIds,
+  attemptUnlock,
+  notify,
+}: SkillTreeModalProps) {
   const [seed] = useState<number>(12345);
   const [query, setQuery] = useState('');
   const [focusNodeId, setFocusNodeId] = useState<string | undefined>(undefined);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [stateId, setStateId] = useState<string | null>(null);
   const [pinned, setPinned] = useState<string[]>([]);
-  const [unlocked, setUnlocked] = useState<Record<string, boolean>>(() => {
-    if (typeof window === 'undefined') return {};
-    try { 
-      return JSON.parse(localStorage.getItem('ad_skills_unlocked') || '{}'); 
-    } catch { 
-      return {}; 
-    }
-  });
+  const [status, setStatus] = useState<{ type: 'error' | 'info'; message: string } | null>(null);
 
   const [tree, setTree] = useState(() => generateSkillTree(seed, 10));
   const matches = useMemo(() => {
@@ -37,6 +45,15 @@ export default function SkillTreeModal({ isOpen, onClose, resources }: SkillTree
   }, [query, tree]);
 
   // Path planning helpers (postorder collect ancestors for unlock order)
+  const unlockedSet = useMemo(() => new Set(unlockedIds), [unlockedIds]);
+  const unlockedRecord = useMemo(() => {
+    const record: Record<string, boolean> = {};
+    unlockedIds.forEach(id => {
+      record[id] = true;
+    });
+    return record;
+  }, [unlockedIds]);
+
   const computePathTo = useCallback((targetId: string) => {
     const target = tree.nodes.find(n => n.id === targetId);
     if (!target) return [] as SkillNode[];
@@ -44,7 +61,7 @@ export default function SkillTreeModal({ isOpen, onClose, resources }: SkillTree
     const seen = new Set<string>();
     const visit = (n: SkillNode) => {
       (n.requires || []).forEach(reqId => {
-        if (!unlocked[reqId]) {
+        if (!unlockedSet.has(reqId)) {
           const req = tree.nodes.find(nn => nn.id === reqId);
           if (req && !seen.has(req.id)) { visit(req); out.push(req); seen.add(req.id); }
         }
@@ -52,7 +69,7 @@ export default function SkillTreeModal({ isOpen, onClose, resources }: SkillTree
     };
     visit(target);
     return out;
-  }, [tree, unlocked]);
+  }, [tree, unlockedSet]);
 
   const plannedPath = useMemo(() => selectedNodeId ? computePathTo(selectedNodeId) : [], [selectedNodeId, computePathTo]);
   const plannedCost = useMemo(() => {
@@ -106,25 +123,43 @@ export default function SkillTreeModal({ isOpen, onClose, resources }: SkillTree
     try { await fetch('/api/state', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: stateId, pinned_skill_targets: next }) }); } catch {}
   }, [stateId, selectedNodeId, pinned]);
 
-  // Persist unlocked state to localStorage
-  useEffect(() => {
-    try { 
-      localStorage.setItem('ad_skills_unlocked', JSON.stringify(unlocked)); 
+  const handleUnlockSuccess = useCallback((node: SkillNode) => {
+    setStatus(null);
+    try {
+      window.dispatchEvent(new CustomEvent('ad_unlock_skill', {
+        detail: node
+      }));
     } catch {}
-  }, [unlocked]);
+  }, []);
 
-  const handleUnlock = (node: SkillNode) => {
-    const reqMet = (node.requires || []).every(r => unlocked[r]);
-    if (!reqMet || unlocked[node.id]) return;
-    
-    try { 
-      window.dispatchEvent(new CustomEvent('ad_unlock_skill', { 
-        detail: node 
-      })); 
-    } catch {}
-    
-    setUnlocked(prev => ({ ...prev, [node.id]: true }));
-  };
+  const handleUnlockError = useCallback((node: SkillNode, error: SkillUnlockError) => {
+    let message: string;
+    if (error.type === 'requirements') {
+      message = error.reasons.join(', ') || 'Prerequisites not met.';
+    } else if (error.type === 'cost') {
+      const costs: string[] = [];
+      if (node.cost?.coin) costs.push(`${node.cost.coin} coin`);
+      if (node.cost?.mana) costs.push(`${node.cost.mana} mana`);
+      if (node.cost?.favor) costs.push(`${node.cost.favor} favor`);
+      const costText = costs.length ? ` (${costs.join(', ')})` : '';
+      message = `Insufficient resources to unlock ${node.title}${costText}.`;
+    } else {
+      message = error.message || 'The archivists rejected the purchase. Please try again.';
+    }
+    setStatus({ type: 'error', message });
+    notify?.({
+      type: 'error',
+      title: 'Unable to unlock skill',
+      message,
+      dedupeKey: `skill-unlock-${error.type}-${node.id}`,
+    });
+  }, [notify]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setStatus(null);
+    }
+  }, [isOpen]);
 
   const colorFor = (cat: SkillNode['category']) => ({
     economic: '#0ea5e9', 
@@ -197,12 +232,28 @@ export default function SkillTreeModal({ isOpen, onClose, resources }: SkillTree
               </div>
             </div>
             
+            {status && (
+              <div className="absolute top-14 left-0 right-0 z-20 flex justify-center px-6">
+                <div
+                  className={`pointer-events-auto rounded-md border px-3 py-2 text-sm shadow-lg transition-colors ${
+                    status.type === 'error'
+                      ? 'border-red-500/40 bg-red-500/20 text-red-200'
+                      : 'border-blue-500/40 bg-blue-500/20 text-blue-100'
+                  }`}
+                >
+                  {status.message}
+                </div>
+              </div>
+            )}
+
             {/* PoE Skill Tree Canvas */}
              <div className="absolute inset-0 pt-16">
-                <ConstellationSkillTree 
+                <ConstellationSkillTree
                   tree={tree}
-                  unlocked={unlocked}
-                  onUnlock={handleUnlock}
+                  unlocked={unlockedRecord}
+                  attemptUnlock={attemptUnlock}
+                  onUnlock={handleUnlockSuccess}
+                  onUnlockError={handleUnlockError}
                   colorFor={colorFor}
                   focusNodeId={focusNodeId}
                   onSelectNode={setSelectedNodeId}

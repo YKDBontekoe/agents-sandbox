@@ -397,9 +397,23 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   };
 
   const [unlockedSkillIds, setUnlockedSkillIds] = useState<string[]>(() => {
-    if (typeof window === 'undefined') return [];
-    try { return Object.keys(JSON.parse(localStorage.getItem('ad_skills_unlocked') || '{}')).filter(k => JSON.parse(localStorage.getItem('ad_skills_unlocked') || '{}')[k]); } catch { return []; }
+    const initialSkills = Array.isArray((initialState as any)?.skills)
+      ? ([...(initialState as any).skills] as string[])
+      : [];
+    return initialSkills;
   });
+  useEffect(() => {
+    const serverSkills = Array.isArray((state as any)?.skills)
+      ? (state as any).skills as string[]
+      : null;
+    if (!serverSkills) return;
+    setUnlockedSkillIds(prev => {
+      if (prev.length === serverSkills.length && prev.every((id, idx) => id === serverSkills[idx])) {
+        return prev;
+      }
+      return [...serverSkills];
+    });
+  }, [state]);
   useEffect(() => {
     logger.debug('localStorage useEffect running, window defined:', typeof window !== 'undefined');
     if (typeof window === 'undefined') return;
@@ -482,31 +496,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     logger.debug('🔍 TILETYPES CHANGED - length:', tileTypes.length);
   }, [tileTypes]);
   
-  // Listen for skill unlock events to deduct costs && persist
-  useEffect(() => {
-    const onUnlock = async (e: any) => {
-      const n = e.detail as SkillNode;
-      if (unlockedSkillIds.includes(n.id)) return;
-      const needed = { coin: n.cost.coin || 0, mana: n.cost.mana || 0, favor: n.cost.favor || 0 } as Record<string, number>;
-      const have = { coin: state?.resources.coin || 0, mana: state?.resources.mana || 0, favor: state?.resources.favor || 0 } as Record<string, number>;
-      if (have.coin < needed.coin || have.mana < needed.mana || have.favor < needed.favor) return;
-      const newResServer = { ...state!.resources } as Record<string, number>;
-      newResServer.coin = Math.max(0, newResServer.coin - needed.coin);
-      newResServer.mana = Math.max(0, newResServer.mana - needed.mana);
-      newResServer.favor = Math.max(0, newResServer.favor - needed.favor);
-      const nextSkills = [...unlockedSkillIds, n.id];
-      setState(prev => prev ? { ...prev, resources: newResServer, skills: nextSkills as any } : prev);
-      await saveState({ resources: newResServer, buildings: placedBuildings, routes, workers: state?.workers, skills: nextSkills } as any);
-      setUnlockedSkillIds(nextSkills);
-      notify({ type: 'success', title: 'Skill Unlocked', message: n.title })
-      try {
-        const prev = JSON.parse(localStorage.getItem('ad_skills_unlocked') || '{}');
-        prev[n.id] = true; localStorage.setItem('ad_skills_unlocked', JSON.stringify(prev));
-      } catch {}
-    };
-    window.addEventListener('ad_unlock_skill', onUnlock as any);
-    return () => window.removeEventListener('ad_unlock_skill', onUnlock as any);
-  }, [state, unlockedSkillIds]);
+  // Skill unlock persistence handled via attemptUnlock callback
   const [selectedTile, setSelectedTile] = useState<{ x: number; y: number; tileType?: string } | null>(null);
   const [hoverTile, setHoverTile] = useState<{ x: number; y: number; tileType?: string } | null>(null);
   const [previewTypeId, setPreviewTypeId] = useState<BuildTypeId | null>(null);
@@ -537,10 +527,29 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     return () => clearInterval(cleanup);
   }, []);
 
-  const saveState = useCallback(async (partial: { resources?: Record<string, number>; workers?: number; buildings?: StoredBuilding[]; routes?: TradeRoute[]; roads?: Array<{x:number;y:number}>; edicts?: Record<string, number>; map_size?: number }) => {
-    if (!state) return;
+  const saveState = useCallback(async (partial: {
+    resources?: Record<string, number>;
+    workers?: number;
+    buildings?: StoredBuilding[];
+    routes?: TradeRoute[];
+    roads?: Array<{ x: number; y: number }>;
+    edicts?: Record<string, number>;
+    map_size?: number;
+    skills?: string[];
+  }) => {
+    if (!state) return false;
     try {
-      const body: { id: string; resources?: Record<string, number>; workers?: number; buildings?: StoredBuilding[]; routes?: TradeRoute[]; roads?: Array<{x:number;y:number}>; edicts?: Record<string, number>; map_size?: number } = { id: state.id };
+      const body: {
+        id: string;
+        resources?: Record<string, number>;
+        workers?: number;
+        buildings?: StoredBuilding[];
+        routes?: TradeRoute[];
+        roads?: Array<{ x: number; y: number }>;
+        edicts?: Record<string, number>;
+        map_size?: number;
+        skills?: string[];
+      } = { id: state.id };
       if (partial.resources) body.resources = partial.resources;
       if (typeof partial.workers === 'number') body.workers = partial.workers;
       if (partial.buildings) body.buildings = partial.buildings;
@@ -548,14 +557,17 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
       if (partial.roads) body.roads = partial.roads;
       if (partial.edicts) body.edicts = partial.edicts;
       if (typeof partial.map_size === 'number') body.map_size = partial.map_size;
+      if (partial.skills) body.skills = partial.skills;
       const res = await fetch('/api/state', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return true;
     } catch (err) {
       logger.error('Failed to save state:', err);
+      return false;
     }
   }, [state]);
 
@@ -570,6 +582,50 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     }
     setMapSizeModalOpen(false);
   }, [pendingMapSize, state, saveState]);
+
+  const attemptUnlock = useCallback(async (node: SkillNode) => {
+    if (!state) return false;
+    if (unlockedSkillIds.includes(node.id)) return true;
+
+    const cost = node.cost || {};
+    const coinCost = typeof cost.coin === 'number' ? cost.coin : 0;
+    const manaCost = typeof cost.mana === 'number' ? cost.mana : 0;
+    const favorCost = typeof cost.favor === 'number' ? cost.favor : 0;
+
+    const currentResources = state.resources || {};
+    if ((currentResources.coin || 0) < coinCost || (currentResources.mana || 0) < manaCost || (currentResources.favor || 0) < favorCost) {
+      return false;
+    }
+
+    const nextResources: Record<string, number> = { ...currentResources };
+    nextResources.coin = Math.max(0, (currentResources.coin || 0) - coinCost);
+    nextResources.mana = Math.max(0, (currentResources.mana || 0) - manaCost);
+    nextResources.favor = Math.max(0, (currentResources.favor || 0) - favorCost);
+
+    const nextSkills = [...unlockedSkillIds, node.id];
+
+    const persisted = await saveState({
+      resources: nextResources,
+      buildings: placedBuildings,
+      routes,
+      workers: state.workers,
+      skills: nextSkills,
+    } as any);
+    if (!persisted) {
+      return false;
+    }
+
+    setState(prev => (prev ? { ...prev, resources: nextResources, skills: nextSkills } as any : prev));
+    setUnlockedSkillIds(nextSkills);
+    notify({
+      type: 'success',
+      title: 'Skill Unlocked',
+      message: node.title,
+      dedupeKey: `skill-success-${node.id}`,
+      dedupeMs: 4000,
+    });
+    return true;
+  }, [state, unlockedSkillIds, saveState, placedBuildings, routes, notify]);
 
   const computeRoadPath = useCallback((sx:number, sy:number, tx:number, ty:number): Array<{x:number;y:number}> => {
     // Lightweight Dijkstra with road preference
@@ -1695,6 +1751,11 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
               resourceChanges,
               workforce: { total: totalWorkers, idle: idleWorkers, needed: neededWorkers },
               time: { ...gameTime, isPaused, intervalMs: Number((state as any)?.tick_interval_ms ?? 60000) }
+            }}
+            skills={{
+              unlockedIds: unlockedSkillIds,
+              attemptUnlock,
+              notify,
             }}
             cityManagement={{
               stats: {

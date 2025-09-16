@@ -12,6 +12,12 @@ import CityManagementPanel, {
   ZoneType,
   ServiceType,
 } from '../CityManagementPanel';
+import type { SkillNode } from '../skills/types';
+import type { Notification } from './types';
+
+type NotifyFn = (
+  notification: Omit<Notification, 'id' | 'timestamp'> & { id?: string; dedupeKey?: string; dedupeMs?: number }
+) => void;
 
 export interface PanelComposerProps {
   children?: ReactNode;
@@ -65,6 +71,11 @@ export interface PanelComposerProps {
   };
   onGameAction: (action: string, data?: unknown) => void;
   className?: string;
+  skills?: {
+    unlockedIds: string[];
+    attemptUnlock?: (node: SkillNode) => Promise<boolean>;
+    notify?: NotifyFn;
+  };
 }
 
 export function PanelComposer({
@@ -73,6 +84,7 @@ export function PanelComposer({
   onGameAction,
   cityManagement,
   className = '',
+  skills,
 }: PanelComposerProps) {
   const { currentPreset } = useHUDLayoutPresets();
 
@@ -162,6 +174,9 @@ export function PanelComposer({
             mana: gameData.resources.mana,
             favor: gameData.resources.favor,
           }}
+          unlockedIds={skills?.unlockedIds ?? []}
+          attemptUnlock={skills?.attemptUnlock}
+          notify={skills?.notify}
         />
         <div className="mt-2" />
         {children}
