@@ -7,10 +7,12 @@ interface ModularActionPanelProps {
   onOpenEdicts?: () => void;
   onOpenOmens?: () => void;
   onOpenSettings?: () => void;
+  onToggleLeylineDrawing?: () => void;
   intervalMs?: number;
   onChangeIntervalMs?: (ms: number) => void;
   variant?: 'default' | 'compact' | 'minimal';
   collapsible?: boolean;
+  isLeylineDrawing?: boolean;
 }
 
 interface ActionItemProps {
@@ -20,11 +22,13 @@ interface ActionItemProps {
   variant?: 'default' | 'compact' | 'minimal';
   disabled?: boolean;
   badge?: string | number;
+  active?: boolean;
 }
 
-function ActionItem({ label, onClick, icon, variant = 'default', disabled = false, badge }: ActionItemProps) {
+function ActionItem({ label, onClick, icon, variant = 'default', disabled = false, badge, active = false }: ActionItemProps) {
   const getButtonVariant = () => {
     if (disabled) return 'secondary';
+    if (active) return 'success';
     return 'primary';
   };
 
@@ -102,18 +106,26 @@ const actionIcons = {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
     </svg>
+  ),
+  leylines: (
+    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 19c4-6 12-6 16 0M4 5c4 6 12 6 16 0" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v14" />
+    </svg>
   )
 };
 
-export function ModularActionPanel({ 
-  onOpenCouncil, 
-  onOpenEdicts, 
-  onOpenOmens, 
-  onOpenSettings, 
+export function ModularActionPanel({
+  onOpenCouncil,
+  onOpenEdicts,
+  onOpenOmens,
+  onOpenSettings,
+  onToggleLeylineDrawing,
   intervalMs,
   onChangeIntervalMs,
   variant = 'default',
-  collapsible = true 
+  collapsible = true,
+  isLeylineDrawing = false
 }: ModularActionPanelProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   
@@ -164,6 +176,7 @@ export function ModularActionPanel({
   const actions = [
     { label: 'Council', onClick: onOpenCouncil, icon: actionIcons.council, key: 'council' },
     { label: 'Edicts', onClick: onOpenEdicts, icon: actionIcons.edicts, key: 'edicts' },
+    { label: 'Leylines', onClick: onToggleLeylineDrawing, icon: actionIcons.leylines, key: 'leylines', active: isLeylineDrawing },
     { label: 'Omens', onClick: onOpenOmens, icon: actionIcons.omens, key: 'omens' },
     { label: 'Settings', onClick: onOpenSettings, icon: actionIcons.settings, key: 'settings' }
   ];
@@ -221,7 +234,9 @@ export function ModularActionPanel({
             onClick={action.onClick}
             icon={action.icon}
             variant={variant}
+            disabled={!action.onClick}
             badge={getActionBadge(action.key)}
+            active={Boolean(action.active)}
           />
         ))}
       </ResponsiveStack>

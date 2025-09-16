@@ -63,6 +63,7 @@ type BuildTypeId = keyof typeof SIM_BUILDINGS;
 
 const ISO_TILE_WIDTH = 64;
 const ISO_TILE_HEIGHT = 32;
+const LEYLINE_STORAGE_KEY = 'ad_leylines';
 
 const indicatorDurationToMs = (duration: number): number => {
   if (!Number.isFinite(duration) || duration <= 0) {
@@ -417,6 +418,46 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   const [districts, _setDistricts] = useState<District[]>([]);
   const [leylines, setLeylines] = useState<Leyline[]>([]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const stored = localStorage.getItem(LEYLINE_STORAGE_KEY);
+      if (!stored) return;
+      const parsed = JSON.parse(stored);
+      if (!Array.isArray(parsed)) return;
+
+      const sanitized: Leyline[] = parsed
+        .filter((value): value is Leyline => {
+          if (!value || typeof value !== 'object') return false;
+          const candidate = value as Record<string, unknown>;
+          return (
+            typeof candidate.id === 'string' &&
+            typeof candidate.fromX === 'number' &&
+            typeof candidate.fromY === 'number' &&
+            typeof candidate.toX === 'number' &&
+            typeof candidate.toY === 'number' &&
+            typeof candidate.capacity === 'number' &&
+            typeof candidate.currentFlow === 'number' &&
+            typeof candidate.isActive === 'boolean'
+          );
+        })
+        .map((value) => {
+          const capacity = Math.max(0, value.capacity);
+          return {
+            ...value,
+            capacity,
+            currentFlow: Math.max(0, Math.min(value.currentFlow, capacity)),
+          };
+        });
+
+      if (sanitized.length > 0) {
+        setLeylines(sanitized);
+      }
+    } catch (err) {
+      logger.warn('Failed to load stored leylines', err);
+    }
+  }, []);
+
   const [mapSizeModalOpen, setMapSizeModalOpen] = useState(true);
   const [pendingMapSize, setPendingMapSize] = useState<number>(32);
 
@@ -672,7 +713,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   const [tooltipLocked, setTooltipLocked] = useState(false);
   const [clickEffectKey, setClickEffectKey] = useState<string | null>(null);
   const [selectedLeyline, setSelectedLeyline] = useState<Leyline | null>(null);
-  const [isDrawingMode, _setIsDrawingMode] = useState(false);
+  const [isLeylineDrawing, setIsLeylineDrawing] = useState(false);
   const hasAutoOpenedCouncilRef = useRef(false);
   const [routeHoverToId, setRouteHoverToId] = useState<string | null>(null);
   const [assignLines, setAssignLines] = useState<AssignLine[]>([]);
@@ -767,6 +808,83 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     }
     setMapSizeModalOpen(false);
   }, [pendingMapSize, state, saveState]);
+
+  const updateLeylines = useCallback((updater: (prev: Leyline[]) => Leyline[]) => {
+    setLeylines(prev => {
+      const next = updater(prev);
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem(LEYLINE_STORAGE_KEY, JSON.stringify(next));
+        } catch (err) {
+          logger.warn('Failed to persist leylines', err);
+        }
+      }
+      return next;
+    });
+  }, []);
+
+  const handleLeylineCreate = useCallback((fromX: number, fromY: number, toX: number, toY: number) => {
+    const newLeyline: Leyline = {
+      id: generateId(),
+      fromX: Math.round(fromX),
+      fromY: Math.round(fromY),
+      toX: Math.round(toX),
+      toY: Math.round(toY),
+      capacity: 100,
+      currentFlow: 0,
+      isActive: true,
+    };
+    updateLeylines(prev => [...prev, newLeyline]);
+    setSelectedLeyline(newLeyline);
+  }, [generateId, updateLeylines]);
+
+  const handleLeylineDelete = useCallback((id: string) => {
+    updateLeylines(prev => prev.filter(leyline => leyline.id !== id));
+    setSelectedLeyline(prev => (prev && prev.id === id ? null : prev));
+  }, [updateLeylines]);
+
+  const handleLeylineUpdate = useCallback((id: string, updates: Partial<Leyline>) => {
+    let updated: Leyline | null = null;
+    updateLeylines(prev => prev.map(leyline => {
+      if (leyline.id !== id) return leyline;
+      const nextCapacity = updates.capacity !== undefined ? Math.max(0, Math.round(updates.capacity)) : leyline.capacity;
+      const rawFlow = updates.currentFlow !== undefined ? Math.max(0, Math.round(updates.currentFlow)) : leyline.currentFlow;
+      const nextFlow = Math.min(rawFlow, nextCapacity);
+      const next: Leyline = {
+        ...leyline,
+        ...updates,
+        id: leyline.id,
+        capacity: nextCapacity,
+        currentFlow: nextFlow,
+        isActive: updates.isActive !== undefined ? updates.isActive : leyline.isActive,
+      };
+      updated = next;
+      return next;
+    }));
+    if (updated) {
+      setSelectedLeyline(updated);
+    }
+  }, [updateLeylines]);
+
+  useEffect(() => {
+    if (!selectedLeyline) return;
+    const latest = leylines.find(l => l.id === selectedLeyline.id);
+    if (!latest) {
+      setSelectedLeyline(null);
+      return;
+    }
+    if (
+      latest.capacity !== selectedLeyline.capacity ||
+      latest.currentFlow !== selectedLeyline.currentFlow ||
+      latest.isActive !== selectedLeyline.isActive ||
+      latest.fromX !== selectedLeyline.fromX ||
+      latest.fromY !== selectedLeyline.fromY ||
+      latest.toX !== selectedLeyline.toX ||
+      latest.toY !== selectedLeyline.toY
+    ) {
+      setSelectedLeyline(latest);
+    }
+  }, [leylines, selectedLeyline]);
 
   const computeRoadPath = useCallback((sx:number, sy:number, tx:number, ty:number): Array<{x:number;y:number}> => {
     // Lightweight Dijkstra with road preference
@@ -1756,6 +1874,9 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
               leylines={leylines}
               selectedLeyline={selectedLeyline}
               setSelectedLeyline={setSelectedLeyline}
+              isLeylineDrawing={isLeylineDrawing}
+              onLeylineCreate={handleLeylineCreate}
+              onLeylineRemove={handleLeylineDelete}
               resources={resources}
               cycle={state.cycle ?? 0}
               constructionEvents={constructionEvents}
@@ -1774,6 +1895,91 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
               <div className="px-3 py-1.5 rounded-full bg-blue-900/30 text-blue-300 border border-blue-700/60 text-xs shadow-sm">{msg}</div>
             );
           })()}
+        </div>
+      )}
+
+      {selectedLeyline && (
+        <div className="fixed right-6 top-24 z-[12000] w-72 max-w-full pointer-events-auto">
+          <div className="rounded-lg border border-blue-700/60 bg-slate-900/95 p-4 shadow-xl backdrop-blur">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <h3 className="text-sm font-semibold text-blue-200">Leyline Inspector</h3>
+                <p className="mt-1 text-xs text-gray-400">
+                  {`(${selectedLeyline.fromX}, ${selectedLeyline.fromY}) → (${selectedLeyline.toX}, ${selectedLeyline.toY})`}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedLeyline(null)}
+                className="rounded-full p-1 text-gray-400 hover:text-gray-200 hover:bg-slate-800"
+                aria-label="Close leyline inspector"
+              >
+                <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" stroke="currentColor" fill="none">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="mt-3 space-y-3 text-xs text-gray-200">
+              <div>
+                <label className="block text-[11px] uppercase tracking-wide text-gray-400">Capacity</label>
+                <input
+                  type="number"
+                  min={0}
+                  step={10}
+                  value={selectedLeyline.capacity}
+                  onChange={(event) => {
+                    const parsed = Number(event.target.value);
+                    const sanitized = Number.isFinite(parsed) ? Math.max(0, Math.round(parsed)) : 0;
+                    const adjustedFlow = Math.min(selectedLeyline.currentFlow, sanitized);
+                    handleLeylineUpdate(selectedLeyline.id, { capacity: sanitized, currentFlow: adjustedFlow });
+                  }}
+                  className="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-gray-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] uppercase tracking-wide text-gray-400">Current Flow</label>
+                <input
+                  type="number"
+                  min={0}
+                  step={5}
+                  value={selectedLeyline.currentFlow}
+                  onChange={(event) => {
+                    const parsed = Number(event.target.value);
+                    const sanitized = Number.isFinite(parsed) ? Math.max(0, Math.round(parsed)) : 0;
+                    handleLeylineUpdate(selectedLeyline.id, { currentFlow: Math.min(sanitized, selectedLeyline.capacity) });
+                  }}
+                  className="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-gray-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                />
+                <p className="mt-1 text-[11px] text-gray-400">
+                  {selectedLeyline.capacity === 0
+                    ? 'No capacity assigned yet.'
+                    : `${Math.round((selectedLeyline.currentFlow / Math.max(1, selectedLeyline.capacity)) * 100)}% utilized`}
+                </p>
+              </div>
+              <div className="flex items-center gap-2 text-[11px]">
+                <span className="text-gray-400">Status:</span>
+                <span className={`font-medium ${selectedLeyline.isActive ? 'text-emerald-300' : 'text-gray-400'}`}>
+                  {selectedLeyline.isActive ? 'Active' : 'Dormant'}
+                </span>
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => handleLeylineUpdate(selectedLeyline.id, { isActive: !selectedLeyline.isActive })}
+                  className={`flex-1 rounded px-2 py-1 text-sm font-medium transition-colors ${selectedLeyline.isActive ? 'bg-blue-600 text-white hover:bg-blue-500' : 'bg-slate-700 text-gray-100 hover:bg-slate-600'}`}
+                >
+                  {selectedLeyline.isActive ? 'Pause Flow' : 'Resume Flow'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleLeylineDelete(selectedLeyline.id)}
+                  className="rounded px-2 py-1 text-sm font-medium text-white bg-red-600 hover:bg-red-500"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -1938,6 +2144,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
               time: { ...gameTime, isPaused, intervalMs: Number((state as any)?.tick_interval_ms ?? 60000) }
             }}
             map={miniMapDescriptor}
+            isLeylineDrawing={isLeylineDrawing}
             cityManagement={{
               stats: {
                 population: placedBuildings.reduce((sum, b) => sum + (b.workers || 0), 0),
@@ -2005,6 +2212,9 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ id: state.id, tick_interval_ms: sanitizedMs })
                 });
+              }
+              if (action === 'toggle-leylines') {
+                setIsLeylineDrawing(prev => !prev);
               }
               if (action === 'open-council') setIsCouncilOpen(true);
               if (action === 'open-edicts') setIsEdictsOpen(true);
