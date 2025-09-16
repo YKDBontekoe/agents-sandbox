@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import type { EdgeScrollState, GameRendererProps } from "./types";
 import { useGameContext } from "./GameContext";
 import GameCanvas from "./GameCanvas";
 import { IsometricGrid } from "./IsometricGrid";
@@ -9,19 +10,6 @@ import { Viewport } from "pixi-viewport";
 import * as PIXI from "pixi.js";
 import MiniMap from "./MiniMap";
 import logger from "@/lib/logger";
-
-interface GameRendererProps {
-  width?: number;
-  height?: number;
-  gridSize?: number;
-  tileTypes?: string[][];
-  onTileHover?: (x: number, y: number, tileType?: string) => void;
-  onTileClick?: (x: number, y: number, tileType?: string) => void;
-  children?: React.ReactNode;
-  useExternalProvider?: boolean;
-  enableEdgeScroll?: boolean;
-  onReset?: () => void;
-}
 
 function GameRendererContent({
   width = 800,
@@ -37,14 +25,21 @@ function GameRendererContent({
   const [showHelp, setShowHelp] = useState(true);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [dims, setDims] = useState<{ w: number; h: number }>({ w: width, h: height });
-  const { viewport } = useGameContext();
-  const edgeScrollRef = useRef<{ vx: number; vy: number; raf: number | null }>({ vx: 0, vy: 0, raf: null });
+  const { app, viewport } = useGameContext();
+  const edgeScrollRef = useRef<EdgeScrollState>({ vx: 0, vy: 0, raf: null });
   // Keyboard pan/zoom helpers
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!viewport) return;
-      const target = e.target as HTMLElement | null;
-      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || (target as any).isContentEditable)) return;
+      const target = e.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
       const step = 64;
       const zoomStep = 0.1;
       if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'a') {
@@ -107,24 +102,33 @@ function GameRendererContent({
   useEffect(() => {
     const el = containerRef.current;
     if (!el || !viewport || !enableEdgeScroll) return;
+    const ticker = app?.ticker;
+    if (!ticker) return;
     const margin = 24; // px from edge
     const maxSpeed = 12; // pixels per frame pan speed
     const state = edgeScrollRef.current;
 
     const animate = () => {
-      if (!viewport) { state.raf = null; return; }
       const { vx, vy } = state;
-      if (Math.abs(vx) < 0.01 && Math.abs(vy) < 0.01) { 
-        state.raf = null;
-        if (viewport.parent && 'ticker' in viewport.parent) {
-          const app = viewport.parent as any;
-          if (app.ticker) {
-            app.ticker.remove(animate);
-          }
-        }
-        return; 
+      if (Math.abs(vx) < 0.01 && Math.abs(vy) < 0.01) {
+        stopAnimation();
+        return;
       }
       viewport.moveCenter(viewport.center.x + vx, viewport.center.y + vy);
+    };
+
+    const stopAnimation = () => {
+      if (state.raf !== null) {
+        state.raf = null;
+        ticker.remove(animate);
+      }
+    };
+
+    const startAnimation = () => {
+      if (state.raf === null) {
+        state.raf = 1;
+        ticker.add(animate);
+      }
     };
 
     const onMouseMove = (e: MouseEvent) => {
@@ -138,34 +142,28 @@ function GameRendererContent({
       else if (y > rect.height - margin) vy = ((y - (rect.height - margin)) / margin) * maxSpeed;
       state.vx = vx;
       state.vy = vy;
-      if (!state.raf && (vx !== 0 || vy !== 0)) {
-        state.raf = 1; // mark as active
-        if (viewport.parent && 'ticker' in viewport.parent) {
-          const app = viewport.parent as any;
-          if (app.ticker) {
-            app.ticker.add(animate);
-          }
-        }
+      if (vx !== 0 || vy !== 0) {
+        startAnimation();
+      } else {
+        stopAnimation();
       }
     };
     const onMouseLeave = () => {
-      state.vx = 0; state.vy = 0;
+      state.vx = 0;
+      state.vy = 0;
+      stopAnimation();
     };
-    
+
     el.addEventListener('mousemove', onMouseMove);
     el.addEventListener('mouseleave', onMouseLeave);
     return () => {
       el.removeEventListener('mousemove', onMouseMove);
       el.removeEventListener('mouseleave', onMouseLeave);
-      if (state.raf && viewport.parent && 'ticker' in viewport.parent) {
-        const app = viewport.parent as any;
-        if (app.ticker) {
-          app.ticker.remove(animate);
-        }
-      }
-      state.vx = 0; state.vy = 0; state.raf = null;
+      stopAnimation();
+      state.vx = 0;
+      state.vy = 0;
     };
-  }, [viewport, enableEdgeScroll]);
+  }, [app, viewport, enableEdgeScroll]);
 
   return (
     <div ref={containerRef} className="relative w-full h-full bg-gray-900">
@@ -244,4 +242,4 @@ export default function GameRenderer({ children, useExternalProvider = false, ..
   );
 }
 
-export type { GameRendererProps };
+export type { GameRendererProps } from "./types";
