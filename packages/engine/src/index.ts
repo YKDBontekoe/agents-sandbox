@@ -254,3 +254,9 @@ export * from './simulation/events';
 
 // Export time system
 export * from './systems/time';
+
+// Export world generation helpers
+export * from './world/noise';
+export * from './world/biome';
+export * from './world/features';
+export * from './world/generator';

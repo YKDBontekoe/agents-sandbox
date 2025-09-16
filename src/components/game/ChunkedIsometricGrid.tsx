@@ -7,7 +7,7 @@ import logger from "@/lib/logger";
 import { worldToGrid } from "@/lib/isometric";
 import { createTileSprite, type GridTile } from "./grid/TileRenderer";
 import { TileOverlay } from "./grid/TileOverlay";
-import type { RegionFeatures } from "@/lib/world/generator";
+import type { RegionFeatures } from "@engine";
 
 interface ChunkFieldMaps {
   height: number[][];
