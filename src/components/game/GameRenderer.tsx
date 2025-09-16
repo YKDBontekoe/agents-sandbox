@@ -233,7 +233,10 @@ function GameRendererContent({
 
 export default function GameRenderer({ children, useExternalProvider = false, ...props }: GameRendererProps) {
   logger.debug("GameRenderer component rendering with props:", props);
-  
+
+  const [app, setApp] = useState<PIXI.Application | null>(null);
+  const [viewport, setViewport] = useState<Viewport | null>(null);
+
   if (useExternalProvider) {
     return (
       <>
@@ -242,9 +245,6 @@ export default function GameRenderer({ children, useExternalProvider = false, ..
       </>
     );
   }
-
-  const [app, setApp] = useState<PIXI.Application | null>(null);
-  const [viewport, setViewport] = useState<Viewport | null>(null);
 
   return (
     <GameProvider app={app} viewport={viewport} setApp={setApp} setViewport={setViewport}>

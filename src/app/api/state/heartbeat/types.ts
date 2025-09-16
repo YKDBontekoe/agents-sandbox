@@ -1,8 +1,8 @@
 import type { GameState, TickResult } from '@engine'
 
-export interface HeartbeatState extends GameState {}
+export type HeartbeatState = GameState
 
-export interface HeartbeatTickResult extends TickResult {}
+export type HeartbeatTickResult = TickResult
 
 export interface HeartbeatUpdatePayload
   extends Pick<GameState, 'cycle' | 'max_cycle' | 'resources' | 'workers' | 'buildings' | 'routes' | 'edicts'> {

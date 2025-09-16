@@ -41,10 +41,9 @@ export function createGameTime(totalMinutes: number): GameTime {
   else if (hour >= 18 && hour < 22) timeOfDay = 'evening';
   else timeOfDay = 'night';
   
-  let season: string;
   const seasonIndex = Math.floor((month - 1) / 3);
   const seasons = ['spring', 'summer', 'autumn', 'winter'];
-  season = seasons[seasonIndex] || 'spring';
+  const season = seasons[seasonIndex] || 'spring';
   
   return {
     year,
