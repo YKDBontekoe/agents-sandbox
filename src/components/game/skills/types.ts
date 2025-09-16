@@ -14,6 +14,9 @@ export interface SpecialAbility {
   description: string;
   power: number;
   quality: NodeQuality;
+  flavor?: string;
+  duration?: string;
+  cooldown?: string;
 }
 
 export interface SkillNode {

@@ -7,6 +7,7 @@ import type {
   UnlockCondition,
   SpecialAbility,
 } from './types';
+import { rollSpecialAbility } from './specialAbilities';
 
 // Simple seeded RNG (mulberry32)
 function mulberry32(a: number) {
@@ -106,38 +107,8 @@ export function generateSkillTree(seed = 42, tiers: number = 8): SkillTree {
     }
   };
 
-  const createSpecialAbility = (quality: NodeQuality, category: SkillNode['category']): SpecialAbility | undefined => {
-    if (quality === 'common') return undefined;
-    
-    const abilities: Record<SkillNode['category'], SpecialAbility[]> = {
-      economic: [
-        { id: 'golden_touch', name: 'Golden Touch', description: 'Double coin generation for 5 minutes', power: 2.0, quality },
-        { id: 'market_insight', name: 'Market Insight', description: 'Reveal optimal trade routes', power: 1.5, quality }
-      ],
-      military: [
-        { id: 'battle_fury', name: 'Battle Fury', description: 'Reduce all military costs by 50%', power: 0.5, quality },
-        { id: 'fortress_shield', name: 'Fortress Shield', description: 'Immunity to raids for 10 minutes', power: 0.0, quality }
-      ],
-      mystical: [
-        { id: 'mana_storm', name: 'Mana Storm', description: 'Triple mana generation for 3 minutes', power: 3.0, quality },
-        { id: 'arcane_mastery', name: 'Arcane Mastery', description: 'Unlock hidden mystical nodes', power: 1.0, quality }
-      ],
-      infrastructure: [
-        { id: 'rapid_construction', name: 'Rapid Construction', description: 'Instant building completion', power: 1.0, quality },
-        { id: 'efficiency_boost', name: 'Efficiency Boost', description: 'All buildings produce 50% more', power: 1.5, quality }
-      ],
-      diplomatic: [
-        { id: 'silver_tongue', name: 'Silver Tongue', description: 'Double favor from all sources', power: 2.0, quality },
-        { id: 'peace_treaty', name: 'Peace Treaty', description: 'Eliminate all diplomatic penalties', power: 1.0, quality }
-      ],
-      social: [
-        { id: 'festival_spirit', name: 'Festival Spirit', description: 'Boost all resource generation by 25%', power: 1.25, quality },
-        { id: 'unity_bond', name: 'Unity Bond', description: 'Reduce all costs by 30%', power: 0.7, quality }
-      ]
-    };
-    
-    return pick(rng, abilities[category]);
-  };
+  const createSpecialAbility = (quality: NodeQuality, category: SkillNode['category']): SpecialAbility | undefined =>
+    rollSpecialAbility(category, quality, rng);
 
   // Generate hierarchical tiers with optimized connectivity
   let prevTier: string[] = [];
@@ -450,18 +421,8 @@ export function expandSkillTree(tree: SkillTree, seed: number, moreTiers: number
     const cost = { coin: Math.round(baseCost.coin! * progressiveMultiplier), mana: Math.round(baseCost.mana! * progressiveMultiplier), favor: Math.round(baseCost.favor! * progressiveMultiplier) };
     return { cost, baseCost };
   };
-  const createSpecialAbility = (quality: NodeQuality, category: SkillNode['category']): SpecialAbility | undefined => {
-    if (quality === 'common') return undefined;
-    const abilities: Record<SkillNode['category'], SpecialAbility[]> = {
-      economic: [ { id: 'golden_touch', name: 'Golden Touch', description: 'Double coin generation for 5 minutes', power: 2.0, quality } ],
-      military: [ { id: 'battle_fury', name: 'Battle Fury', description: 'Reduce all military costs by 50%', power: 0.5, quality } ],
-      mystical: [ { id: 'mana_storm', name: 'Mana Storm', description: 'Triple mana generation for 3 minutes', power: 3.0, quality } ],
-      infrastructure: [ { id: 'rapid_construction', name: 'Rapid Construction', description: 'Instant building completion', power: 1.0, quality } ],
-      diplomatic: [ { id: 'silver_tongue', name: 'Silver Tongue', description: 'Double favor from all sources', power: 2.0, quality } ],
-      social: [ { id: 'festival_spirit', name: 'Festival Spirit', description: 'Boost all resource generation by 25%', power: 1.25, quality } ],
-    };
-    return pick(abilities[category]);
-  };
+  const createSpecialAbility = (quality: NodeQuality, category: SkillNode['category']): SpecialAbility | undefined =>
+    rollSpecialAbility(category, quality, rng);
   const makeEffects = (cat: SkillNode['category']): SkillEffect[] => {
     switch (cat) {
       case 'economic': return rng() < 0.5 ? [{ kind: 'resource_multiplier', resource: 'coin', factor: 1.06 + rng() * 0.08 }] : [{ kind: 'route_bonus', percent: 5 + Math.floor(rng() * 10) }];
