@@ -16,11 +16,17 @@ export function attachCanvasEvents({
   onTileClick,
 }: CanvasEventsOptions): () => void {
   const getGlobalXY = (event: FederatedPointerEvent) => {
-    const gx = (event as any).globalX as number | undefined;
-    const gy = (event as any).globalY as number | undefined;
-    if (typeof gx === "number" && typeof gy === "number") return { x: gx, y: gy };
-    const g = (event as any).global as { x: number; y: number } | undefined;
-    return { x: g?.x ?? 0, y: g?.y ?? 0 };
+    const { globalX, globalY, global } = event;
+
+    if (Number.isFinite(globalX) && Number.isFinite(globalY)) {
+      return { x: globalX, y: globalY };
+    }
+
+    if (global && Number.isFinite(global.x) && Number.isFinite(global.y)) {
+      return { x: global.x, y: global.y };
+    }
+
+    return { x: 0, y: 0 };
   };
 
   const handlePointerMove = (event: FederatedPointerEvent) => {
