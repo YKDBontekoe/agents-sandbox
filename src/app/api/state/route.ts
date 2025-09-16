@@ -3,10 +3,40 @@ import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { SupabaseUnitOfWork } from '@arcane/infrastructure/supabase'
 import logger from '@/lib/logger'
 import { z } from 'zod'
-import type { GameState } from '@engine'
+import type { GameState, BuildingData, RouteData } from '@engine'
 import { config } from '@/infrastructure/config'
 import { createRequestMetadata } from '@/lib/logging/requestMetadata'
 import { createErrorMetadata } from '@/lib/logging/errorMetadata'
+
+type OptionalKeys<T extends object> = {
+  [K in keyof T]-?: undefined extends T[K] ? K : never
+}[keyof T]
+
+function setOptionalField<T extends object, K extends OptionalKeys<T>>(target: Partial<T>, key: K, value: NonNullable<T[K]>) {
+  target[key] = value
+}
+
+const BuildingDataSchema: z.ZodType<BuildingData> = z
+  .object({
+    id: z.string().optional(),
+    typeId: z.string().optional(),
+    workers: z.number().optional(),
+    level: z.number().optional(),
+    traits: z.record(z.string(), z.unknown()).optional(),
+    recipe: z.string().optional(),
+    x: z.number().optional(),
+    y: z.number().optional(),
+  })
+  .passthrough()
+
+const RouteDataSchema: z.ZodType<RouteData> = z
+  .object({
+    id: z.string(),
+    fromId: z.string(),
+    toId: z.string(),
+    length: z.number().optional(),
+  })
+  .passthrough()
 
 export async function GET(req: NextRequest) {
   try {
@@ -26,17 +56,23 @@ export async function GET(req: NextRequest) {
     }
 
     const needsSeed = !state.skill_tree_seed
-    const needsClockDefaults = typeof (state as any).tick_interval_ms !== 'number' || typeof (state as any).auto_ticking !== 'boolean' || !(state as any).last_tick_at
+    const needsClockDefaults =
+      typeof state.tick_interval_ms !== 'number' ||
+      typeof state.auto_ticking !== 'boolean' ||
+      !state.last_tick_at
+
     if (needsSeed || needsClockDefaults) {
-      const patch: Partial<GameState & { auto_ticking: boolean; tick_interval_ms: number; last_tick_at: string }> = {}
-      if (needsSeed) patch.skill_tree_seed = Math.floor(Math.random() * 1e9)
+      const patch: Partial<GameState> = {}
+      if (needsSeed) setOptionalField(patch, 'skill_tree_seed', Math.floor(Math.random() * 1e9))
       if (needsClockDefaults) {
-        if (typeof (state as any).auto_ticking !== 'boolean') (patch as any).auto_ticking = true
-        if (typeof (state as any).tick_interval_ms !== 'number') (patch as any).tick_interval_ms = 60000
-        if (!(state as any).last_tick_at) (patch as any).last_tick_at = new Date().toISOString()
+        if (typeof state.auto_ticking !== 'boolean') setOptionalField(patch, 'auto_ticking', true)
+        if (typeof state.tick_interval_ms !== 'number') setOptionalField(patch, 'tick_interval_ms', 60000)
+        if (!state.last_tick_at) setOptionalField(patch, 'last_tick_at', new Date().toISOString())
       }
-      const patched = await uow.gameStates.update(state.id, patch as Partial<GameState>)
-      return NextResponse.json(patched)
+      if (Object.keys(patch).length > 0) {
+        const patched = await uow.gameStates.update(state.id, patch)
+        return NextResponse.json(patched)
+      }
     }
 
     return NextResponse.json(state)
@@ -57,8 +93,8 @@ const UpdateSchema = z.object({
   id: z.string().uuid(),
   resources: z.record(z.string(), z.number()).optional(),
   workers: z.number().optional(),
-  buildings: z.array(z.unknown()).optional(),
-  routes: z.array(z.unknown()).optional(),
+  buildings: z.array(BuildingDataSchema).optional(),
+  routes: z.array(RouteDataSchema).optional(),
   roads: z.array(z.object({ x: z.number().int().nonnegative(), y: z.number().int().nonnegative() })).optional(),
   citizens_seed: z.number().int().optional(),
   citizens_count: z.number().int().optional(),
@@ -80,35 +116,33 @@ export async function PATCH(req: NextRequest) {
   }
 
   const { id, resources, workers, buildings, routes, roads, citizens_seed, citizens_count, edicts, skills, skill_tree_seed, pinned_skill_targets, auto_ticking, tick_interval_ms, last_tick_at, map_size } = parsed.data
-  const updates: Partial<{ resources: Record<string, number>; workers: number; buildings: unknown[]; routes: unknown[]; roads: Array<{x:number;y:number}>; citizens_seed: number; citizens_count: number; edicts: Record<string, number>; skills: string[]; skill_tree_seed: number; pinned_skill_targets: string[]; updated_at: string; auto_ticking: boolean; tick_interval_ms: number; last_tick_at: string; map_size: number }> = { updated_at: new Date().toISOString() }
+  const updates: Partial<GameState> = {}
+  setOptionalField(updates, 'updated_at', new Date().toISOString())
+
   if (resources) updates.resources = resources
-  if (typeof workers === 'number') updates.workers = workers
-  if (buildings) updates.buildings = buildings
-  if (routes) updates.routes = routes
-  if (roads) updates.roads = roads
-  if (typeof citizens_seed === 'number') updates.citizens_seed = citizens_seed
-  if (typeof citizens_count === 'number') updates.citizens_count = citizens_count
-  if (edicts) updates.edicts = edicts
-  if (skills) updates.skills = skills
-  if (typeof skill_tree_seed === 'number') updates.skill_tree_seed = skill_tree_seed
-  if (pinned_skill_targets) (updates as any).pinned_skill_targets = pinned_skill_targets
-  if (typeof auto_ticking === 'boolean') (updates as any).auto_ticking = auto_ticking
-  if (typeof tick_interval_ms === 'number') (updates as any).tick_interval_ms = tick_interval_ms
-  if (typeof last_tick_at === 'string') (updates as any).last_tick_at = last_tick_at
-  if (typeof map_size === 'number') updates.map_size = map_size
+  if (typeof workers === 'number') setOptionalField(updates, 'workers', workers)
+  if (buildings !== undefined) setOptionalField(updates, 'buildings', buildings)
+  if (routes !== undefined) setOptionalField(updates, 'routes', routes)
+  if (roads !== undefined) setOptionalField(updates, 'roads', roads)
+  if (typeof citizens_seed === 'number') setOptionalField(updates, 'citizens_seed', citizens_seed)
+  if (typeof citizens_count === 'number') setOptionalField(updates, 'citizens_count', citizens_count)
+  if (edicts) setOptionalField(updates, 'edicts', edicts)
+  if (skills !== undefined) setOptionalField(updates, 'skills', skills)
+  if (typeof skill_tree_seed === 'number') setOptionalField(updates, 'skill_tree_seed', skill_tree_seed)
+  if (pinned_skill_targets !== undefined) setOptionalField(updates, 'pinned_skill_targets', pinned_skill_targets)
+  if (typeof auto_ticking === 'boolean') setOptionalField(updates, 'auto_ticking', auto_ticking)
+  if (typeof tick_interval_ms === 'number') setOptionalField(updates, 'tick_interval_ms', tick_interval_ms)
+  if (typeof last_tick_at === 'string') setOptionalField(updates, 'last_tick_at', last_tick_at)
+  if (typeof map_size === 'number') setOptionalField(updates, 'map_size', map_size)
 
   const supabase = createSupabaseServerClient(config)
   const uow = new SupabaseUnitOfWork(supabase)
   try {
-    const data = await uow.gameStates.update(id, updates as Partial<GameState>)
+    const data = await uow.gameStates.update(id, updates)
     return NextResponse.json(data)
   } catch (error: unknown) {
     const request = createRequestMetadata(req)
     const errorMetadata = createErrorMetadata(error)
-    logger.error('Supabase update error', {
-      error: errorMetadata,
-      request,
-    })
 
     let message = 'Unknown error'
     let details = ''
@@ -118,15 +152,18 @@ export async function PATCH(req: NextRequest) {
       details = error.stack ?? ''
     } else if (typeof error === 'object' && error !== null) {
       try {
-        message = JSON.stringify(error)
+        message = JSON.stringify(error, null, 2)
       } catch {
         message = String(error)
       }
-    } else if (typeof error === 'string') {
-      message = error
-    } else if (typeof error === 'number' || typeof error === 'boolean') {
+    } else {
       message = String(error)
     }
+
+    logger.error('Supabase update error', {
+      error: errorMetadata,
+      request,
+    })
 
     return NextResponse.json({ error: message, details }, { status: 500 })
   }

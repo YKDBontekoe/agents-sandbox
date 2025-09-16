@@ -57,10 +57,12 @@ export interface GameState {
   citizens_seed?: number;
   citizens_count?: number;
   skills?: string[];
+  pinned_skill_targets?: string[];
   skill_tree_seed?: number;
   edicts?: Record<string, number>;
   max_cycle?: number;
   updated_at?: string;
+  map_size?: number;
   // Real-time clock
   auto_ticking?: boolean;
   last_tick_at?: string; // ISO timestamp

@@ -13,5 +13,9 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
+    environmentMatchGlobs: [[
+      'src/state/**/*.test.{ts,tsx}',
+      'jsdom',
+    ]],
   },
 });

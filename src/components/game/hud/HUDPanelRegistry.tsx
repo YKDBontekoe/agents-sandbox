@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
 import { HUDZone, useHUDLayout } from './HUDLayoutSystem';
 
 // Panel configuration interface
@@ -25,24 +25,35 @@ export interface HUDPanelConfig {
 }
 
 // Panel component interface
-export interface HUDPanelComponent {
+export interface HUDPanelComponent<P extends object = Record<string, never>> {
   config: HUDPanelConfig;
-  component: React.ComponentType<any>;
-  props?: Record<string, any>;
+  component: React.ComponentType<P>;
+  props?: Partial<P>;
   isVisible?: boolean;
   isCollapsed?: boolean;
 }
 
+type HUDPanelRegistryEntry<P extends object = Record<string, never>> = HUDPanelComponent<P> & {
+  isVisible: boolean;
+  isCollapsed: boolean;
+};
+
+type AnyHUDPanelRegistryEntry = HUDPanelRegistryEntry<object>;
+
+type HUDPanelUpdate<P extends object = Record<string, never>> = Partial<
+  Pick<HUDPanelRegistryEntry<P>, 'props' | 'isVisible' | 'isCollapsed'>
+>;
+
 // Panel registry context
 interface HUDPanelRegistryContextType {
-  panels: Map<string, HUDPanelComponent>;
-  registerPanel: (panel: HUDPanelComponent) => void;
+  panels: Map<string, AnyHUDPanelRegistryEntry>;
+  registerPanel: <P extends object>(panel: HUDPanelComponent<P>) => void;
   unregisterPanel: (panelId: string) => void;
-  updatePanel: (panelId: string, updates: Partial<HUDPanelComponent>) => void;
-  getPanelsForZone: (zone: HUDZone) => HUDPanelComponent[];
+  updatePanel: <P extends object>(panelId: string, updates: HUDPanelUpdate<P>) => void;
+  getPanelsForZone: (zone: HUDZone) => AnyHUDPanelRegistryEntry[];
   togglePanelVisibility: (panelId: string) => void;
   togglePanelCollapse: (panelId: string) => void;
-  getPanelById: (panelId: string) => HUDPanelComponent | undefined;
+  getPanelById: (panelId: string) => AnyHUDPanelRegistryEntry | undefined;
 }
 
 const HUDPanelRegistryContext = createContext<HUDPanelRegistryContextType | null>(null);
@@ -61,34 +72,35 @@ interface HUDPanelRegistryProviderProps {
 }
 
 export function HUDPanelRegistryProvider({ children }: HUDPanelRegistryProviderProps) {
-  const [panels, setPanels] = useState<Map<string, HUDPanelComponent>>(new Map());
-  const { screenSize, activeZones, layout, registerPanel: registerLayoutPanel, unregisterPanel: unregisterLayoutPanel, getPanelsInZone } = useHUDLayout();
+  const [panels, setPanels] = useState<Map<string, AnyHUDPanelRegistryEntry>>(new Map());
+  const { screenSize, layout, registerPanel: registerLayoutPanel, unregisterPanel: unregisterLayoutPanel, getPanelsInZone } = useHUDLayout();
 
-  const registerPanel = useCallback((panel: HUDPanelComponent) => {
+  const registerPanel = useCallback(<P extends object>(panel: HUDPanelComponent<P>) => {
     const { config } = panel;
-    
+
     // Check responsive visibility
-    const shouldHide = 
+    const shouldHide =
       (screenSize === 'mobile' && config.responsive?.hideOnMobile) ||
       (screenSize === 'tablet' && config.responsive?.hideOnTablet);
-    
-    const shouldCollapse = 
-      screenSize === 'mobile' && config.responsive?.collapseOnMobile;
 
-    const panelWithState: HUDPanelComponent = {
+    const shouldCollapse = Boolean(
+      screenSize === 'mobile' && config.responsive?.collapseOnMobile
+    );
+
+    const panelWithState: HUDPanelRegistryEntry<P> = {
       ...panel,
-      isVisible: !shouldHide,
-      isCollapsed: shouldCollapse
+      isVisible: panel.isVisible ?? !shouldHide,
+      isCollapsed: panel.isCollapsed ?? shouldCollapse
     };
 
     setPanels(prev => {
       const newPanels = new Map(prev);
-      newPanels.set(config.id, panelWithState);
+      newPanels.set(config.id, panelWithState as AnyHUDPanelRegistryEntry);
       return newPanels;
     });
 
     // Do not register with layout here; defer to effect to avoid updates during render
-  }, [screenSize, registerLayoutPanel]);
+  }, [screenSize]);
 
   const unregisterPanel = useCallback((panelId: string) => {
     // Only update local registry here; layout reconciliation effect will handle unregistering
@@ -100,18 +112,18 @@ export function HUDPanelRegistryProvider({ children }: HUDPanelRegistryProviderP
     });
   }, []);
 
-  const updatePanel = useCallback((panelId: string, updates: Partial<HUDPanelComponent>) => {
+  const updatePanel = useCallback(<P extends object>(panelId: string, updates: HUDPanelUpdate<P>) => {
     setPanels(prev => {
       const panel = prev.get(panelId);
       if (!panel) return prev;
 
       const newPanels = new Map(prev);
-      newPanels.set(panelId, { ...panel, ...updates });
+      newPanels.set(panelId, { ...panel, ...updates } as AnyHUDPanelRegistryEntry);
       return newPanels;
     });
   }, []);
 
-  const getPanelsForZone = useCallback((zone: HUDZone): HUDPanelComponent[] => {
+  const getPanelsForZone = useCallback((zone: HUDZone): AnyHUDPanelRegistryEntry[] => {
     return Array.from(panels.values())
       .filter(panel => panel.config.zone === zone && panel.isVisible)
       .sort((a, b) => (b.config.priority || 0) - (a.config.priority || 0));
@@ -133,7 +145,7 @@ export function HUDPanelRegistryProvider({ children }: HUDPanelRegistryProviderP
     }
   }, [panels, updatePanel]);
 
-  const getPanelById = useCallback((panelId: string): HUDPanelComponent | undefined => {
+  const getPanelById = useCallback((panelId: string): AnyHUDPanelRegistryEntry | undefined => {
     return panels.get(panelId);
   }, [panels]);
 
@@ -146,7 +158,9 @@ export function HUDPanelRegistryProvider({ children }: HUDPanelRegistryProviderP
         (screenSize === 'mobile' && config.responsive?.hideOnMobile) ||
         (screenSize === 'tablet' && config.responsive?.hideOnTablet);
 
-      const shouldCollapse = screenSize === 'mobile' && config.responsive?.collapseOnMobile;
+      const shouldCollapse = Boolean(
+        screenSize === 'mobile' && config.responsive?.collapseOnMobile
+      );
 
       if (panel.isVisible !== !shouldHide || panel.isCollapsed !== shouldCollapse) {
         setPanels(prev => {
@@ -163,7 +177,7 @@ export function HUDPanelRegistryProvider({ children }: HUDPanelRegistryProviderP
         });
       }
     });
-  }, [screenSize]);
+  }, [screenSize, panels]);
 
   // Reconcile layout registration after render based on current panels
   useEffect(() => {
@@ -214,10 +228,10 @@ export function HUDPanelRegistryProvider({ children }: HUDPanelRegistryProviderP
 }
 
 // Hook for registering panels
-export function useHUDPanel(panel: HUDPanelComponent) {
+export function useHUDPanel<P extends object>(panel: HUDPanelComponent<P>) {
   const { registerPanel, unregisterPanel } = useHUDPanelRegistry();
-  
-  const stablePanel = useMemo(() => panel, [panel.config.id, panel.config.zone, panel.config.priority]);
+
+  const stablePanel = useMemo(() => panel, [panel.config.id, panel.config.zone, panel.config.priority, panel.component]);
 
   useEffect(() => {
     registerPanel(stablePanel);

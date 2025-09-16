@@ -3,28 +3,7 @@
 import { useEffect, useRef, useCallback } from "react";
 import * as PIXI from "pixi.js";
 import logger from "@/lib/logger";
-
-interface MemoryStats {
-  totalTextures: number;
-  totalGeometries: number;
-  totalDrawCalls: number;
-  memoryUsage: number;
-  loadedChunks: number;
-  // Additional diagnostics
-  heapLimitMB?: number;
-  percentUsed?: number; // 0-100
-}
-
-interface MemoryManagerProps {
-  maxMemoryMB?: number;
-  maxTextures?: number;
-  cleanupInterval?: number;
-  onMemoryWarning?: (stats: MemoryStats) => void;
-  onMemoryCleanup?: (freedMB: number) => void;
-  // New optional controls (backward-compatible)
-  warnAtPercent?: number; // warn when used/limit exceeds this percent
-  warningCooldownMs?: number; // minimum time between warnings
-}
+import type { MemoryManagerProps, MemoryStats } from "./MemoryManager.types";
 
 export default function MemoryManager({
   maxMemoryMB = 512, // 512MB limit
@@ -49,15 +28,15 @@ export default function MemoryManager({
   // Estimate memory usage of PIXI objects
   const estimateMemoryUsage = useCallback((): MemoryStats => {
     // Simple estimation based on performance.memory if available
-    const memoryInfo = (performance as any).memory;
+    const memoryInfo = typeof performance !== "undefined" ? performance.memory : undefined;
 
     let estimatedMemoryMB = 0;
     let heapLimitMB: number | undefined;
     let percentUsed: number | undefined;
 
-    if (memoryInfo) {
+    if (memoryInfo && typeof memoryInfo.usedJSHeapSize === "number") {
       estimatedMemoryMB = memoryInfo.usedJSHeapSize / (1024 * 1024);
-      if (memoryInfo.jsHeapSizeLimit) {
+      if (typeof memoryInfo.jsHeapSizeLimit === "number") {
         heapLimitMB = memoryInfo.jsHeapSizeLimit / (1024 * 1024);
         if (heapLimitMB > 0) {
           percentUsed = (estimatedMemoryMB / heapLimitMB) * 100;
@@ -95,8 +74,8 @@ export default function MemoryManager({
       }
       
       // Force JavaScript garbage collection if available
-      if (typeof (window as any).gc === 'function') {
-        (window as any).gc();
+      if (typeof window !== "undefined" && typeof window.gc === "function") {
+        window.gc();
       }
       
       const afterStats = estimateMemoryUsage();
@@ -199,16 +178,16 @@ export default function MemoryManager({
   // Expose memory management functions globally for debugging
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      (window as any).memoryManager = {
+      window.memoryManager = {
         getStats: estimateMemoryUsage,
         cleanup: performCleanup,
         checkUsage: checkMemoryUsage,
       };
     }
-    
+
     return () => {
       if (typeof window !== 'undefined') {
-        delete (window as any).memoryManager;
+        delete window.memoryManager;
       }
     };
   }, [estimateMemoryUsage, performCleanup, checkMemoryUsage]);
@@ -219,10 +198,10 @@ export default function MemoryManager({
 // Hook for accessing memory stats
 export function useMemoryStats() {
   const getStats = useCallback((): MemoryStats => {
-    if (typeof window !== 'undefined' && (window as any).memoryManager) {
-      return (window as any).memoryManager.getStats();
+    if (typeof window !== 'undefined' && window.memoryManager) {
+      return window.memoryManager.getStats();
     }
-    
+
     return {
       totalTextures: 0,
       totalGeometries: 0,
@@ -233,10 +212,10 @@ export function useMemoryStats() {
       percentUsed: undefined,
     };
   }, []);
-  
+
   const forceCleanup = useCallback(async (): Promise<number> => {
-    if (typeof window !== 'undefined' && (window as any).memoryManager) {
-      return await (window as any).memoryManager.cleanup();
+    if (typeof window !== 'undefined' && window.memoryManager) {
+      return await window.memoryManager.cleanup();
     }
     return 0;
   }, []);
@@ -244,5 +223,5 @@ export function useMemoryStats() {
   return { getStats, forceCleanup };
 }
 
-export type { MemoryStats, MemoryManagerProps };
+export type { MemoryStats, MemoryManagerProps } from "./MemoryManager.types";
 export { MemoryManager };

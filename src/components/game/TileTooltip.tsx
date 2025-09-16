@@ -27,7 +27,8 @@ export default function TileTooltip({ hoverTile, selectedTile, previewTypeId, ti
   useEffect(() => {
     if (!viewport || !target) { setPos(null); return; }
     const { worldX, worldY } = gridToWorld(target.x, target.y, tileWidth, tileHeight);
-    const p = viewport.toGlobal({ x: worldX, y: worldY } as any);
+    const worldPoint = new PIXI.Point(worldX, worldY);
+    const p = viewport.toGlobal(worldPoint);
     setPos({ left: p.x + 12, top: p.y - 12 });
   }, [viewport, target?.x, target?.y, target?.tileType]);
 

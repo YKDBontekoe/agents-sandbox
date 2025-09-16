@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import * as PIXI from "pixi.js";
 import { useGameContext } from "./GameContext";
+import type { ParticleGraphic } from "./AmbientLayer.types";
 
 interface AmbientLayerProps {
   tileTypes: string[][];
@@ -13,7 +14,7 @@ interface AmbientLayerProps {
 export default function AmbientLayer({ tileTypes, tileWidth = 64, tileHeight = 32 }: AmbientLayerProps) {
   const { app, viewport } = useGameContext();
   const containerRef = useRef<PIXI.Container | null>(null);
-  const particlesRef = useRef<PIXI.Graphics[]>([]);
+  const particlesRef = useRef<ParticleGraphic[]>([]);
   const tRef = useRef(0);
 
   const gridToWorld = (gx: number, gy: number) => {
@@ -49,37 +50,40 @@ export default function AmbientLayer({ tileTypes, tileWidth = 64, tileHeight = 3
         if (visibleTiles.length) {
           const pick = visibleTiles[Math.floor(Math.random() * visibleTiles.length)];
           const p = gridToWorld(pick.gx, pick.gy);
-          const g = new PIXI.Graphics();
-          g.position.set(p.wx, p.wy);
-          g.zIndex = 990;
+          const baseGraphic = new PIXI.Graphics();
+          baseGraphic.position.set(p.wx, p.wy);
+          baseGraphic.zIndex = 990;
+          let vy: number;
+          let fade: number;
           if (pick.type === 'water') {
-            g.beginFill(0x93c5fd, 0.4);
-            g.drawCircle(0, 0, 1.5);
-            g.endFill();
-            (g as any).__vy = -0.08;
-            (g as any).__fade = 0.007;
+            baseGraphic.beginFill(0x93c5fd, 0.4);
+            baseGraphic.drawCircle(0, 0, 1.5);
+            baseGraphic.endFill();
+            vy = -0.08;
+            fade = 0.007;
           } else {
-            g.beginFill(0x65a30d, 0.35);
-            g.drawCircle(0, 0, 1.8);
-            g.endFill();
-            (g as any).__vy = -0.05;
-            (g as any).__fade = 0.005;
+            baseGraphic.beginFill(0x65a30d, 0.35);
+            baseGraphic.drawCircle(0, 0, 1.8);
+            baseGraphic.endFill();
+            vy = -0.05;
+            fade = 0.005;
           }
-          container.addChild(g);
-          particlesRef.current.push(g);
+          const particle: ParticleGraphic = Object.assign(baseGraphic, { vy, fade });
+          container.addChild(particle);
+          particlesRef.current.push(particle);
         }
       }
 
       // Animate particles
-      particlesRef.current.forEach((g) => {
-        g.y += (g as any).__vy;
-        g.alpha = Math.max(0, g.alpha - (g as any).__fade);
+      particlesRef.current.forEach((particle) => {
+        particle.y += particle.vy;
+        particle.alpha = Math.max(0, particle.alpha - particle.fade);
       });
       // Cleanup faded
-      particlesRef.current = particlesRef.current.filter((g) => {
-        if (g.alpha <= 0.02) {
-          if (g.parent) g.parent.removeChild(g);
-          g.destroy();
+      particlesRef.current = particlesRef.current.filter((particle) => {
+        if (particle.alpha <= 0.02) {
+          if (particle.parent) particle.parent.removeChild(particle);
+          particle.destroy();
           return false;
         }
         return true;
@@ -89,7 +93,10 @@ export default function AmbientLayer({ tileTypes, tileWidth = 64, tileHeight = 3
     app.ticker.add(tick);
     return () => {
       app.ticker.remove(tick);
-      particlesRef.current.forEach(g => { if (g.parent) g.parent.removeChild(g); g.destroy(); });
+      particlesRef.current.forEach((particle) => {
+        if (particle.parent) particle.parent.removeChild(particle);
+        particle.destroy();
+      });
       particlesRef.current = [];
       if (container.parent) container.parent.removeChild(container);
       container.destroy({ children: true });

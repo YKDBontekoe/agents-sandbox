@@ -3,6 +3,7 @@ import * as PIXI from "pixi.js";
 import { Viewport } from "pixi-viewport";
 import { useGameContext } from "@/components/game/GameContext";
 import logger from "@/lib/logger";
+import { ensureStaticEventMode } from "@/lib/pixi/eventMode";
 
 interface UsePixiApplicationOptions {
   width: number;
@@ -107,8 +108,8 @@ export function usePixiApplication({
           events: app.renderer.events,
         });
         // Ensure pointer events are processed in Pixi v7+/v8
-        (app.stage as any).eventMode = "static";
-        (viewport as any).eventMode = "static";
+        ensureStaticEventMode(app.stage);
+        ensureStaticEventMode(viewport);
 
         viewport.sortableChildren = true;
         app.stage.addChild(viewport);
@@ -194,8 +195,8 @@ export function usePixiApplication({
           events: app.renderer.events,
         });
         // Ensure pointer events are processed in Pixi v7+/v8
-        (app.stage as any).eventMode = "static";
-        (viewport as any).eventMode = "static";
+        ensureStaticEventMode(app.stage);
+        ensureStaticEventMode(viewport);
 
         viewport.sortableChildren = true;
         app.stage.addChild(viewport);
@@ -272,11 +273,11 @@ export function usePixiApplication({
   useEffect(() => {
     const applySize = () => {
       if (appRef.current && viewportRef.current) {
-        const renderer = appRef.current.renderer as any;
-        const curW = renderer?.width ?? 0;
-        const curH = renderer?.height ?? 0;
+        const renderer = appRef.current.renderer;
+        const curW = renderer.width;
+        const curH = renderer.height;
         if (curW !== width || curH !== height) {
-          appRef.current.renderer.resize(width, height);
+          renderer.resize(width, height);
           viewportRef.current.resize(width, height);
         }
       }

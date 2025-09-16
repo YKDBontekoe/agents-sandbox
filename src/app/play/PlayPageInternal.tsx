@@ -117,7 +117,7 @@ interface PlayPageProps {
 }
 
 export default function PlayPage({ initialState = null, initialProposals = [] }: PlayPageProps) {
-  console.log('🚀 PlayPage component mounting/rendering');
+  logger.debug('🚀 PlayPage component mounting/rendering');
   const generateId = useIdGenerator();
   const [state, setState] = useState<GameState | null>(initialState);
   const [proposals, setProposals] = useState<Proposal[]>(initialProposals ?? []);
@@ -131,7 +131,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     // Priority: initialState.map_size > localStorage > default 32
     if (initialState?.map_size) {
       const n = Math.max(8, Math.min(48, initialState.map_size));
-      console.log('Initial gridSize from initialState.map_size:', n);
+      logger.debug('Initial gridSize from initialState.map_size:', n);
       return n;
     }
     if (typeof window !== 'undefined') {
@@ -139,53 +139,53 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
         const stored = localStorage.getItem('ad_map_size');
         if (stored) {
           const n = Math.max(8, Math.min(48, parseInt(stored, 10) || 32));
-          console.log('Initial gridSize from localStorage:', n);
+          logger.debug('Initial gridSize from localStorage:', n);
           return n;
         }
       } catch (err) {
-        console.error('Error reading gridSize from localStorage:', err);
+        logger.error('Error reading gridSize from localStorage:', err);
       }
     }
-    console.log('Initial gridSize fallback to default: 32');
+    logger.debug('Initial gridSize fallback to default: 32');
     return 32;
   });
   
   // Load map data when gridSize changes - MUST be before conditional returns
   useEffect(() => {
-    console.log('🔥 MAP USEEFFECT SETUP - gridSize:', gridSize);
+    logger.debug('🔥 MAP USEEFFECT SETUP - gridSize:', gridSize);
     async function loadMap() {
       try {
-        console.log('🗺️ USEEFFECT TRIGGERED - gridSize:', gridSize);
+        logger.debug('🗺️ USEEFFECT TRIGGERED - gridSize:', gridSize);
         
         if (gridSize == null) {
-          console.log('❌ SKIPPED - gridSize is null');
+          logger.debug('❌ SKIPPED - gridSize is null');
           return;
         }
         
         const url = `/api/map?size=${gridSize}`;
-        console.log('🌐 FETCHING:', url);
+        logger.debug('🌐 FETCHING:', url);
         
         const res = await fetch(url);
-        console.log('📡 RESPONSE STATUS:', res.status, res.ok);
+        logger.debug('📡 RESPONSE STATUS:', res.status, res.ok);
         
         if (!res.ok) throw new Error('Failed to load map');
         
         const data = await res.json();
-        console.log('📦 DATA RECEIVED - map length:', data.map?.length);
+        logger.debug('📦 DATA RECEIVED - map length:', data.map?.length);
         
-        console.log('🎯 CALLING setTileTypes with data:', {
+        logger.debug('🎯 CALLING setTileTypes with data:', {
           mapLength: data.map?.length,
           firstRowLength: data.map?.[0]?.length,
           sampleData: data.map?.slice(0, 2)
         });
-        console.log('🔄 Current tileTypes length before setState:', tileTypes.length);
+        logger.debug('🔄 Current tileTypes length before setState:', tileTypes.length);
         setTileTypes(data.map);
-        console.log('✅ setTileTypes CALLED - should trigger tileTypes useEffect');
+        logger.debug('✅ setTileTypes CALLED - should trigger tileTypes useEffect');
         // Check if we're in React StrictMode (double execution)
-        console.log('🔍 React StrictMode check - this log should appear once per actual call');
+        logger.debug('🔍 React StrictMode check - this log should appear once per actual call');
         
       } catch (err) {
-        console.error('❌ MAP LOAD ERROR:', err);
+        logger.error('❌ MAP LOAD ERROR:', err);
       }
     }
     loadMap();
@@ -193,14 +193,14 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   
   // Monitor tileTypes state changes - MUST be before conditional returns
   useEffect(() => {
-    console.log('🔥 TILETYPES USEEFFECT SETUP');
-    console.log('🔍 TILETYPES CHANGED - length:', tileTypes.length, 'firstRowLength:', tileTypes[0]?.length || 0);
+    logger.debug('🔥 TILETYPES USEEFFECT SETUP');
+    logger.debug('🔍 TILETYPES CHANGED - length:', tileTypes.length, 'firstRowLength:', tileTypes[0]?.length || 0);
     if (tileTypes.length > 0) {
-      console.log('✅ TILETYPES STATE UPDATED SUCCESSFULLY!');
+      logger.debug('✅ TILETYPES STATE UPDATED SUCCESSFULLY!');
       // Make a server-side visible log by calling a simple API
       fetch('/api/debug-log?message=TILETYPES_STATE_UPDATED&length=' + tileTypes.length).catch(() => {});
     } else {
-      console.log('❌ TILETYPES STILL EMPTY');
+      logger.debug('❌ TILETYPES STILL EMPTY');
       // Make a server-side visible log for empty state too
       fetch('/api/debug-log?message=TILETYPES_STILL_EMPTY').catch(() => {});
     }
@@ -287,7 +287,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
       const data = await response.json();
       return data.tiles as string[][];
     } catch (error) {
-      console.warn('Failed to fetch chunk:', error);
+      logger.warn('Failed to fetch chunk:', error);
       return null;
     }
   }, [citizensSeed]);
@@ -401,12 +401,12 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     try { return Object.keys(JSON.parse(localStorage.getItem('ad_skills_unlocked') || '{}')).filter(k => JSON.parse(localStorage.getItem('ad_skills_unlocked') || '{}')[k]); } catch { return []; }
   });
   useEffect(() => {
-    console.log('localStorage useEffect running, window defined:', typeof window !== 'undefined');
+    logger.debug('localStorage useEffect running, window defined:', typeof window !== 'undefined');
     if (typeof window === 'undefined') return;
     
     // Don't override if gridSize was already set from initialState.map_size
     if (initialState?.map_size) {
-      console.log('Skipping localStorage override - initialState.map_size already set gridSize to:', gridSize);
+      logger.debug('Skipping localStorage override - initialState.map_size already set gridSize to:', gridSize);
       setPendingMapSize(gridSize || 24);
       setMapSizeModalOpen(false);
       return;
@@ -414,63 +414,63 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     
     try {
       const saved = localStorage.getItem('ad_map_size');
-      console.log('Saved map size from localStorage:', saved);
+      logger.debug('Saved map size from localStorage:', saved);
       if (saved) {
         // Limit map size to prevent performance issues - max 48 for stability
         const n = Math.max(8, Math.min(48, Number(saved) || 24));
-        console.log('Setting gridSize from localStorage:', n);
+        logger.debug('Setting gridSize from localStorage:', n);
         setGridSize(n);
         setPendingMapSize(n);
         setMapSizeModalOpen(false);
-        console.log('localStorage: Set gridSize to', n, 'and closed modal');
+        logger.debug('localStorage: Set gridSize to', n, 'and closed modal');
       } else {
         // Set default map size if none exists
-        console.log('No saved map size, setting default to 32');
+        logger.debug('No saved map size, setting default to 32');
         setGridSize(32);
         setPendingMapSize(32);
         setMapSizeModalOpen(false);
         localStorage.setItem('ad_map_size', '32');
-        console.log('localStorage: Set default gridSize to 32 and closed modal');
+        logger.debug('localStorage: Set default gridSize to 32 and closed modal');
       }
     } catch (err) {
-      console.error('Error loading map size from localStorage:', err);
+      logger.error('Error loading map size from localStorage:', err);
       // Fallback to default
       setGridSize(32);
       setPendingMapSize(32);
       setMapSizeModalOpen(false);
-      console.log('localStorage: Error fallback - set gridSize to 32 and closed modal');
+      logger.debug('localStorage: Error fallback - set gridSize to 32 and closed modal');
     }
   }, [initialState?.map_size, gridSize]);
 
   // Load map data when gridSize changes - MUST be before conditional returns
   useEffect(() => {
-    console.log('🔥 MAP USEEFFECT SETUP - gridSize:', gridSize);
+    logger.debug('🔥 MAP USEEFFECT SETUP - gridSize:', gridSize);
     async function loadMap() {
       try {
-        console.log('🗺️ USEEFFECT TRIGGERED - gridSize:', gridSize);
+        logger.debug('🗺️ USEEFFECT TRIGGERED - gridSize:', gridSize);
         
         if (gridSize == null) {
-          console.log('❌ SKIPPED - gridSize is null');
+          logger.debug('❌ SKIPPED - gridSize is null');
           return;
         }
         
         const url = `/api/map?size=${gridSize}`;
-        console.log('🌐 FETCHING:', url);
+        logger.debug('🌐 FETCHING:', url);
         
         const res = await fetch(url);
-        console.log('📡 RESPONSE STATUS:', res.status, res.ok);
+        logger.debug('📡 RESPONSE STATUS:', res.status, res.ok);
         
         if (!res.ok) throw new Error('Failed to load map');
         
         const data = await res.json();
-        console.log('📦 DATA RECEIVED - map length:', data.map?.length);
+        logger.debug('📦 DATA RECEIVED - map length:', data.map?.length);
         
-        console.log('🎯 CALLING setTileTypes');
+        logger.debug('🎯 CALLING setTileTypes');
         setTileTypes(data.map);
-        console.log('✅ setTileTypes CALLED');
+        logger.debug('✅ setTileTypes CALLED');
         
       } catch (err) {
-        console.error('❌ MAP LOAD ERROR:', err);
+        logger.error('❌ MAP LOAD ERROR:', err);
       }
     }
     loadMap();
@@ -478,8 +478,8 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   
   // Monitor tileTypes state changes - MUST be before conditional returns
   useEffect(() => {
-    console.log('🔥 TILETYPES USEEFFECT SETUP');
-    console.log('🔍 TILETYPES CHANGED - length:', tileTypes.length);
+    logger.debug('🔥 TILETYPES USEEFFECT SETUP');
+    logger.debug('🔍 TILETYPES CHANGED - length:', tileTypes.length);
   }, [tileTypes]);
   
   // Listen for skill unlock events to deduct costs && persist
@@ -555,7 +555,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
     } catch (err) {
-      console.error('Failed to save state:', err);
+      logger.error('Failed to save state:', err);
     }
   }, [state]);
 
@@ -819,16 +819,18 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     });
   }, [state]);
 
-  // Greedy auto-assign idle workers to best buildings by marginal yield
-  useEffect(() => {
-    if (!autoAssignWorkers) return;
+  const stateWorkers = state?.workers ?? 0;
+  const stateCycle = state?.cycle ?? 0;
+
+  const autoAssignIdleWorkers = useCallback(() => {
     if (!simResources) return;
     let idle = simResources.workers || 0;
     if (idle <= 0) return;
-    // Work on local copies; batch a single save at end
+
     const updatedBuildings = [...placedBuildings];
-    let safety = 100; // guard against infinite loop
-    // Base weights per resource value
+    if (updatedBuildings.length === 0) return;
+
+    let safety = 100;
     const scoreWeights: Record<string, number> = {
       grain: 3,
       wood: 2,
@@ -837,85 +839,95 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
       favor: 0.4,
       mana: 0,
     };
-    const routesArr = routes || [];
-    const edictsApplied = edicts;
-    const season = ((state?.cycle ?? 0) % 4 === 0 ? 'spring' : ((state?.cycle ?? 0) % 4 === 1 ? 'summer' : ((state?.cycle ?? 0) % 4 === 2 ? 'autumn' : 'winter')));
 
-    // Adjust priorities by season and policy
-    // Grain is more critical in winter; wood a bit higher in autumn; coin more valuable with high tariffs
+    const routesArr = routes ?? [];
+    const edictsApplied = edicts;
+    const cycleMod = stateCycle % 4;
+    const season = cycleMod === 0 ? 'spring' : cycleMod === 1 ? 'summer' : cycleMod === 2 ? 'autumn' : 'winter';
+
     const tariffs = Math.max(0, Math.min(100, Number(edictsApplied['tariffs'] ?? 50)));
-    const coinBoost = 1 + (tariffs - 50) / 100 * 0.6; // [-0.3, +0.3]
+    const coinBoost = 1 + ((tariffs - 50) / 100) * 0.6;
     if (season === 'winter') scoreWeights.grain += 1.2;
     if (season === 'autumn') scoreWeights.wood += 0.6;
     if (season === 'summer') scoreWeights.planks += 0.4;
     scoreWeights.coin *= coinBoost;
 
     const marginalScore = (idx: number): number => {
-      const b = updatedBuildings[idx];
-      const def = SIM_BUILDINGS[b.typeId];
+      const building = updatedBuildings[idx];
+      const def = SIM_BUILDINGS[building.typeId];
       if (!def) return -Infinity;
+
       const capBase = def.workCapacity ?? 0;
-      // account for level scaling similar to projection
-      const level = Math.max(1, Number(b.level ?? 1));
+      const level = Math.max(1, Number(building.level ?? 1));
       const levelCapScale = 1 + 0.25 * (level - 1);
       const cap = Math.round(capBase * levelCapScale);
       if (cap <= 0) return -Infinity;
-      if ((b.workers || 0) >= cap) return -Infinity;
+      if ((building.workers || 0) >= cap) return -Infinity;
 
       const base = projectCycleDeltas(
         { ...simResources },
         updatedBuildings,
         routesArr,
         SIM_BUILDINGS,
-        { totalWorkers: (state?.workers || 0), edicts: edictsApplied }
+        { totalWorkers: stateWorkers, edicts: edictsApplied }
       ).updated;
-      // simulate +1 worker on this building only
+
       const temp = [...updatedBuildings];
-      temp[idx] = { ...temp[idx], workers: (temp[idx].workers || 0) + 1 } as any;
+      temp[idx] = { ...temp[idx], workers: (temp[idx].workers || 0) + 1 } as StoredBuilding;
+
       const next = projectCycleDeltas(
         { ...simResources },
         temp,
         routesArr,
         SIM_BUILDINGS,
-        { totalWorkers: (state?.workers || 0), edicts: edictsApplied }
+        { totalWorkers: stateWorkers, edicts: edictsApplied }
       ).updated;
 
       let score = 0;
-      for (const [k, w] of Object.entries(scoreWeights)) {
-        const delta = (next as any)[k] - (base as any)[k];
-        score += (delta || 0) * (w as number);
+      for (const [resource, weight] of Object.entries(scoreWeights)) {
+        const delta = (next as any)[resource] - (base as any)[resource];
+        score += (delta || 0) * (weight as number);
       }
-      // bias toward resolving current shortages
-      if ((simResources.grain || 0) < 50 && b.typeId === 'farm') score += 5;
-      if ((simResources.wood || 0) < 30 && b.typeId === 'lumber_camp') score += 3;
-      if ((simResources.planks || 0) < 20 && b.typeId === 'sawmill') score += 2;
-      // Slight policy-aware bonus
-      if (tariffs > 70 && (b.typeId === 'trade_post')) score += 1.5;
+
+      if ((simResources.grain || 0) < 50 && building.typeId === 'farm') score += 5;
+      if ((simResources.wood || 0) < 30 && building.typeId === 'lumber_camp') score += 3;
+      if ((simResources.planks || 0) < 20 && building.typeId === 'sawmill') score += 2;
+      if (tariffs > 70 && building.typeId === 'trade_post') score += 1.5;
+
       return score;
     };
 
     while (idle > 0 && safety-- > 0) {
-      // find best index
       let bestIdx = -1;
       let bestScore = 0;
       for (let i = 0; i < updatedBuildings.length; i++) {
-        const s = marginalScore(i);
-        if (s > bestScore) { bestScore = s; bestIdx = i; }
+        const score = marginalScore(i);
+        if (score > bestScore) {
+          bestScore = score;
+          bestIdx = i;
+        }
       }
       if (bestIdx === -1) break;
-      // assign 1 worker
-      updatedBuildings[bestIdx] = { ...updatedBuildings[bestIdx], workers: (updatedBuildings[bestIdx].workers || 0) + 1 } as any;
+
+      updatedBuildings[bestIdx] = {
+        ...updatedBuildings[bestIdx],
+        workers: (updatedBuildings[bestIdx].workers || 0) + 1,
+      } as StoredBuilding;
       idle -= 1;
     }
 
     if (idle !== (simResources.workers || 0)) {
-      // apply local updates and persist
       setPlacedBuildings(updatedBuildings);
-      setSimResources(prev => prev ? { ...prev, workers: idle } : prev);
-      saveState({ buildings: updatedBuildings }).catch(()=>{});
+      setSimResources(prev => (prev ? { ...prev, workers: idle } : prev));
+      saveState({ buildings: updatedBuildings }).catch(() => {});
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoAssignWorkers, simResources?.workers]);
+  }, [simResources, placedBuildings, routes, edicts, stateCycle, stateWorkers, saveState]);
+
+  // Greedy auto-assign idle workers to best buildings by marginal yield
+  useEffect(() => {
+    if (!autoAssignWorkers) return;
+    autoAssignIdleWorkers();
+  }, [autoAssignWorkers, autoAssignIdleWorkers]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -970,9 +982,9 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   // Fetch initial state if not provided
   useEffect(() => {
     if (!initialState && !state) {
-      console.log('🔄 No initial state provided, fetching from API...');
+      logger.debug('🔄 No initial state provided, fetching from API...');
       fetchState().catch((err) => {
-        console.error('❌ Failed to fetch initial state:', err);
+        logger.error('❌ Failed to fetch initial state:', err);
         setError(err.message || 'Failed to load game state');
       });
     }
@@ -1020,7 +1032,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
         const indicators = simulationSystem.generateVisualIndicators(enhancedState);
         setVisualIndicators(indicators);
       } catch (simError) {
-        console.warn('Simulation system update failed:', simError);
+        logger.warn('Simulation system update failed:', simError);
       }
       
       // Flavor events disabled for stability
@@ -1424,7 +1436,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
             useExternalProvider
             enableEdgeScroll={edgeScrollEnabled}
             gridSize={(() => {
-              console.log('🎮 GameRenderer gridSize prop:', { 
+              logger.debug('🎮 GameRenderer gridSize prop:', { 
                 gridSize, 
                 fallback: gridSize || 0, 
                 tileTypesLength: tileTypes.length,
@@ -1707,11 +1719,11 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
               isSimulationRunning: !isPaused,
               onToggleSimulation: () => setIsPaused(!isPaused),
               onResetCity: () => {
-                console.log('Reset city requested');
+                logger.info('Reset city requested');
                 // Add reset logic here
               },
               isOpen: true,
-              onClose: () => console.log('City management panel close requested')
+              onClose: () => logger.info('City management panel close requested')
             }}
             onGameAction={(action, payload: any) => {
               if (action === 'advance-cycle') { tick(); if (onboardingStep < 6) setOnboardingStep(6); }
