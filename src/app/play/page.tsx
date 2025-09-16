@@ -1,18 +1,28 @@
+import type { ComponentProps } from 'react';
 import PlayClient from './PlayClient';
+import type PlayPage from './PlayPageInternal';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { config } from '@/infrastructure/config';
 
-interface GameStateRow {
-  id: string;
-  cycle: number;
-  resources: Record<string, number>;
-  workers?: number;
-  buildings?: unknown[];
+type PlayPageProps = ComponentProps<typeof PlayPage>;
+type LoadedState = Exclude<PlayPageProps['initialState'], null | undefined>;
+type LoadedProposals = NonNullable<PlayPageProps['initialProposals']>;
+type ProposalItem = LoadedProposals[number];
+
+interface GameStateRow extends LoadedState {
+  created_at?: string;
+  updated_at?: string;
+}
+
+interface ProposalRow extends ProposalItem {
+  state_id: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export default async function Page() {
-  let initialState: GameStateRow | null = null;
-  let initialProposals: any[] = [];
+  let initialState: PlayPageProps['initialState'] = null;
+  let initialProposals: LoadedProposals = [];
   try {
     const supabase = createSupabaseServerClient(config);
     const { data: state } = await supabase
@@ -21,21 +31,25 @@ export default async function Page() {
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
-    initialState = (state as GameStateRow) || null;
+    const typedState: GameStateRow | null = state ?? null;
 
-    if (initialState) {
+    if (typedState) {
+      initialState = typedState;
       const { data: props } = await supabase
         .from('proposals')
         .select('*')
-        .eq('state_id', initialState.id)
+        .eq('state_id', typedState.id)
         .in('status', ['pending', 'accepted', 'rejected'])
         .order('created_at', { ascending: false });
-      initialProposals = props || [];
+      if (Array.isArray(props)) {
+        const typedProposals: ProposalRow[] = props;
+        initialProposals = typedProposals;
+      }
     }
   } catch {
     // Leave initialState null; client will handle fallback
   }
 
-  return <PlayClient initialState={initialState as any} initialProposals={initialProposals as any} />;
+  return <PlayClient initialState={initialState} initialProposals={initialProposals} />;
 }
 

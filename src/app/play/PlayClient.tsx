@@ -1,9 +1,12 @@
 'use client';
 
+import type { ComponentProps } from 'react';
 import PlayPage from './PlayPageInternal';
 import { StoreProvider } from '@/state/store';
 
-export default function PlayClient(props: any) {
+type PlayClientProps = ComponentProps<typeof PlayPage>;
+
+export default function PlayClient(props: PlayClientProps) {
   return (
     <StoreProvider>
       <PlayPage {...props} />
