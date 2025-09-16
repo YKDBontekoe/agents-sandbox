@@ -5,6 +5,7 @@ import { generateSkillTree } from '../../skills/generate';
 import type { SkillNode } from '../../skills/types';
 import { collectUnlockBlockers } from '../../skills/unlock';
 import SkillTreeModal from '../../skills/SkillTreeModal';
+import { sanitizeSkillList, skillsListToRecord, readSkillCache, recordToSkillList, writeSkillCache } from '../../skills/storage';
 
 interface ModularSkillTreePanelProps {
   seed?: number;
@@ -25,27 +26,80 @@ export function ModularSkillTreePanel({ seed = 12345, onUnlock, variant = 'compa
     window.addEventListener('ad_skill_trend', fn as EventListener);
     return () => window.removeEventListener('ad_skill_trend', fn as EventListener);
   }, []);
+  const [serverSeed, setServerSeed] = useState<number | null>(null);
+  const effectiveSeed = serverSeed ?? seed;
+
   useHUDPanel({
     config: { id: 'skill-tree', zone: 'sidebar-right', priority: 5, persistent: true },
     component: ModularSkillTreePanel,
-    props: { seed, variant }
+    props: { seed: effectiveSeed, variant }
   });
-
-  const tree = useMemo(() => generateSkillTree(seed), [seed]);
+  const tree = useMemo(() => generateSkillTree(effectiveSeed), [effectiveSeed]);
   const [query, setQuery] = useState('');
   const [showAll, setShowAll] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<Record<SkillNode['category'], boolean>>({
     economic: true, military: true, mystical: true, infrastructure: true, diplomatic: true, social: true,
   });
   const toggleCat = (c: SkillNode['category']) => setCategoryFilter(prev => ({ ...prev, [c]: !prev[c] }));
-  const [unlocked, setUnlocked] = useState<Record<string, boolean>>(() => {
-    if (typeof window === 'undefined') return {};
-    try { return JSON.parse(localStorage.getItem('ad_skills_unlocked') || '{}'); } catch { return {}; }
-  });
+  const [unlocked, setUnlocked] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
-    try { localStorage.setItem('ad_skills_unlocked', JSON.stringify(unlocked)); } catch {}
+    writeSkillCache(recordToSkillList(unlocked));
   }, [unlocked]);
+
+  const fallbackToCache = useCallback(() => {
+    setUnlocked(readSkillCache());
+  }, [setUnlocked]);
+
+  const applySkillData = useCallback(
+    (data: { skill_tree_seed?: unknown; skills?: unknown }) => {
+      if (typeof data.skill_tree_seed === 'number') {
+        setServerSeed(data.skill_tree_seed);
+      }
+
+      if (Array.isArray(data.skills)) {
+        const normalized = sanitizeSkillList(data.skills);
+        setUnlocked(skillsListToRecord(normalized));
+      } else {
+        fallbackToCache();
+      }
+    },
+    [fallbackToCache, setServerSeed, setUnlocked],
+  );
+
+  const loadSkills = useCallback(
+    async (cancelRef: { cancelled: boolean }) => {
+      try {
+        const res = await fetch('/api/state');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data: { skill_tree_seed?: unknown; skills?: unknown } = await res.json();
+        if (cancelRef.cancelled) return;
+        applySkillData(data);
+      } catch {
+        if (!cancelRef.cancelled) {
+          fallbackToCache();
+        }
+      }
+    },
+    [applySkillData, fallbackToCache],
+  );
+
+  useEffect(() => {
+    const cancelRef = { cancelled: false };
+    loadSkills(cancelRef);
+    return () => {
+      cancelRef.cancelled = true;
+    };
+  }, [loadSkills]);
+
+  useEffect(() => {
+    if (!open) return;
+    const cancelRef = { cancelled: false };
+    loadSkills(cancelRef);
+    return () => {
+      cancelRef.cancelled = true;
+    };
+  }, [open, loadSkills]);
 
   const canUnlock = useCallback(
     (n: SkillNode) => collectUnlockBlockers({ node: n, unlocked, nodes: tree.nodes }).length === 0,
