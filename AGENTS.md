@@ -11,17 +11,25 @@ Related deep dives live in `docs/agents/` (ARCHITECTURE, PROMPTS, SECURITY, OPER
 1. [World & Player Pillars](#world--player-pillars)
 2. [Quick Setup & Environment](#quick-setup--environment)
 3. [Systems Overview](#systems-overview)
-4. [Directory Map](#directory-map)
-5. [Data & API Contracts](#data--api-contracts)
-6. [Agent Responsibilities & Principles](#agent-responsibilities--principles)
-7. [Prompting Standards](#prompting-standards)
-8. [Efficiency Playbook](#efficiency-playbook)
-9. [Safety & Security](#safety--security)
-10. [Operations & Observability](#operations--observability)
-11. [Testing & Evaluation](#testing--evaluation)
-12. [Extending the Council](#extending-the-council)
-13. [Delivery Workflow & Required Checks](#delivery-workflow--required-checks)
-14. [Reference Appendices](#reference-appendices)
+4. [Repository Layout & Rationale](#repository-layout--rationale)
+    - [Root Workspace](#root-workspace)
+    - [src Application Core](#src-application-core)
+    - [Packages Modular Libraries](#packages-modular-libraries)
+    - [Apps Feature Surfaces](#apps-feature-surfaces)
+    - [Docs & Knowledge Base](#docs--knowledge-base)
+    - [Supabase & Infra](#supabase--infra)
+5. [Monorepo Tooling & Configuration](#monorepo-tooling--configuration)
+6. [Data & API Contracts](#data--api-contracts)
+7. [Agent Responsibilities & Principles](#agent-responsibilities--principles)
+8. [Prompting Standards](#prompting-standards)
+9. [Efficiency Playbook](#efficiency-playbook)
+10. [Safety & Security](#safety--security)
+11. [Operations & Observability](#operations--observability)
+12. [Testing & Evaluation](#testing--evaluation)
+13. [Extending the Council](#extending-the-council)
+14. [Historical Context & Key Refactors](#historical-context--key-refactors)
+15. [Delivery Workflow & Required Checks](#delivery-workflow--required-checks)
+16. [Reference Appendices](#reference-appendices)
 
 ---
 
@@ -68,21 +76,111 @@ Related deep dives live in `docs/agents/` (ARCHITECTURE, PROMPTS, SECURITY, OPER
 - **Rendering**: PIXI-based layers (`GameLayers`, `BuildingsLayer`, `effects`, etc.), accessible HUD modules, canvas icon drawers.
 - **Simulation Packages**: `packages/engine/src/simulation/{traffic,zoning,transport}` for systemic behaviors.
 
-## Directory Map
+## Repository Layout & Rationale
 
-- `src/app/api/state/route.ts`: GET latest state.
-- `src/app/api/state/tick/route.ts`: POST tick resolution (apply deltas, pressures, clamps).
-- `src/app/api/proposals/route.ts`: GET proposals for current state.
-- `src/app/api/proposals/generate/route.ts`: POST to generate proposals.
-- `src/app/api/proposals/[id]/scry/route.ts`: POST scry update.
-- `src/app/api/proposals/[id]/decide/route.ts`: POST accept/reject.
-- `src/lib/supabase/server.ts`: Service-role client (server-only writes).
-- `src/lib/supabase/browser.ts`: Anon client (read-oriented).
-- `docs/agents/`: Architecture, prompts, security, operations, evaluation, extensions, contributing.
-- `supabase/migrations/`: Schema and idempotent updates for Supabase tables.
-- `src/state/`: Client state slices (`notifications`, `session`, `game`) combined in `slices/index.ts`; persistence utilities.
-- `src/components/game/`: Buildings, HUD, effects, city panels, skills, accessibility helpers, etc.
-- `packages/engine/`: Simulation subsystems.
+Arcane Dominion runs as a TypeScript-first Next.js monorepo. The layout deliberately isolates the playable client, headless
+simulation engine, infrastructure adapters, and knowledge base so that each concern can evolve and be tested independently
+without breaking the agent workflows described elsewhere in this guide.
+
+### Root Workspace
+
+- `package.json` / `package-lock.json`: Single Next.js workspace exposing `dev`, `build`, `lint`, and `test` scripts. Keep these
+  at the repository root so CI and local tooling share the same entrypoint.
+- `next.config.ts`, `vitest.config.ts`, `tailwind.config.js`, `postcss.config.mjs`: Centralized build and design configuration.
+  The Next.js config temporarily disables Turbopack to avoid HMR regressions while still allowing production builds if linting
+  fails (lint must be run separately). Vitest mirrors our path aliases so simulation code remains deterministic under Node.
+- `tsconfig.json`: Strict TypeScript settings with bundler-style module resolution and aliases for `@`, `@engine`,
+  `@arcane/ui`, `@arcane/infrastructure`, and `@/utils/performance` so imports stay stable as files move.
+- `eslint.config.mjs`: Flat-config baseline extending `next/core-web-vitals` and `next/typescript` while permitting the
+  occasional `any` in simulation math.
+- `public/`: Static assets (SVG icons, sprite atlases) shipped directly by Next.js.
+- `scripts/`: Operational helpers such as `migrate-supabase.sh`, which runs migrations against a provided `DATABASE_URL`.
+- `infra/`: Runbooks for database migrations that complement the Supabase folder described below.
+- High-level workspaces: `src/` (application), `packages/` (shared libraries), `apps/` (feature playgrounds), `docs/`
+  (knowledge base), and `supabase/` (database schema). These remain at the root so editors and CLI tooling can resolve paths
+  without additional configuration.
+
+### src Application Core
+
+- `app/`: The App Router front door. `layout.tsx` wires providers; `page.tsx` boots the `/play` experience; `play/` contains the
+  interactive client (`PlayClient`, `PlayPageInternal`, and supporting utilities); `debug/` hosts instrumentation views; and
+  `api/` holds the route handlers that orchestrate Supabase, the simulation engine, and AI agents (generate, scry, decide, tick,
+  and map routes).
+- `components/`: React building blocks. The `game/` subtree layers PIXI-based rendering (grid, buildings, citizens, seasonal
+  effects), HUD panels, accessibility helpers, and simulation overlays. `SettingsPanel.tsx` at the root is shared between the
+  HUD and settings surfaces.
+- `domain/`: Repository interfaces for proposals and game state. These abstract Supabase so tests and future storage backends
+  can plug in via dependency injection.
+- `hooks/`: Shared React hooks for adaptive quality scaling, PIXI lifecycle management, deterministic ID generation, and player
+  preference hydration.
+- `infrastructure/`: Runtime configuration helpers that translate environment variables into typed flags consumed by the app and
+  agents.
+- `lib/`: Cross-cutting utilities, including Supabase client factories (`lib/supabase`), PIXI helpers (`lib/pixi`), logging,
+  building catalogs, and icon registries. Unit tests live under `lib/__tests__`.
+- `middleware/`: API middleware such as `rateLimit.ts` that guards server routes.
+- `state/`: Zustand store composition, slice definitions (`game`, `notifications`, `session`), persistence helpers, and store
+  tests.
+- `styles/`: Global CSS tokens (`design-tokens.css`) and animation helpers (`animations.css`) that Tailwind consumes.
+- `pages/`: Legacy `hud-demo` page retained for regression checks while the production experience runs entirely through the App
+  Router.
+
+### Packages Modular Libraries
+
+- `engine`: Deterministic simulation library executed server-side. The September 2025 refactors (`aeae37a`, `57e45cf`) split the
+  monolithic engine into modular city and worker services (`buildingManager`, `citizenManager`, `laborMarketService`, etc.) with
+  exhaustive tests under `src/simulation/**`.
+- `infrastructure`: Supabase-backed implementations of the domain repositories plus a `unit-of-work` helper so API routes can
+  manage transactions consistently.
+- `ui`: Cross-application UI primitives (action buttons, resource icons, settings flyouts) with their own Tailwind theme to keep
+  design tokens in sync across surfaces.
+- `utils/performance`: Small helpers (adaptive quality, throttle/debounce, RAF coordination) consumed by the PIXI renderer and
+  hooks.
+- `assembly/`: Experimental AssemblyScript modules that ship with the engine but are excluded from the TypeScript build via
+  `tsconfig.json`.
+
+### Apps Feature Surfaces
+
+- `apps/web/features`: Internal playgrounds for rendering experiments (buildings, effects, ley lines, routes). Commit `b7967ec`
+  introduced the leyline inspector here before merging the refined experience into `src/app/play`, so this directory remains a
+  safe staging ground for prototypes that may later graduate into the main client.
+
+### Docs & Knowledge Base
+
+- `docs/agents`: Deep dives for architecture, prompts, security, operations, evaluation, and extensions. Keep this guide and
+  those documents in lockstep whenever mechanics or prompting strategies change.
+- `docs/architecture`: System context and package diagrams (Mermaid) referenced in ADR-0001.
+- `docs/adr`: Architecture Decision Records, starting with `[ADR-0001]` that formalized this documentation process. Add new
+  ADRs whenever you make non-trivial structural changes.
+
+### Supabase & Infra
+
+- `supabase/config.toml`: Supabase CLI configuration for local linking and migrations.
+- `supabase/migrations`: Timestamped SQL migrations that define the canonical schema. Follow the naming convention outlined in
+  `infra/README.md` and apply them via `supabase db push --include-all` or the migration script.
+- `supabase/functions`: Placeholder for edge functions/triggers. Keep empty files removed to avoid accidental deployments.
+- `infra/README.md`: Operational guidance for database migrations, including conflict resolution steps.
+- `scripts/migrate-supabase.sh`: Convenience wrapper to run migrations against a Postgres `DATABASE_URL`.
+
+## Monorepo Tooling & Configuration
+
+- **Package scripts**: `npm run dev` (Next.js with PIXI layers), `npm run build`, `npm run lint`, and `npm run test`. Linting is
+  enforced separately from `next build`, so always run it before opening a PR.
+- **TypeScript**: `tsconfig.json` enforces `strict` mode, skips library checks for speed, and aligns path aliases with the
+  package structure so both Next.js and Vitest resolve shared code consistently.
+- **Vitest**: `vitest.config.ts` mirrors the alias map and defaults to the Node environment, switching to `jsdom` for UI store
+  tests (`src/state/**`) to keep browser-only APIs available where needed.
+- **ESLint**: Flat config extends Next best practices and allows limited `any` usage for simulation math. Respect lint output in
+  CI and fix violations locally.
+- **Next.js build**: `next.config.ts` disables Turbopack while its module boundary bugs are triaged and sets `ignoreDuringBuilds`
+  so lint failures do not block `next build`. Do not rely on that bypass—run lint/tests yourself.
+- **Styling pipeline**: Tailwind consumes tokens from `src/styles/design-tokens.css`; PostCSS with autoprefixer keeps generated
+  CSS compatible across browsers. Update both when introducing new design tokens.
+- **PIXI/WebGL setup**: Rendering layers use `@pixi/react` and `pixi-viewport`. When touching these, validate performance with
+  the adaptive quality utilities in `packages/utils/performance`.
+- **Supabase CLI**: Use `supabase link` to bind a project, then `supabase db push --include-all` or `scripts/migrate-supabase.sh`
+  to apply migrations. Secrets stay in `.env.local` and are never committed.
+- **Engine packaging**: `packages/engine/package.json` provides `tsup` builds for both CJS and ESM plus an optional
+  `build:wasm` script for the AssemblyScript experiments. Keep generated artifacts out of source control.
 
 ## Data & API Contracts
 
@@ -191,6 +289,31 @@ Agents receive:
 - **New Actions**: Add structured `action_type`, `cost`, `requirements` fields with schema coverage.
 - **Lore Expansions**: Update resource definitions, building catalog, and onboarding flow when adding systems.
 - See `docs/agents/EXTENSIONS.md` for design patterns, pitfalls, and migration notes.
+
+## Historical Context & Key Refactors
+
+Understanding how the repository has evolved helps you respect existing seams when proposing new structures:
+
+- **2025-01-12 – ADR-0001**: Established the architecture documentation suite under `docs/architecture` and formalized the ADR
+  template in `docs/adr/`, giving us a home for structural decisions that materially affect agents and simulation boundaries.
+- **2025-09-16 – `b7967ec` Add leyline drawing controls and inspector**: Landed the leyline workflow in `apps/web/features` and
+  `src/app/play`, codifying the pattern of using `apps/` as a safe proving ground for complex HUD features before they reach the
+  main game.
+- **2025-09-16 – `57e45cf` Refactor worker simulation into modular services**: Split the worker systems into dedicated services
+  under `packages/engine/src/simulation/workers/**`, which is why new worker logic should live beside `laborMarketService` and
+  ship with matching tests.
+- **2025-09-16 – `aeae37a` Refactor city simulation into modular services**: Broke the city simulation apart into
+  `buildingManager`, `citizenManager`, `eventScheduler`, and `metricsService`, reinforcing the expectation that future engine
+  work favors focused services over monoliths.
+- **2025-09-16 – `ecad943` Move world generation utilities into engine**: Centralized noise/biome utilities inside
+  `packages/engine/src/world` and deleted the redundant `src/lib/world` module, so any terrain updates must go through the
+  engine package to stay deterministic.
+- **Monorepo realignment artifacts**: `package.json.root.bak` and `package-lock.json.root.bak` document the previous nested
+  workspace that wrapped an `arcane-dominion/` folder. They remain for historical reference; new tooling should target the
+  flattened layout described above.
+
+Use `git log -- <path>` to review these refactors before touching a directory—they explain why tests, docs, and abstractions sit
+where they do.
 
 ## Delivery Workflow & Required Checks
 
