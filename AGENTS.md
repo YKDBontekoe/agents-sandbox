@@ -104,10 +104,16 @@ Agents receive:
 - Current resources (grain, coin, mana, favor, unrest, threat, and optional wood/planks).
 - Building snapshot (counts per type), logistics routes, storehouse presence.
 - Terrain/adjacency summaries.
-- Active skill modifiers:
+- Active skill modifiers (defaults: multipliers start at `1`, upkeep delta at `0`):
   - `resource_multipliers: Record<Resource, number>`
   - `building_multipliers: Record<BuildingType, number>`
   - `upkeep_grain_per_worker_delta: number`
+  - `global_building_output_multiplier: number`
+  - `global_resource_output_multiplier: number`
+  - `route_coin_output_multiplier: number`
+  - `patrol_coin_upkeep_multiplier: number`
+  - `building_input_multiplier: number`
+- Special abilities flow through these multipliers; see [Skill Special Abilities & Derived Multipliers](#skill-special-abilities--derived-multipliers).
 - Treat modifiers as small tilts; keep forecasts conservative.
 
 ## Agent Responsibilities & Principles
@@ -121,7 +127,7 @@ Agents receive:
 - **Traceability**: Log prompts, model versions, request IDs with sensitive data redacted.
 - **Conservative Forecasting**: Bias toward stability; small magnitudes; pair benefits with costs (e.g., grain↑ usually costs coin↓ or mana↓).
 - **Clamp After Application**: Floors at 0 applied post-tick; forecasts remain raw.
-- **Skill & Logistics Awareness**: Account for storehouse bonuses, adjacency, and unlocked skills when evaluating deltas.
+- **Skill & Logistics Awareness**: Account for storehouse bonuses, adjacency, and every field in `skill_modifiers` (global/route/patrol multipliers, input discounts, upkeep deltas) when evaluating deltas. Special ability spikes should inform narrative justification but forecasts remain conservative.
 
 ## Prompting Standards
 
@@ -203,7 +209,29 @@ _For documentation-only updates, explicitly state why automated checks were skip
 - Primary resources: grain, coin, mana, favor, unrest, threat. Expanded: wood, planks.
 - Logistics: Producers linked to a Storehouse via routes gain a modest output bonus.
 - Terrain: Farms near water, lumber camps in dense forest, shrines near mountains receive adjacency boosts.
-- Skills: Modify resource multipliers, building outputs, worker upkeep.
+- Skills: Modify resource/building multipliers, worker upkeep, global output rates, trade-route coin yield, patrol upkeep costs, and building input consumption via `skill_modifiers`. Special abilities and category synergies feed these numbers.
+- Category synergies: Economic+infrastructure (≥4 unlocks) boosts `trade_post`/`sawmill` output 5%; mystical+infrastructure (≥4) grants +5% mana and Storehouse output; military+social (≥3) reduces upkeep by 0.05 grain/worker; any legendary unlock nudges coin output +2%.
+
+### Skill Special Abilities & Derived Multipliers
+
+Skill nodes above common rarity may roll a special ability. The council API does **not** surface the ability directly—instead, its effects are folded into the `skill_modifiers` payload. Use the table below to interpret spikes and keep projections aligned with in-game math. Multipliers compound with other skill effects; defaults stem from the generator catalog.
+
+| Ability (id) | Category | Default power | Derived effect(s) surfaced to agents |
+| --- | --- | --- | --- |
+| Golden Touch (`golden_touch`) | Economic | 2 | `building_multipliers.trade_post` and `.automation_workshop` × power (default ×2). |
+| Market Insight (`market_insight`) | Economic | 1.5 | `route_coin_output_multiplier` × power (default ×1.5); `building_multipliers.trade_post` × (1 + 0.1·power) (default ×1.15). |
+| Battle Fury (`battle_fury`) | Military | 0.5 | Reduces `upkeep_grain_per_worker_delta` by min(0.2, 0.2·power) (default −0.1). |
+| Fortress Shield (`fortress_shield`) | Military | 0 | Forces `patrol_coin_upkeep_multiplier` to 0 (patrol routes free). |
+| Mana Storm (`mana_storm`) | Mystical | 3 | `resource_multipliers.mana` × power (default ×3); `global_resource_output_multiplier` × (1 + 0.05·power) (default ×1.15). |
+| Arcane Mastery (`arcane_mastery`) | Mystical | 1 | `resource_multipliers.mana` × (1 + 0.15·power) (default ×1.15); `building_multipliers.shrine` × (1 + 0.1·power) (default ×1.1). |
+| Rapid Construction (`rapid_construction`) | Infrastructure | 1 | `resource_multipliers.wood` and `.planks` × (1 + 0.25·power) (default ×1.25); `global_building_output_multiplier` × (1 + 0.05·power) (default ×1.05). |
+| Efficiency Boost (`efficiency_boost`) | Infrastructure | 1.5 | `global_building_output_multiplier` × (1 + 0.2·power) (default ×1.30). |
+| Silver Tongue (`silver_tongue`) | Diplomatic | 2 | `resource_multipliers.favor` × power (default ×2). |
+| Peace Treaty (`peace_treaty`) | Diplomatic | 1 | `upkeep_grain_per_worker_delta` −= 0.03·power (default −0.03); `building_input_multiplier` × max(0.6, 1 − 0.15·power) (default ×0.85). |
+| Festival Spirit (`festival_spirit`) | Social | 1.25 | `global_resource_output_multiplier` × (1 + 0.08·power) (default ×1.10). |
+| Unity Bond (`unity_bond`) | Social | 0.7 | `building_input_multiplier` × min(1, power) (default ×0.7); lowers `upkeep_grain_per_worker_delta` by 0.02·(1 − min(1, power)) (default ≈ −0.006). |
+
+_Tip_: If multipliers fall below 1, interpret them as discounts (e.g., `building_input_multiplier` of 0.7 means 30% cheaper inputs). Always narrate the boon while still pairing upside with realistic trade-offs elsewhere in the proposal.
 
 ### Building Catalog (client-visible)
 
