@@ -18,6 +18,8 @@ import EnhancedVisualEffectsLayer from './EnhancedVisualEffectsLayer';
 import { SIM_BUILDINGS, BUILDABLE_TILES } from './simCatalog';
 import { canAfford, type SimResources } from './resourceUtils';
 import type { GameResources } from './hud/types';
+import type { GameTime as SystemGameTime } from '@engine';
+import type { Season } from './SeasonalLayer.types';
 
 import type { BuildTypeId } from './panels/TileInfoPanel';
 
@@ -65,7 +67,7 @@ export interface GameLayersProps {
   selectedLeyline: Leyline | null;
   setSelectedLeyline: (l: Leyline | null) => void;
   resources: GameResources;
-  cycle: number;
+  gameTime: SystemGameTime;
   constructionEvents: Array<{
     id: string;
     buildingId: string;
@@ -102,7 +104,7 @@ const GameLayers: React.FC<GameLayersProps> = ({
   selectedLeyline,
   setSelectedLeyline,
   resources,
-  cycle,
+  gameTime,
   constructionEvents,
 }) => {
   const buildHint = useMemo(() => {
@@ -131,6 +133,23 @@ const GameLayers: React.FC<GameLayersProps> = ({
   }, [previewTypeId, hoverTile, selectedTile, placedBuildings, tutorialFree, simResources]);
 
   const buildingsForLayer = useMemo(() => placedBuildings.map(b => ({ id: b.id, typeId: b.typeId, x: b.x, y: b.y, workers: b.workers, level: b.level })), [placedBuildings]);
+
+  const seasonForLayer = useMemo<Season>(() => {
+    const normalized = typeof gameTime.season === 'string' ? gameTime.season.toLowerCase() : '';
+    if (normalized === 'spring' || normalized === 'summer' || normalized === 'autumn' || normalized === 'winter') {
+      return normalized as Season;
+    }
+    return 'spring';
+  }, [gameTime.season]);
+
+  const visualEffectsGameTime = useMemo(
+    () => ({
+      hour: Math.max(0, Math.floor(gameTime.hour)),
+      minute: Math.max(0, Math.floor(gameTime.minute)),
+      day: Math.max(1, Math.floor(gameTime.day)),
+    }),
+    [gameTime.day, gameTime.hour, gameTime.minute],
+  );
 
   return (
     <>
@@ -191,13 +210,13 @@ const GameLayers: React.FC<GameLayersProps> = ({
         <EffectsLayer trigger={{ eventKey: clickEffectKey, deltas: {}, gridX: selectedTile.x, gridY: selectedTile.y }} />
       )}
       <AmbientLayer tileTypes={tileTypes} />
-      <SeasonalLayer season={((cycle % 4 === 0 ? 'spring' : (cycle % 4 === 1 ? 'summer' : (cycle % 4 === 2 ? 'autumn' : 'winter'))))} />
+      <SeasonalLayer season={seasonForLayer} />
       <MarkersLayer markers={markers.map(m => ({ id: m.id, gridX: m.x, gridY: m.y, label: m.label }))} />
       <EnhancedVisualEffectsLayer
         buildings={buildingsForLayer}
         citizens={placedBuildings.filter(b => b.workers > 0).map(b => ({ id: b.id, x: b.x, y: b.y, activity: 'working', speed: 1.0 }))}
         roads={roads}
-        gameTime={{ hour: Math.floor((Date.now() / 60000) % 24), minute: Math.floor((Date.now() / 1000) % 60), day: Math.floor(Date.now() / 86400000) }}
+        gameTime={visualEffectsGameTime}
         cityMetrics={{ population: citizensCount, happiness: 75, pollution: 20, traffic: roads.length * 10 }}
         constructionEvents={constructionEvents}
       />

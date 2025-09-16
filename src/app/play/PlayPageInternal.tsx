@@ -56,13 +56,25 @@ import type { CategoryType } from '@arcane/ui';
 import { simulationSystem, EnhancedGameState } from '@engine'
 import { VisualIndicator } from '@engine';
 import { pauseSimulation, resumeSimulation } from './simulationControls';
-import { TimeSystem, timeSystem, TIME_SPEEDS, GameTime as SystemGameTime, type TimeSpeed } from '@engine';
+import { TimeSystem, GameTime as SystemGameTime } from '@engine';
 import { intervalMsToTimeSpeed, sanitizeIntervalMs } from './timeSpeedUtils';
 
 type BuildTypeId = keyof typeof SIM_BUILDINGS;
 
 const ISO_TILE_WIDTH = 64;
 const ISO_TILE_HEIGHT = 32;
+
+const DEFAULT_GAME_TIME: SystemGameTime = {
+  year: 2024,
+  month: 1,
+  day: 1,
+  hour: 8,
+  minute: 0,
+  totalMinutes: 0,
+  timeOfDay: 'morning',
+  dayProgress: 0,
+  season: 'spring',
+};
 
 const arraysEqual = (a: string[], b: string[]) =>
   a.length === b.length && a.every((value, index) => value === b[index]);
@@ -277,24 +289,39 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   const [placedBuildings, setPlacedBuildings] = useState<StoredBuilding[]>([]);
   const [routes, setRoutes] = useState<TradeRoute[]>([]);
   const [roads, setRoads] = useState<Array<{x:number;y:number}>>([]);
-  
+
   // Initialize TimeSystem
   const timeSystemRef = useRef<TimeSystem | null>(null);
   if (!timeSystemRef.current) {
     timeSystemRef.current = new TimeSystem();
     timeSystemRef.current.start();
   }
-  const timeSystem = timeSystemRef.current;
+  const timeController = timeSystemRef.current;
+
+  const [gameClock, setGameClock] = useState<SystemGameTime>(() => timeController?.getCurrentTime() ?? DEFAULT_GAME_TIME);
 
   const stateId = state?.id ?? null;
 
   const handlePauseSimulation = useCallback(() => {
-    pauseSimulation({ stateId, setIsPaused, controller: timeSystem ?? undefined });
-  }, [stateId, setIsPaused, timeSystem]);
+    pauseSimulation({ stateId, setIsPaused, controller: timeController ?? undefined });
+  }, [stateId, setIsPaused, timeController]);
 
   const handleResumeSimulation = useCallback(() => {
-    resumeSimulation({ stateId, setIsPaused, controller: timeSystem ?? undefined });
-  }, [stateId, setIsPaused, timeSystem]);
+    resumeSimulation({ stateId, setIsPaused, controller: timeController ?? undefined });
+  }, [stateId, setIsPaused, timeController]);
+
+  useEffect(() => {
+    const controller = timeSystemRef.current;
+    if (!controller) return;
+    const handleTimeUpdated = (updated: SystemGameTime) => {
+      setGameClock({ ...updated });
+    };
+    controller.on('time-updated', handleTimeUpdated);
+    setGameClock(controller.getCurrentTime());
+    return () => {
+      controller.off('time-updated', handleTimeUpdated);
+    };
+  }, []);
 
   // Handle TimeSystem cleanup
   useEffect(() => {
@@ -1103,7 +1130,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
         const simulationInput = {
           buildings: serverState.buildings,
           resources: simRes,
-          gameTime: timeSystem.getCurrentTime()
+          gameTime: timeController?.getCurrentTime() ?? DEFAULT_GAME_TIME,
         };
         const enhancedState = simulationSystem.updateSimulation(simulationInput, 1.0);
         setEnhancedGameState(enhancedState);
@@ -1121,7 +1148,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     } finally {
       setLoading(false);
     }
-  }, [fetchProposals, syncSkillsFromServer]);
+  }, [fetchProposals, syncSkillsFromServer, timeController]);
 
   // Council actions
   const generate = useCallback(async () => {
@@ -1319,10 +1346,10 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
 
   const skillTreeSeed = typeof state?.skill_tree_seed === 'number' ? state.skill_tree_seed : 12345;
 
-  const currentTime = timeSystem.getCurrentTime();
+  const seasonName = typeof gameClock.season === 'string' ? gameClock.season : DEFAULT_GAME_TIME.season;
   const gameTime: GameTime = {
-    cycle: Math.floor(currentTime.totalMinutes / 60), // Convert to legacy cycle for HUD compatibility
-    season: 'spring', // TODO: Implement seasons based on currentTime.month
+    cycle: Math.max(0, Math.floor(gameClock.totalMinutes / 60)), // Convert to legacy cycle for HUD compatibility
+    season: seasonName,
     timeRemaining,
   };
   const totalAssigned = placedBuildings.reduce((sum, b) => sum + b.workers, 0);
@@ -1612,7 +1639,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
               selectedLeyline={selectedLeyline}
               setSelectedLeyline={setSelectedLeyline}
               resources={resources}
-              cycle={state.cycle ?? 0}
+              gameTime={gameClock}
               constructionEvents={constructionEvents}
             />
       </GameRenderer>
@@ -1851,7 +1878,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
                 }
 
                 const nextSpeed = intervalMsToTimeSpeed(sanitizedMs);
-                timeSystem.setSpeed(nextSpeed);
+                timeController?.setSpeed(nextSpeed);
 
                 setState(prev => (prev ? { ...prev, tick_interval_ms: sanitizedMs } as any : prev));
 
