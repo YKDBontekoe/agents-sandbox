@@ -1,8 +1,9 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import ConstellationSkillTree from './ConstellationSkillTree';
-import { generateSkillTree, expandSkillTree } from './generate';
+import { generateSkillTree } from './generate';
 import type { SkillNode } from './types';
+import { useSkillTreeFrontierExpansion } from './useSkillTreeFrontierExpansion';
 
 interface SkillTreeModalProps {
   isOpen: boolean;
@@ -27,6 +28,13 @@ export default function SkillTreeModal({ isOpen, onClose, resources }: SkillTree
   });
 
   const [tree, setTree] = useState(() => generateSkillTree(seed, 10));
+
+  useSkillTreeFrontierExpansion({
+    tree,
+    selectedNodeId,
+    seed,
+    setTree,
+  });
   const matches = useMemo(() => {
     if (!query) return [] as { id: string; title: string }[];
     const q = query.toLowerCase();
@@ -108,8 +116,8 @@ export default function SkillTreeModal({ isOpen, onClose, resources }: SkillTree
 
   // Persist unlocked state to localStorage
   useEffect(() => {
-    try { 
-      localStorage.setItem('ad_skills_unlocked', JSON.stringify(unlocked)); 
+    try {
+      localStorage.setItem('ad_skills_unlocked', JSON.stringify(unlocked));
     } catch {}
   }, [unlocked]);
 
@@ -209,18 +217,6 @@ export default function SkillTreeModal({ isOpen, onClose, resources }: SkillTree
                   resources={resources}
                 />
               </div>
-              {/* Lazy expansion when reaching near the frontier */}
-              {(() => {
-                if (!selectedNodeId) return null;
-                const selected = tree.nodes.find(n => n.id === selectedNodeId);
-                if (!selected || typeof selected.tier !== 'number' || !tree.layout) return null;
-                const nearFrontier = selected.tier >= (tree.layout.maxTier - 2);
-                if (nearFrontier) {
-                  // Expand deterministically
-                  setTimeout(() => { setTree(prev => expandSkillTree({ ...prev, nodes: [...prev.nodes], edges: [...prev.edges], layout: { ...prev.layout, tiers: { ...prev.layout!.tiers }, categoryDistribution: { ...prev.layout!.categoryDistribution }, maxTier: prev.layout!.maxTier || 0 } }, seed, 4)); }, 0);
-                }
-                return null;
-              })()}
           </div>
         </Dialog.Content>
       </Dialog.Portal>
