@@ -3,63 +3,12 @@ import type { SimulatedBuilding } from './buildingSimulation';
 import { citizenAI } from './citizenAI';
 import type { PathfindingGoal } from './ai/types';
 import type { GameTime } from '../types/gameTime';
-import type {
-  PersonalityTraits,
-  CitizenNeeds,
-  CitizenMood,
-  SocialRelationship,
-} from './citizens/types';
-import {
-  generateDailySchedule,
-  generateLifeGoals,
-  type DailySchedule,
-  type LifeGoals,
-} from './citizens/schedule';
-
-// Complete citizen definition
-export interface Citizen {
-  id: string;
-  name: string;
-  age: number;
-  gender: 'male' | 'female' | 'other';
-  
-  // Core attributes
-  personality: PersonalityTraits;
-  needs: CitizenNeeds;
-  mood: CitizenMood;
-  
-  // Life situation
-  homeId?: string; // building ID where they live
-  workId?: string; // building ID where they work
-  jobTitle: string;
-  skills: Record<string, number>; // skill name -> level (0-100)
-  
-  // Social connections
-  relationships: SocialRelationship[];
-  familyMembers: string[]; // citizen IDs
-  
-  // Behavior patterns
-  schedule: DailySchedule;
-  goals: LifeGoals;
-  
-  // State tracking
-  currentActivity: string;
-  location: { x: number; y: number };
-  lastActivityChange: number;
-  
-  // Economic status
-  wealth: number;
-  income: number;
-  expenses: number;
-  
-  // Life events and history
-  lifeEvents: Array<{
-    cycle: number;
-    type: string;
-    description: string;
-    impact: Partial<CitizenMood>;
-  }>;
-}
+import { createCitizen } from './citizens/citizenFactory';
+import type { Citizen } from './citizens/citizen';
+import type { CitizenMood } from './citizens/types';
+import { updateNeeds, updateMood } from './citizens/citizenWellbeing';
+import { triggerSocialInteraction } from './citizens/socialInteractions';
+import { maybeTriggerLifeEvent } from './citizens/lifeEvents';
 
 // Citizen behavior patterns and decision making
 export class CitizenBehaviorSystem {
@@ -80,60 +29,11 @@ export class CitizenBehaviorSystem {
     age: number,
     seed: number
   ): Citizen {
-    const rng = this.createSeededRandom(seed);
-    
-    const personality: PersonalityTraits = {
-      ambition: rng(),
-      sociability: rng(),
-      industriousness: rng(),
-      contentment: rng(),
-      curiosity: rng()
-    };
-
-    const needs: CitizenNeeds = {
-      food: 80 + rng() * 20,
-      shelter: 70 + rng() * 30,
-      social: 60 + rng() * 40,
-      purpose: 50 + rng() * 50,
-      safety: 75 + rng() * 25
-    };
-
-    const mood: CitizenMood = {
-      happiness: 60 + rng() * 30,
-      stress: 20 + rng() * 30,
-      energy: 70 + rng() * 30,
-      motivation: 60 + rng() * 40
-    };
-
-    const schedule = generateDailySchedule(personality, rng);
-    const goals = generateLifeGoals(personality, age, rng);
-
-    const citizen: Citizen = {
-      id,
-      name,
-      age,
-      gender: rng() < 0.5 ? 'male' : 'female',
-      personality,
-      needs,
-      mood,
-      jobTitle: 'Unemployed',
-      skills: this.generateSkills(personality, age, rng),
-      relationships: [],
-      familyMembers: [],
-      schedule,
-      goals,
-      currentActivity: 'idle',
-      location: { x: 0, y: 0 },
-      lastActivityChange: 0,
-      wealth: 10 + rng() * 40,
-      income: 0,
-      expenses: 5 + rng() * 10,
-      lifeEvents: []
-    };
+    const citizen = createCitizen({ id, name, age, seed });
 
     this.citizens.set(id, citizen);
     this.socialNetwork.set(id, new Set());
-    
+
     return citizen;
   }
 
@@ -147,14 +47,14 @@ export class CitizenBehaviorSystem {
     const citizen = this.citizens.get(citizenId);
     if (!citizen) return;
 
-    // Convert GameTime to cycle for backward compatibility
-    const currentCycle = Math.floor(gameTime.totalMinutes / 60);
-
     // Update needs decay
-    this.updateNeeds(citizen, gameTime);
-    
+    updateNeeds(citizen);
+
     // Update mood based on needs and circumstances
-    this.updateMood(citizen, gameState);
+    updateMood(citizen, {
+      threatLevel: gameState.threatLevel,
+      cityEvents: gameState.cityEvents
+    });
     
     // Make behavioral decisions
     this.makeBehavioralDecisions(citizen, gameTime, gameState);
@@ -164,52 +64,6 @@ export class CitizenBehaviorSystem {
     
     // Check for life events
     this.checkForLifeEvents(citizen, gameTime, gameState);
-  }
-
-  // Update citizen needs over time
-  private updateNeeds(citizen: Citizen, gameTime: GameTime): void {
-    const currentCycle = Math.floor(gameTime.totalMinutes / 60);
-    const decayRate = 1 - citizen.personality.contentment * 0.3;
-    
-    citizen.needs.food = Math.max(0, citizen.needs.food - 2 * decayRate);
-    citizen.needs.shelter = Math.max(0, citizen.needs.shelter - 0.5 * decayRate);
-    citizen.needs.social = Math.max(0, citizen.needs.social - 1.5 * decayRate);
-    citizen.needs.purpose = Math.max(0, citizen.needs.purpose - 1 * decayRate);
-    
-    // Safety is affected by external factors, not internal decay
-  }
-
-  // Update citizen mood based on needs and external factors
-  private updateMood(citizen: Citizen, gameState: {
-    threatLevel: number;
-    cityEvents: string[];
-  }): void {
-    const needsSatisfaction = (
-      citizen.needs.food + 
-      citizen.needs.shelter + 
-      citizen.needs.social + 
-      citizen.needs.purpose + 
-      citizen.needs.safety
-    ) / 5;
-
-    // Base happiness from needs satisfaction
-    const targetHappiness = needsSatisfaction * (0.7 + citizen.personality.contentment * 0.3);
-    citizen.mood.happiness = this.lerp(citizen.mood.happiness, targetHappiness, 0.1);
-
-    // Stress from unmet needs and external threats
-    const needsStress = Math.max(0, 100 - needsSatisfaction);
-    const threatStress = gameState.threatLevel * (1 - citizen.personality.contentment);
-    const targetStress = Math.min(100, needsStress * 0.5 + threatStress * 0.3);
-    citizen.mood.stress = this.lerp(citizen.mood.stress, targetStress, 0.15);
-
-    // Energy affected by stress and work
-    const workLoad = citizen.jobTitle !== 'Unemployed' ? 20 : 0;
-    const targetEnergy = Math.max(20, 100 - citizen.mood.stress * 0.3 - workLoad);
-    citizen.mood.energy = this.lerp(citizen.mood.energy, targetEnergy, 0.2);
-
-    // Motivation from purpose and personality
-    const targetMotivation = citizen.needs.purpose * 0.6 + citizen.personality.ambition * 40;
-    citizen.mood.motivation = this.lerp(citizen.mood.motivation, targetMotivation, 0.1);
   }
 
   // Make behavioral decisions based on current state
@@ -233,16 +87,14 @@ export class CitizenBehaviorSystem {
     });
     
     let newActivity: string;
-    let newLocation = citizen.location;
-    
+
     if (aiGoal) {
       // Store the goal for tracking
       this.citizenGoals.set(citizen.id, aiGoal);
-      
+
       // Convert AI goal to activity and location
-      newActivity = this.convertGoalToActivity(aiGoal, citizen);
-      newLocation = aiGoal.target;
-      
+      newActivity = this.convertGoalToActivity(aiGoal);
+
       // Apply dynamic pathfinding - move towards target with purpose
       this.updateCitizenMovement(citizen, aiGoal);
     } else {
@@ -267,12 +119,12 @@ export class CitizenBehaviorSystem {
       
       // Calculate satisfaction with previous activity
       if (previousActivity && aiGoal) {
-        const satisfaction = this.calculateActivitySatisfaction(citizen, previousActivity, gameTime);
+        const satisfaction = this.calculateActivitySatisfaction(citizen, previousActivity);
         citizenAI.updateCitizenState(citizen.id, true, satisfaction);
       }
       
       // Trigger activity-specific behaviors
-      this.executeActivity(citizen, newActivity, gameState);
+      this.executeActivity(citizen, newActivity);
     }
   }
 
@@ -315,10 +167,7 @@ export class CitizenBehaviorSystem {
   }
 
   // Execute specific activity behaviors
-  private executeActivity(citizen: Citizen, activity: string, gameState: {
-    buildings: SimulatedBuilding[];
-    resources: SimResources;
-  }): void {
+  private executeActivity(citizen: Citizen, activity: string): void {
     switch (activity) {
       case 'working':
         citizen.needs.purpose = Math.min(100, citizen.needs.purpose + 5);
@@ -331,7 +180,10 @@ export class CitizenBehaviorSystem {
         
       case 'socializing':
         citizen.needs.social = Math.min(100, citizen.needs.social + 10);
-        this.triggerSocialInteraction(citizen);
+        triggerSocialInteraction(citizen, {
+          availableTargets: Array.from(this.socialNetwork.get(citizen.id) || []),
+          getCitizenById: id => this.citizens.get(id)
+        });
         break;
         
       case 'sleeping':
@@ -365,172 +217,21 @@ export class CitizenBehaviorSystem {
     }
   }
 
-  // Trigger social interaction
-  private triggerSocialInteraction(citizen: Citizen): void {
-    const availableTargets = Array.from(this.socialNetwork.get(citizen.id) || []);
-    if (availableTargets.length === 0) return;
-    
-    const targetId = availableTargets[Math.floor(Math.random() * availableTargets.length)];
-    const target = this.citizens.get(targetId);
-    if (!target) return;
-    
-    // Find or create relationship
-    let relationship = citizen.relationships.find(r => r.targetId === targetId);
-    if (!relationship) {
-      relationship = {
-        targetId,
-        type: 'friend',
-        strength: 20,
-        lastInteraction: 0,
-        interactionHistory: []
-      };
-      citizen.relationships.push(relationship);
-    }
-    
-    // Positive interaction based on personality compatibility
-    const compatibility = this.calculateCompatibility(citizen.personality, target.personality);
-    const interactionQuality = compatibility > 0.6 ? 'positive' : 
-                              compatibility < 0.4 ? 'negative' : 'neutral';
-    
-    // Update relationship
-    relationship.lastInteraction = Date.now();
-    relationship.interactionHistory.push({
-      cycle: Date.now(),
-      type: interactionQuality,
-      context: 'casual_interaction'
-    });
-    
-    if (interactionQuality === 'positive') {
-      relationship.strength = Math.min(100, relationship.strength + 3);
-    } else if (interactionQuality === 'negative') {
-      relationship.strength = Math.max(0, relationship.strength - 2);
-    }
-  }
-
   // Check for life events
   private checkForLifeEvents(citizen: Citizen, gameTime: GameTime, gameState: {
     buildings: SimulatedBuilding[];
     threatLevel: number;
   }): void {
     const currentCycle = Math.floor(gameTime.totalMinutes / 60);
-    const eventChance = 0.02; // 2% chance per cycle
-    
-    if (Math.random() < eventChance) {
-      const eventType = this.selectLifeEvent(citizen, gameState);
-      this.triggerLifeEvent(citizen, eventType, gameTime);
-    }
-  }
 
-
-  // Generate skills based on personality and age
-  private generateSkills(personality: PersonalityTraits, age: number, rng: () => number): Record<string, number> {
-    const baseSkill = Math.min(80, age * 2 + rng() * 20);
-    
-    return {
-      work_efficiency: baseSkill * personality.industriousness,
-      social_skills: baseSkill * personality.sociability,
-      leadership: baseSkill * personality.ambition,
-      creativity: baseSkill * personality.curiosity,
-      resilience: baseSkill * personality.contentment
-    };
-  }
-
-  // Calculate personality compatibility
-  private calculateCompatibility(p1: PersonalityTraits, p2: PersonalityTraits): number {
-    const differences = [
-      Math.abs(p1.ambition - p2.ambition),
-      Math.abs(p1.sociability - p2.sociability),
-      Math.abs(p1.industriousness - p2.industriousness),
-      Math.abs(p1.contentment - p2.contentment),
-      Math.abs(p1.curiosity - p2.curiosity)
-    ];
-    
-    const avgDifference = differences.reduce((a, b) => a + b, 0) / differences.length;
-    return 1 - avgDifference; // Higher compatibility = lower differences
-  }
-
-  // Select appropriate life event
-  private selectLifeEvent(citizen: Citizen, gameState: { threatLevel: number }): string {
-    const events = ['promotion', 'illness', 'friendship', 'conflict', 'discovery'];
-    
-    // Weight events based on current state
-    if (gameState.threatLevel > 50) {
-      return Math.random() < 0.6 ? 'conflict' : 'illness';
-    }
-    
-    if (citizen.mood.happiness > 70) {
-      return Math.random() < 0.5 ? 'promotion' : 'friendship';
-    }
-    
-    return events[Math.floor(Math.random() * events.length)];
-  }
-
-  // Trigger specific life event
-  private triggerLifeEvent(citizen: Citizen, eventType: string, gameTimeOrCycle: GameTime | number): void {
-    const currentCycle = typeof gameTimeOrCycle === 'number' ? gameTimeOrCycle : Math.floor(gameTimeOrCycle.totalMinutes / 60);
-    let impact: Partial<CitizenMood> = {};
-    let description = '';
-    
-    switch (eventType) {
-      case 'promotion':
-        impact = { happiness: 15, motivation: 10, stress: 5 };
-        description = `${citizen.name} received a promotion at work!`;
-        citizen.income += 5;
-        break;
-        
-      case 'illness':
-        impact = { happiness: -10, energy: -20, stress: 10 };
-        description = `${citizen.name} fell ill and needs rest.`;
-        break;
-        
-      case 'friendship':
-        impact = { happiness: 8 };
-        description = `${citizen.name} made a new friend.`;
-        citizen.needs.social = Math.min(100, citizen.needs.social + 15);
-        break;
-        
-      case 'conflict':
-        impact = { happiness: -12, stress: 15 };
-        description = `${citizen.name} had a conflict with someone.`;
-        citizen.needs.social = Math.max(0, citizen.needs.social - 10);
-        break;
-        
-      case 'discovery':
-        impact = { happiness: 5, motivation: 8 };
-        description = `${citizen.name} discovered something interesting.`;
-        break;
-    }
-    
-    // Apply mood impact
-    for (const [key, value] of Object.entries(impact)) {
-      const currentValue = citizen.mood[key as keyof CitizenMood] || 0;
-      citizen.mood[key as keyof CitizenMood] = Math.max(0, Math.min(100, currentValue + value));
-    }
-    
-    // Record life event
-    citizen.lifeEvents.push({
-      cycle: currentCycle,
-      type: eventType,
-      description,
-      impact
+    maybeTriggerLifeEvent(citizen, gameTime, {
+      threatLevel: gameState.threatLevel,
+      eventChance: 0.02,
+      cycleOverride: currentCycle
     });
   }
-
-  // Utility functions
-  private createSeededRandom(seed: number): () => number {
-    let state = seed;
-    return () => {
-      state = (state * 1664525 + 1013904223) % 4294967296;
-      return state / 4294967296;
-    };
-  }
-
-  private lerp(current: number, target: number, factor: number): number {
-    return current + (target - current) * factor;
-  }
-
   // Convert AI pathfinding goal to citizen activity
-  private convertGoalToActivity(goal: PathfindingGoal, citizen: Citizen): string {
+  private convertGoalToActivity(goal: PathfindingGoal): string {
     switch (goal.purpose) {
       case 'work':
         return 'working';
@@ -588,8 +289,7 @@ export class CitizenBehaviorSystem {
   }
 
   // Calculate satisfaction with completed activity
-  private calculateActivitySatisfaction(citizen: Citizen, activity: string, gameTimeOrCycle: GameTime | number): number {
-    const currentCycle = typeof gameTimeOrCycle === 'number' ? gameTimeOrCycle : Math.floor(gameTimeOrCycle.totalMinutes / 60);
+  private calculateActivitySatisfaction(citizen: Citizen, activity: string): number {
     let satisfaction = 50; // Base satisfaction
     
     // Adjust based on how well the activity met citizen needs
