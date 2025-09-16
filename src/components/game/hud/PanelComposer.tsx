@@ -12,6 +12,7 @@ import CityManagementPanel, {
   ZoneType,
   ServiceType,
 } from '../CityManagementPanel';
+import type { TimeSystem, TimeSpeed } from '@engine';
 
 export interface PanelComposerProps {
   children?: ReactNode;
@@ -65,6 +66,7 @@ export interface PanelComposerProps {
   };
   onGameAction: (action: string, data?: unknown) => void;
   className?: string;
+  timeSystem: TimeSystem;
 }
 
 export function PanelComposer({
@@ -72,6 +74,7 @@ export function PanelComposer({
   gameData,
   onGameAction,
   cityManagement,
+  timeSystem,
   className = '',
 }: PanelComposerProps) {
   const { currentPreset } = useHUDLayoutPresets();
@@ -142,7 +145,13 @@ export function PanelComposer({
           />
         )}
         <div className="mt-2" />
-        <TimeControlPanel className="w-full" />
+        <TimeControlPanel
+          className="w-full"
+          timeSystem={timeSystem}
+          onPause={() => onGameAction('pause')}
+          onResume={() => onGameAction('resume')}
+          onSetSpeed={(speed: TimeSpeed) => onGameAction('set-speed', { speed })}
+        />
         <div className="mt-2" />
         <ModularMiniMapPanel gridSize={20} />
         <div className="mt-2" />

@@ -54,9 +54,59 @@ import type { GameResources, GameTime } from '@/components/game/hud/types';
 import type { CategoryType } from '@arcane/ui';
 import { simulationSystem, EnhancedGameState } from '@engine'
 import { VisualIndicator } from '@engine';
-import { TimeSystem, timeSystem, TIME_SPEEDS, type TimeSpeed, GameTime as SystemGameTime } from '@engine';
+import { TimeSystem, TIME_SPEEDS, type TimeSpeed } from '@engine';
 
 type BuildTypeId = keyof typeof SIM_BUILDINGS;
+
+
+const SPEED_VALUES: ReadonlySet<TimeSpeed> = new Set(Object.values(TIME_SPEEDS) as TimeSpeed[]);
+
+const parseTimeSpeed = (value: unknown): TimeSpeed | null => {
+  if (typeof value === 'number' && SPEED_VALUES.has(value as TimeSpeed)) {
+    return value as TimeSpeed;
+  }
+  if (typeof value === 'string') {
+    const numeric = Number(value);
+    if (!Number.isNaN(numeric) && SPEED_VALUES.has(numeric as TimeSpeed)) {
+      return numeric as TimeSpeed;
+    }
+  }
+  return null;
+};
+
+const getIntervalForSpeed = (speed: TimeSpeed): number => {
+  switch (speed) {
+    case TIME_SPEEDS.FAST:
+      return 6000;
+    case TIME_SPEEDS.VERY_FAST:
+      return 3000;
+    case TIME_SPEEDS.ULTRA_FAST:
+      return 1500;
+    case TIME_SPEEDS.HYPER_SPEED:
+      return 600;
+    default:
+      return 12000;
+  }
+};
+
+const getSpeedForInterval = (ms: number): TimeSpeed => {
+  if (!Number.isFinite(ms)) {
+    return TIME_SPEEDS.NORMAL;
+  }
+  if (ms <= 600) {
+    return TIME_SPEEDS.HYPER_SPEED;
+  }
+  if (ms <= 1500) {
+    return TIME_SPEEDS.ULTRA_FAST;
+  }
+  if (ms <= 3000) {
+    return TIME_SPEEDS.VERY_FAST;
+  }
+  if (ms <= 6000) {
+    return TIME_SPEEDS.FAST;
+  }
+  return TIME_SPEEDS.NORMAL;
+};
 
 
 
@@ -252,7 +302,20 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     timeSystemRef.current.start();
   }
   const timeSystem = timeSystemRef.current;
-  
+  const lastActiveSpeedRef = useRef<TimeSpeed>(
+    timeSystem.isPaused() ? TIME_SPEEDS.NORMAL : timeSystem.getCurrentSpeed(),
+  );
+
+  const applySpeed = (speed: TimeSpeed) => {
+    timeSystem.setSpeed(speed);
+    if (speed === TIME_SPEEDS.PAUSED) {
+      setIsPaused(true);
+    } else {
+      setIsPaused(false);
+      lastActiveSpeedRef.current = speed;
+    }
+  };
+
   // Handle TimeSystem cleanup
   useEffect(() => {
     return () => {
@@ -1690,6 +1753,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
           {/* Integrated HUD now shares the same GameProvider */}
           <IntegratedHUDSystem
             defaultPreset="default"
+            timeSystem={timeSystem}
             gameData={{
               resources,
               resourceChanges,
@@ -1727,35 +1791,71 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
             }}
             onGameAction={(action, payload: any) => {
               if (action === 'advance-cycle') { tick(); if (onboardingStep < 6) setOnboardingStep(6); }
-              if (action === 'pause') { 
-                timeSystem.setSpeed(TIME_SPEEDS.PAUSED);
-                setIsPaused(true);
-                if (state) { void fetch('/api/state', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: state.id, auto_ticking: false }) }); }
+              if (action === 'pause') {
+                const currentSpeed = timeSystem.getCurrentSpeed();
+                if (currentSpeed !== TIME_SPEEDS.PAUSED) {
+                  lastActiveSpeedRef.current = currentSpeed;
+                }
+                applySpeed(TIME_SPEEDS.PAUSED);
+                if (state) {
+                  void fetch('/api/state', {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: state.id, auto_ticking: false }),
+                  });
+                }
+                return;
               }
               if (action === 'resume') {
-                timeSystem.setSpeed(TIME_SPEEDS.NORMAL);
-                setIsPaused(false);
-                if (state) { void fetch('/api/state', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: state.id, auto_ticking: true, last_tick_at: new Date().toISOString() }) }); }
+                const resumeSpeed = lastActiveSpeedRef.current ?? TIME_SPEEDS.NORMAL;
+                applySpeed(resumeSpeed);
+                if (state) {
+                  const ms = getIntervalForSpeed(resumeSpeed);
+                  void fetch('/api/state', {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      id: state.id,
+                      auto_ticking: true,
+                      last_tick_at: new Date().toISOString(),
+                      tick_interval_ms: ms,
+                    }),
+                  });
+                  setState(prev => (prev ? { ...prev, tick_interval_ms: ms } as any : prev));
+                }
+                return;
               }
               if (action === 'set-speed') {
                 if (!state) return;
-                // Map speed payload to TIME_SPEEDS constants
-                const speedMap: Record<string, TimeSpeed> = { 
-                  '1': TIME_SPEEDS.NORMAL, 
-                  '2': TIME_SPEEDS.FAST, 
-                  '3': TIME_SPEEDS.VERY_FAST,
-                  '4': TIME_SPEEDS.ULTRA_FAST,
-                  '5': TIME_SPEEDS.HYPER_SPEED
-                };
-                const speed = speedMap[payload?.speed] || TIME_SPEEDS.NORMAL;
-                timeSystem.setSpeed(speed);
-                // Keep backward compatibility with server - faster speeds need shorter intervals
-                const ms = speed === TIME_SPEEDS.NORMAL ? 12000 : 
-                          speed === TIME_SPEEDS.FAST ? 6000 : 
-                          speed === TIME_SPEEDS.VERY_FAST ? 3000 :
-                          speed === TIME_SPEEDS.ULTRA_FAST ? 1500 : 600;
-                void fetch('/api/state', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: state.id, tick_interval_ms: ms }) });
-                setState(prev => prev ? { ...prev, tick_interval_ms: ms } as any : prev);
+                const parsedSpeed = parseTimeSpeed(payload?.speed);
+                const requestedSpeed = parsedSpeed ?? (typeof payload?.ms === 'number' ? getSpeedForInterval(payload.ms) : TIME_SPEEDS.NORMAL);
+
+                if (requestedSpeed === TIME_SPEEDS.PAUSED) {
+                  const currentSpeed = timeSystem.getCurrentSpeed();
+                  if (currentSpeed !== TIME_SPEEDS.PAUSED) {
+                    lastActiveSpeedRef.current = currentSpeed;
+                  }
+                  applySpeed(TIME_SPEEDS.PAUSED);
+                  void fetch('/api/state', {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: state.id, auto_ticking: false }),
+                  });
+                  return;
+                }
+
+                const intervalMs = typeof payload?.ms === 'number' && Number.isFinite(payload.ms)
+                  ? Math.max(0, payload.ms)
+                  : getIntervalForSpeed(requestedSpeed);
+
+                applySpeed(requestedSpeed);
+                void fetch('/api/state', {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ id: state.id, tick_interval_ms: intervalMs, auto_ticking: true }),
+                });
+                setState(prev => (prev ? { ...prev, tick_interval_ms: intervalMs } as any : prev));
+                return;
               }
               if (action === 'open-council') setIsCouncilOpen(true);
               if (action === 'open-edicts') setIsEdictsOpen(true);
