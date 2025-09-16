@@ -162,8 +162,8 @@ export default function ChunkedIsometricGrid({
       memoryStatsRef.current.totalSprites += tiles.size;
       renderStatsRef.current.chunksLoaded++;
       renderStatsRef.current.spritesCreated += tiles.size;
-      console.log(`🔍 [MEMORY TRACKING] Chunk ${chunkKey} loaded - Total sprites: ${memoryStatsRef.current.totalSprites}, Containers: ${memoryStatsRef.current.totalContainers}`);
-      console.log(`🎮 [RENDER TRACKING] Chunks loaded: ${renderStatsRef.current.chunksLoaded}, Sprites created: ${renderStatsRef.current.spritesCreated}`);
+      logger.debug(`🔍 [MEMORY TRACKING] Chunk ${chunkKey} loaded - Total sprites: ${memoryStatsRef.current.totalSprites}, Containers: ${memoryStatsRef.current.totalContainers}`);
+      logger.debug(`🎮 [RENDER TRACKING] Chunks loaded: ${renderStatsRef.current.chunksLoaded}, Sprites created: ${renderStatsRef.current.spritesCreated}`);
       
       worldContainerRef.current.addChild(container);
       logger.debug(`[GRAPHICS] Added chunk container ${chunkKey} to world container. World children: ${worldContainerRef.current.children.length}`);
@@ -252,12 +252,12 @@ export default function ChunkedIsometricGrid({
       const unloadTime = performance.now() - startTime;
       const memoryAfter = memoryStatsRef.current;
       logger.info(`[MEMORY] Unloaded chunk ${chunkKey} in ${unloadTime.toFixed(2)}ms. Disposed ${disposedCount}/${tileCount} tiles. New stats: sprites=${memoryAfter.totalSprites}, containers=${memoryAfter.totalContainers}`);
-      console.log(`🧹 [MEMORY CLEANUP] Chunk ${chunkKey} unloaded - Disposed ${disposedCount} sprites, Remaining: ${memoryAfter.totalSprites}`);
+      logger.debug(`🧹 [MEMORY CLEANUP] Chunk ${chunkKey} unloaded - Disposed ${disposedCount} sprites, Remaining: ${memoryAfter.totalSprites}`);
       
       // Log render stats summary
       const renderStats = renderStatsRef.current;
       logger.debug(`[RENDER_STATS] Total - Loaded: ${renderStats.chunksLoaded}, Unloaded: ${renderStats.chunksUnloaded}, Sprites Created: ${renderStats.spritesCreated}, Sprites Destroyed: ${renderStats.spritesDestroyed}`);
-      console.log(`🗑️ [RENDER CLEANUP] Chunks unloaded: ${renderStats.chunksUnloaded}, Sprites destroyed: ${renderStats.spritesDestroyed}`);
+      logger.debug(`🗑️ [RENDER CLEANUP] Chunks unloaded: ${renderStats.chunksUnloaded}, Sprites destroyed: ${renderStats.spritesDestroyed}`);
     }
   }, []);
 
