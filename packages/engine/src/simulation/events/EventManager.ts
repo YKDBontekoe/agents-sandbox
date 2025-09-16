@@ -1,6 +1,6 @@
 import type { SimResources } from '../../index';
 import type { SimulatedBuilding } from '../buildingSimulation';
-import type { Citizen } from '../citizenBehavior';
+import type { Citizen } from '../citizens/citizen';
 import type { WorkerProfile } from '../workers/types';
 import type { GameTime } from '../../types/gameTime';
 import { EVENT_DEFINITIONS } from './definitions';

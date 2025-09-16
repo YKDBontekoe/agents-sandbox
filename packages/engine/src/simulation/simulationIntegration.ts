@@ -6,7 +6,8 @@ import {
   performMaintenance,
   createSimulatedBuilding
 } from './buildingSimulation';
-import { CitizenBehaviorSystem, Citizen } from './citizenBehavior';
+import { CitizenBehaviorSystem } from './citizenBehavior';
+import type { Citizen } from './citizens/citizen';
 import { WorkerSimulationSystem } from './workerSimulation';
 import type { WorkerProfile } from './workers/types';
 import type { ActiveEvent, VisualIndicator } from './events/types';
