@@ -14,6 +14,7 @@ import {
   drawParticles,
   drawConnections,
 } from './effects';
+import SkillTooltipContent from './SkillTooltipContent';
 
 export default function ConstellationSkillTree({ tree, unlocked, onUnlock, colorFor, focusNodeId, resources, onSelectNode }: ConstellationSkillTreeProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -936,15 +937,15 @@ export default function ConstellationSkillTree({ tree, unlocked, onUnlock, color
       
       {/* Enhanced Tooltip */}
       {tooltip.visible && tooltip.node && (
-        <div 
+        <div
           className={`absolute pointer-events-none z-50 max-w-sm ${
             tooltip.anchor === 'left' ? 'transform -translate-x-full' :
             tooltip.anchor === 'right' ? 'transform translate-x-0' :
             tooltip.anchor === 'top' ? 'transform -translate-y-full' :
             'transform translate-y-0'
           }`}
-          style={{ 
-            left: tooltip.x, 
+          style={{
+            left: tooltip.x,
             top: tooltip.y,
             opacity: tooltip.fadeIn,
             transform: `scale(${0.95 + tooltip.fadeIn * 0.05}) translateZ(0)`,
@@ -952,141 +953,17 @@ export default function ConstellationSkillTree({ tree, unlocked, onUnlock, color
             filter: 'drop-shadow(0 20px 25px rgba(0, 0, 0, 0.4))'
           }}
         >
-          <div className="relative bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-xl border border-gray-600/50 overflow-hidden">
-            {/* Subtle glow effect */}
-            <div 
-              className="absolute inset-0 rounded-xl opacity-20"
-              style={{ 
-                background: `radial-gradient(circle at 50% 0%, ${colorFor(tooltip.node.category)}40, transparent 70%)` 
-              }}
-            />
-            
-            {/* Content */}
-            <div className="relative p-5">
-              {/* Header */}
-              <div className="flex items-start gap-3 mb-4">
-                <div 
-                  className="w-4 h-4 rounded-full flex-shrink-0 mt-0.5 shadow-lg"
-                  style={{ 
-                    backgroundColor: colorFor(tooltip.node.category),
-                    boxShadow: `0 0 12px ${colorFor(tooltip.node.category)}60`
-                  }}
-                />
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-white font-semibold text-base leading-tight mb-1">
-                    {tooltip.node.title}
-                  </h3>
-                  <div className="text-xs text-gray-400 font-medium uppercase tracking-wider">
-                    {tooltip.node.category}
-                  </div>
-                </div>
-              </div>
-              
-              {/* Description */}
-              <p className="text-gray-300 text-sm leading-relaxed mb-4 font-light">
-                {tooltip.node.description}
-              </p>
-          
-              {/* Effects */}
-              {tooltip.node.effects && tooltip.node.effects.length > 0 && (
-                <div className="mb-4 border-t border-gray-700/50 pt-4">
-                  <h4 className="text-yellow-400 text-sm font-semibold mb-3 flex items-center gap-2">
-                    <span className="w-2 h-2 bg-yellow-400 rounded-full"></span>
-                    Effects
-                  </h4>
-                  <div className="space-y-2">
-                    {tooltip.node.effects.map((effect, i) => {
-                      let effectText = '';
-                      let effectIcon = '⚡';
-                      switch (effect.kind) {
-                        case 'resource_multiplier':
-                          effectText = `+${((effect.factor - 1) * 100).toFixed(0)}% ${effect.resource}`;
-                          effectIcon = '💰';
-                          break;
-                        case 'building_multiplier':
-                          effectText = `+${((effect.factor - 1) * 100).toFixed(0)}% ${effect.typeId}`;
-                          effectIcon = '🏗️';
-                          break;
-                        case 'upkeep_delta':
-                          effectText = `${effect.grainPerWorkerDelta > 0 ? '+' : ''}${effect.grainPerWorkerDelta} grain per worker`;
-                          effectIcon = '🌾';
-                          break;
-                        case 'route_bonus':
-                          effectText = `+${effect.percent}% route efficiency`;
-                          effectIcon = '🛤️';
-                          break;
-                        case 'logistics_bonus':
-                          effectText = `+${effect.percent}% logistics`;
-                          effectIcon = '📦';
-                          break;
-                        case 'special_ability':
-                          effectText = `${effect.description} (Power: ${effect.power})`;
-                          effectIcon = '✨';
-                          break;
-                      }
-                      return (
-                        <div key={i} className="flex items-center gap-3 bg-gray-800/50 rounded-lg px-3 py-2 border border-gray-700/30">
-                          <span className="text-sm">{effectIcon}</span>
-                          <span className="text-green-400 text-sm font-medium flex-1">{effectText}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-          
-          {tooltip.node.requires && tooltip.node.requires.length > 0 && (
-            <div className="mb-2">
-              <h4 className="text-gray-400 text-xs font-medium mb-1">Requirements:</h4>
-              {tooltip.node.requires.map(reqId => {
-                const reqNode = tree.nodes.find(n => n.id === reqId);
-                const isMet = unlocked[reqId];
-                return (
-                  <div key={reqId} className={`text-xs ${
-                    isMet ? 'text-green-400' : 'text-red-400'
-                  }`}>
-                    {isMet ? '✓' : '✗'} {reqNode?.title || reqId}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {/* Lock reasons (exclusivity and extra conditions) */}
-          {(() => {
-            const { ok, reasons } = checkUnlock(tooltip.node!);
-            if (unlocked[tooltip.node!.id] || ok) return null;
-            return (
-              <div className="mb-2">
-                <h4 className="text-red-400 text-xs font-medium mb-1">Locked:</h4>
-                <ul className="list-disc list-inside">
-                  {reasons.map((r, i) => (
-                    <li key={i} className="text-xs text-red-300">{r}</li>
-                  ))}
-                </ul>
-              </div>
-            );
-          })()}
-          
-          {/* Status indicator with affordability */}
-          <div className="mt-3 pt-2 border-t border-gray-700">
-            {(() => {
-              const ok = checkUnlock(tooltip.node).ok;
-              const isUnl = unlocked[tooltip.node.id];
-              const affordable = canAfford(tooltip.node);
-              const cls = isUnl ? 'text-green-400' : ok ? (affordable ? 'text-yellow-400' : 'text-red-300') : 'text-red-400';
-              const text = isUnl ? '✓ Unlocked' : ok ? (affordable ? '⚡ Available' : '⚡ Available • insufficient funds') : '🔒 Locked';
-              return <div className={`text-xs font-medium ${cls}`}>{text}</div>;
-            })()}
-            <div className="text-xs text-gray-500 mt-1">
-              Category: {tooltip.node.category}
-            </div>
-          </div>
-            </div>
-          </div>
+          <SkillTooltipContent
+            node={tooltip.node}
+            tree={tree}
+            unlocked={unlocked}
+            colorFor={colorFor}
+            checkUnlock={checkUnlock}
+            canAfford={canAfford}
+          />
         </div>
       )}
-      
+
       {/* Enhanced Zoom Controls */}
       <div className="absolute top-4 right-4 flex flex-col gap-2 bg-gray-800/90 backdrop-blur-sm rounded-lg p-2 border border-gray-600">
         <button
