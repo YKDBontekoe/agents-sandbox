@@ -3,6 +3,7 @@ import type {
   ConstellationNode,
   ParticleEffect,
   SkillNode,
+  SkillTree,
 } from './types';
 
 // Optimized particle system with object pooling
@@ -343,19 +344,38 @@ export function drawParticles(
 export function drawConnections(
   ctx: CanvasRenderingContext2D,
   layout: { nodes: ConstellationNode[] },
+  edges: SkillTree['edges'],
   unlocked: Record<string, boolean>,
   highlightEdges: Set<string>,
   time: number,
   checkUnlock: (node: SkillNode) => { ok: boolean },
 ) {
+  const nodesById = new Map<string, ConstellationNode>();
+  layout.nodes.forEach((node) => {
+    nodesById.set(node.node.id, node);
+  });
+
+  const unlockableCache = new Map<string, boolean>();
+  const isUnlockable = (node: SkillNode) => {
+    if (!unlockableCache.has(node.id)) {
+      unlockableCache.set(node.id, checkUnlock(node).ok);
+    }
+    return unlockableCache.get(node.id)!;
+  };
+
+  const prerequisiteEdgeKeys = new Set<string>();
+
   layout.nodes.forEach((nodeA) => {
     (nodeA.node.requires || []).forEach((reqId) => {
-      const nodeB = layout.nodes.find((n) => n.node.id === reqId);
+      const nodeB = nodesById.get(reqId);
       if (!nodeB) return;
 
+      const edgeKey = `${reqId}->${nodeA.node.id}`;
+      prerequisiteEdgeKeys.add(edgeKey);
+
       const isUnlocked = unlocked[nodeA.node.id] || unlocked[nodeB.node.id];
-      const nextAvailable = !unlocked[nodeA.node.id] && checkUnlock(nodeA.node).ok;
-      const isHighlighted = highlightEdges.has(`${reqId}->${nodeA.node.id}`);
+      const nextAvailable = !unlocked[nodeA.node.id] && isUnlockable(nodeA.node);
+      const isHighlighted = highlightEdges.has(edgeKey);
       if (!(isUnlocked || nextAvailable || isHighlighted)) return;
       const alpha = isUnlocked ? 0.8 : nextAvailable ? 0.8 : 0.6;
 
@@ -410,5 +430,69 @@ export function drawConnections(
     });
   });
 
+  const previousLineCap = ctx.lineCap;
+  const syntheticEdgeKeys = new Set<string>();
+
+  edges.forEach((edge) => {
+    const fromNode = nodesById.get(edge.from);
+    const toNode = nodesById.get(edge.to);
+    if (!fromNode || !toNode) return;
+
+    const edgeKey = `${edge.from}->${edge.to}`;
+    if (prerequisiteEdgeKeys.has(edgeKey) || syntheticEdgeKeys.has(edgeKey)) {
+      return;
+    }
+    syntheticEdgeKeys.add(edgeKey);
+
+    const highlightKey = `bridge:${edgeKey}`;
+    const fromUnlocked = !!unlocked[edge.from];
+    const toUnlocked = !!unlocked[edge.to];
+    const fromAvailable = !fromUnlocked && isUnlockable(fromNode.node);
+    const toAvailable = !toUnlocked && isUnlockable(toNode.node);
+    const isHighlighted = highlightEdges.has(highlightKey);
+    if (!(fromUnlocked || toUnlocked || fromAvailable || toAvailable || isHighlighted)) {
+      return;
+    }
+
+    const anyUnlocked = fromUnlocked || toUnlocked;
+    const alphaBase = isHighlighted ? 0.9 : anyUnlocked ? 0.6 : 0.45;
+    const gradient = ctx.createLinearGradient(fromNode.x, fromNode.y, toNode.x, toNode.y);
+    gradient.addColorStop(0, `rgba(255, 180, 120, ${alphaBase * 0.85})`);
+    gradient.addColorStop(0.5, `rgba(160, 140, 255, ${alphaBase})`);
+    gradient.addColorStop(1, `rgba(120, 210, 255, ${alphaBase * 0.85})`);
+
+    ctx.strokeStyle = gradient;
+    ctx.lineWidth = isHighlighted ? 3.5 : 2.5;
+    ctx.lineCap = 'round';
+    ctx.setLineDash(isHighlighted ? [8, 6] : [6, 10]);
+
+    ctx.beginPath();
+    ctx.moveTo(fromNode.x, fromNode.y);
+    ctx.lineTo(toNode.x, toNode.y);
+    ctx.stroke();
+
+    if (anyUnlocked || isHighlighted) {
+      const seed =
+        ((edge.from.charCodeAt(0) * 31 + edge.to.charCodeAt(0) * 17) % 997) / 997;
+      for (let i = 0; i < 2; i++) {
+        const flowPos = (time * 0.3 + seed + i * 0.5) % 1;
+        const flowX = fromNode.x + (toNode.x - fromNode.x) * flowPos;
+        const flowY = fromNode.y + (toNode.y - fromNode.y) * flowPos;
+
+        const orbGradient = ctx.createRadialGradient(flowX, flowY, 0, flowX, flowY, 5);
+        const orbAlpha = isHighlighted ? 0.85 : 0.55;
+        orbGradient.addColorStop(0, `rgba(255, 255, 255, ${orbAlpha})`);
+        orbGradient.addColorStop(0.6, `rgba(199, 210, 254, ${orbAlpha * 0.6})`);
+        orbGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+
+        ctx.fillStyle = orbGradient;
+        ctx.beginPath();
+        ctx.arc(flowX, flowY, 5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  });
+
+  ctx.lineCap = previousLineCap;
   ctx.setLineDash([]);
 }
