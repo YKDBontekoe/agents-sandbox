@@ -246,6 +246,7 @@ export * from './simulation/citizenBehavior';
 export * from './simulation/workerSimulation';
 export * from './simulation/simulationIntegration';
 export * from './simulation/events';
+export * from './simulation/world/civilizations';
 
 // Export time system
 export * from './systems/time';

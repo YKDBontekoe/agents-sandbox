@@ -43,6 +43,7 @@ import GoalBanner from '@/components/game/GoalBanner';
 import OnboardingGuide from '@/components/game/OnboardingGuide';
 import ModularWorkerPanel from '@/components/game/hud/panels/ModularWorkerPanel';
 import ModularQuestPanel from '@/components/game/hud/panels/ModularQuestPanel';
+import DiplomaticPanel from '@/components/game/hud/panels/DiplomaticPanel';
 import NotificationHost from '@/components/game/hud/NotificationHost';
 import { useNotify } from '@/state/useNotify';
 import type { Notification } from '@/components/game/hud/types';
@@ -58,11 +59,13 @@ import { VisualIndicator } from '@engine';
 import { pauseSimulation, resumeSimulation } from './simulationControls';
 import { TimeSystem, timeSystem, TIME_SPEEDS, GameTime as SystemGameTime, type TimeSpeed } from '@engine';
 import { intervalMsToTimeSpeed, sanitizeIntervalMs } from './timeSpeedUtils';
+import type { CivilizationSummary, DiplomaticActionKind } from '@engine/simulation/world/civilizations';
 
 type BuildTypeId = keyof typeof SIM_BUILDINGS;
 
 const ISO_TILE_WIDTH = 64;
 const ISO_TILE_HEIGHT = 32;
+const PLAYER_REALM_ID = 'arcane-dominion' as const;
 
 const arraysEqual = (a: string[], b: string[]) =>
   a.length === b.length && a.every((value, index) => value === b[index]);
@@ -98,6 +101,34 @@ interface TradeRoute {
   fromId: string;
   toId: string;
   length: number;
+}
+
+type RelationshipSnapshot = CivilizationSummary['relationship'];
+
+interface ChunkCivilizationInfo {
+  chunkX: number;
+  chunkY: number;
+  size: number;
+  ownerId: string | null;
+  ownerName: string | null;
+  color: string;
+  temperament: string;
+  influence: number;
+  relationship: RelationshipSnapshot | null;
+}
+
+interface ChunkApiResponse {
+  tiles: string[][];
+  size: number;
+  civilization?: {
+    ownerId?: string | null;
+    ownerName?: string | null;
+    color?: string;
+    temperament?: string;
+    influence?: number;
+    relationship?: RelationshipSnapshot | null;
+  } | null;
+  worldCivilizations?: CivilizationSummary[];
 }
 
 interface Proposal {
@@ -267,7 +298,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
       fetch('/api/debug-log?message=TILETYPES_STILL_EMPTY').catch(() => {});
     }
   }, [tileTypes]);
-  
+
   const [isPaused, setIsPaused] = useState(true);
   const [timeRemaining, setTimeRemaining] = useState(60);
   const [edgeScrollEnabled, setEdgeScrollEnabled] = useState(true);
@@ -294,6 +325,9 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   const [markers, setMarkers] = useState<{ id: string; x: number; y: number; label?: string }[]>([]);
   const [visualIndicators, setVisualIndicators] = useState<VisualIndicator[]>([]);
   const [enhancedGameState, setEnhancedGameState] = useState<EnhancedGameState | null>(null);
+  const [chunkCivilizations, setChunkCivilizations] = useState<Record<string, ChunkCivilizationInfo>>({});
+  const [worldCivilizations, setWorldCivilizations] = useState<CivilizationSummary[]>([]);
+  const [isDiplomacyBusy, setIsDiplomacyBusy] = useState(false);
   const notify = useNotify();
   const lastMemoryToastRef = useRef<{ time: number; lastShownMB: number }>({ time: 0, lastShownMB: 0 });
   // building hover details disabled in stable mode
@@ -306,7 +340,39 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   const [placedBuildings, setPlacedBuildings] = useState<StoredBuilding[]>([]);
   const [routes, setRoutes] = useState<TradeRoute[]>([]);
   const [roads, setRoads] = useState<Array<{x:number;y:number}>>([]);
-  
+
+  const syncChunkRelationships = useCallback((summaries: CivilizationSummary[]) => {
+    if (!Array.isArray(summaries) || summaries.length === 0) return;
+    const relationMap = new Map<string, RelationshipSnapshot>();
+    for (const civ of summaries) {
+      relationMap.set(civ.id, civ.relationship);
+    }
+    setChunkCivilizations(prev => {
+      let mutated = false;
+      const next: Record<string, ChunkCivilizationInfo> = {};
+      for (const [key, info] of Object.entries(prev)) {
+        const relation = info.ownerId ? relationMap.get(info.ownerId) : undefined;
+        if (relation) {
+          const existing = info.relationship;
+          const unchanged = !!existing
+            && existing.status === relation.status
+            && existing.attitude === relation.attitude
+            && existing.trend === relation.trend
+            && existing.target === relation.target;
+          if (unchanged) {
+            next[key] = info;
+          } else {
+            next[key] = { ...info, relationship: relation };
+            mutated = true;
+          }
+        } else {
+          next[key] = info;
+        }
+      }
+      return mutated ? next : prev;
+    });
+  }, []);
+
   // Initialize TimeSystem
   const timeSystemRef = useRef<TimeSystem | null>(null);
   if (!timeSystemRef.current) {
@@ -341,6 +407,74 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   const [citizensCount, setCitizensCount] = useState<number>(8);
   const [citizensSeed, setCitizensSeed] = useState<number>(() => Math.floor(Math.random()*1e6));
 
+  const refreshCivilizations = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/map/civilizations?seed=${citizensSeed}`);
+      if (!response.ok) return;
+      const data = await response.json();
+      if (Array.isArray(data?.civilizations)) {
+        const summaries = data.civilizations as CivilizationSummary[];
+        setWorldCivilizations(summaries);
+        syncChunkRelationships(summaries);
+      }
+    } catch (error) {
+      logger.warn('Failed to refresh civilizations:', error);
+    }
+  }, [citizensSeed, syncChunkRelationships]);
+
+  useEffect(() => {
+    void refreshCivilizations();
+  }, [refreshCivilizations]);
+
+  const handleDiplomacyAction = useCallback(async (targetId: string, action: DiplomaticActionKind) => {
+    setIsDiplomacyBusy(true);
+    try {
+      const response = await fetch('/api/map/civilizations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ seed: citizensSeed, targetId, action }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        const message = typeof data?.error === 'string' ? data.error : 'Diplomatic overture failed.';
+        notify({
+          type: 'error',
+          title: 'Diplomacy Failed',
+          message,
+        });
+        return;
+      }
+      if (Array.isArray(data?.civilizations)) {
+        const summaries = data.civilizations as CivilizationSummary[];
+        setWorldCivilizations(summaries);
+        syncChunkRelationships(summaries);
+      }
+      if (data?.result?.description) {
+        notify({
+          type: 'info',
+          title: 'Diplomatic Update',
+          message: data.result.description as string,
+          dedupeKey: `diplomacy-${targetId}-${action}`,
+          dedupeMs: 3500,
+        });
+      }
+    } catch (error) {
+      logger.error('Diplomacy action failed', error);
+      notify({
+        type: 'error',
+        title: 'Diplomacy Failed',
+        message: 'Unable to reach neighboring realms. Please try again shortly.',
+      });
+    } finally {
+      setIsDiplomacyBusy(false);
+    }
+  }, [citizensSeed, notify, syncChunkRelationships]);
+
+  const civilizationClaimList = useMemo(
+    () => Object.values(chunkCivilizations),
+    [chunkCivilizations],
+  );
+
   const [selectedTool, setSelectedTool] = useState<ManagementTool>('select');
   const [selectedZoneType, setSelectedZoneType] = useState<ZoneType>('residential');
   const [selectedServiceType, setSelectedServiceType] = useState<ServiceType>('police');
@@ -356,13 +490,34 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     try {
       const response = await fetch(`/api/map/chunk?x=${chunkX}&y=${chunkY}&size=${chunkSize}&seed=${citizensSeed}`);
       if (!response.ok) return null;
-      const data = await response.json();
-      return data.tiles as string[][];
+      const data = await response.json() as ChunkApiResponse;
+      if (data?.civilization) {
+        const key = `${chunkX},${chunkY}`;
+        setChunkCivilizations(prev => ({
+          ...prev,
+          [key]: {
+            chunkX,
+            chunkY,
+            size: data.size ?? chunkSize,
+            ownerId: data.civilization?.ownerId ?? null,
+            ownerName: data.civilization?.ownerName ?? null,
+            color: data.civilization?.color ?? '#2563eb',
+            temperament: data.civilization?.temperament ?? 'stoic',
+            influence: Number(data.civilization?.influence ?? 0),
+            relationship: data.civilization?.relationship ?? null,
+          },
+        }));
+      }
+      if (Array.isArray(data?.worldCivilizations)) {
+        setWorldCivilizations(data.worldCivilizations);
+        syncChunkRelationships(data.worldCivilizations);
+      }
+      return Array.isArray(data?.tiles) ? data.tiles : null;
     } catch (error) {
       logger.warn('Failed to fetch chunk:', error);
       return null;
     }
-  }, [citizensSeed]);
+  }, [citizensSeed, syncChunkRelationships]);
 
   // Expand map with 'unknown' tiles when interacting near the edges
   const ensureCapacityAround = useCallback((x: number, y: number, margin: number = 2) => {
@@ -1682,6 +1837,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
               acceptedNoticeKey={acceptedNoticeKeyRef.current}
               clickEffectKey={clickEffectKey}
               markers={markers}
+              civilizationClaims={civilizationClaimList}
               districts={districts}
               leylines={leylines}
               selectedLeyline={selectedLeyline}
@@ -2004,6 +2160,11 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
                 proposals: proposals.length > 0,
                 advance: state.cycle > 1,
               }}
+            />
+            <DiplomaticPanel
+              civilizations={worldCivilizations}
+              onAction={handleDiplomacyAction}
+              busy={isDiplomacyBusy}
             />
 
           </IntegratedHUDSystem>

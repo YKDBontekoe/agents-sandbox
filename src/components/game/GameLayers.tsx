@@ -38,6 +38,18 @@ interface TradeRoute {
 
 interface Marker { id: string; x: number; y: number; label?: string }
 
+interface CivilizationClaim {
+  chunkX: number;
+  chunkY: number;
+  size: number;
+  ownerId: string | null;
+  ownerName: string | null;
+  color: string;
+  temperament: string;
+  influence: number;
+  relationship: { status: string; attitude: number; trend: string } | null;
+}
+
 export interface GameLayersProps {
   tileTypes: string[][];
   hoverTile: { x: number; y: number; tileType?: string } | null;
@@ -60,6 +72,7 @@ export interface GameLayersProps {
   acceptedNoticeKey: string | null;
   clickEffectKey: string | null;
   markers: Marker[];
+  civilizationClaims?: CivilizationClaim[];
   districts: District[];
   leylines: Leyline[];
   selectedLeyline: Leyline | null;
@@ -104,6 +117,7 @@ const GameLayers: React.FC<GameLayersProps> = ({
   resources,
   cycle,
   constructionEvents,
+  civilizationClaims = [],
 }) => {
   const buildHint = useMemo(() => {
     if (!previewTypeId) return undefined;
@@ -131,6 +145,45 @@ const GameLayers: React.FC<GameLayersProps> = ({
   }, [previewTypeId, hoverTile, selectedTile, placedBuildings, tutorialFree, simResources]);
 
   const buildingsForLayer = useMemo(() => placedBuildings.map(b => ({ id: b.id, typeId: b.typeId, x: b.x, y: b.y, workers: b.workers, level: b.level })), [placedBuildings]);
+
+  const civilizationMarkers = useMemo(() => {
+    return (civilizationClaims ?? []).map((claim) => {
+      const centerX = claim.chunkX * claim.size + Math.floor(claim.size / 2);
+      const centerY = claim.chunkY * claim.size + Math.floor(claim.size / 2);
+      const hex = typeof claim.color === 'string' ? claim.color.replace('#', '') : '';
+      const parsedColor = Number.parseInt(hex, 16);
+      const color = Number.isNaN(parsedColor) ? 0x2563eb : parsedColor;
+      const relationship = claim.relationship;
+      const statusRaw = relationship?.status ?? 'unknown';
+      const statusLabel = statusRaw === 'self'
+        ? 'Dominion'
+        : statusRaw.charAt(0).toUpperCase() + statusRaw.slice(1);
+      const trendSymbol = relationship
+        ? relationship.trend === 'improving'
+          ? '↑'
+          : relationship.trend === 'declining'
+            ? '↓'
+            : '→'
+        : '•';
+      const influencePct = Number.isFinite(claim.influence)
+        ? Math.max(0, Math.round(claim.influence * 100))
+        : 0;
+      const labelBase = claim.ownerName ?? 'Unclaimed Territory';
+      const label = `${labelBase} • ${statusLabel} ${trendSymbol} ${influencePct}%`;
+      return {
+        id: `civ-${claim.chunkX}-${claim.chunkY}`,
+        gridX: centerX,
+        gridY: centerY,
+        color,
+        label,
+      };
+    });
+  }, [civilizationClaims]);
+
+  const combinedMarkers = useMemo(() => {
+    const base = markers.map(m => ({ id: m.id, gridX: m.x, gridY: m.y, label: m.label }));
+    return [...base, ...civilizationMarkers];
+  }, [markers, civilizationMarkers]);
 
   return (
     <>
@@ -192,7 +245,7 @@ const GameLayers: React.FC<GameLayersProps> = ({
       )}
       <AmbientLayer tileTypes={tileTypes} />
       <SeasonalLayer season={((cycle % 4 === 0 ? 'spring' : (cycle % 4 === 1 ? 'summer' : (cycle % 4 === 2 ? 'autumn' : 'winter'))))} />
-      <MarkersLayer markers={markers.map(m => ({ id: m.id, gridX: m.x, gridY: m.y, label: m.label }))} />
+      <MarkersLayer markers={combinedMarkers} />
       <EnhancedVisualEffectsLayer
         buildings={buildingsForLayer}
         citizens={placedBuildings.filter(b => b.workers > 0).map(b => ({ id: b.id, x: b.x, y: b.y, activity: 'working', speed: 1.0 }))}

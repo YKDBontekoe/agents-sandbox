@@ -1,18 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server'
+import {
+  PLAYER_REALM_ID,
+  getCivilizationWorld,
+  getChunkInfluence,
+  stepCivilizationWorld,
+  summarizeCivilizations,
+} from '@engine/simulation/world/civilizations'
 
 // Enhanced chunk-based terrain generation with villages, rivers, and other features
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
-  const chunkXParam = searchParams.get('chunkX')
-  const chunkYParam = searchParams.get('chunkY')
-  const chunkSizeParam = searchParams.get('chunkSize')
-  const seedParam = searchParams.get('seed')
+  const chunkXParam = searchParams.get('chunkX') ?? searchParams.get('x')
+  const chunkYParam = searchParams.get('chunkY') ?? searchParams.get('y')
+  const chunkSizeParam = searchParams.get('chunkSize') ?? searchParams.get('size')
+  const seedParam = searchParams.get('seed') ?? searchParams.get('worldSeed')
   const detail = searchParams.get('detail') || 'full' // 'minimal', 'standard', 'full'
-  
-  const chunkX = Number(chunkXParam ?? 0)
-  const chunkY = Number(chunkYParam ?? 0)
+
+  const chunkX = Number.isFinite(Number(chunkXParam)) ? Number(chunkXParam) : 0
+  const chunkY = Number.isFinite(Number(chunkYParam)) ? Number(chunkYParam) : 0
   const chunkSize = Math.max(8, Math.min(64, Number(chunkSizeParam ?? 16)))
-  const seed = Number(seedParam ?? 12345)
+  const seed = Number.isFinite(Number(seedParam)) ? Number(seedParam) : 12345
+
+  const world = getCivilizationWorld(seed)
+  stepCivilizationWorld(world)
+  const influence = getChunkInfluence(world, chunkX, chunkY, PLAYER_REALM_ID)
 
   // Enhanced seeded RNG (mulberry32)
   function mulberry32(a: number) {
@@ -244,17 +255,37 @@ export async function GET(req: NextRequest) {
     tiles: chunk
   }
 
+  if (influence) {
+    response.civilization = {
+      ownerId: influence.civilization.id,
+      ownerName: influence.civilization.name,
+      color: influence.civilization.color,
+      temperament: influence.civilization.temperament,
+      influence: influence.influence,
+      relationship: influence.relationship
+        ? {
+            status: influence.relationship.status,
+            attitude: influence.relationship.attitude,
+            trend: influence.relationship.trend,
+            target: influence.relationship.target,
+            lastShiftCycle: influence.relationship.lastShiftCycle,
+          }
+        : null,
+    }
+  }
+
   if (detail === 'full') {
     response.biome = biome
     response.metadata = {
       hasVillage: chunk.some(row => row.some(cell => cell === 'village')),
       hasRuins: chunk.some(row => row.some(cell => cell === 'ruins')),
-      hasSpecialResources: chunk.some(row => row.some(cell => 
+      hasSpecialResources: chunk.some(row => row.some(cell =>
         ['iron_deposit', 'gold_deposit', 'rare_herbs'].includes(cell)
       )),
       waterCoverage: chunk.flat().filter(cell => cell === 'water').length / (chunkSize * chunkSize),
       forestCoverage: chunk.flat().filter(cell => cell === 'forest').length / (chunkSize * chunkSize)
     }
+    response.worldCivilizations = summarizeCivilizations(world, PLAYER_REALM_ID)
   } else if (detail === 'standard') {
     response.biome = biome
   }
