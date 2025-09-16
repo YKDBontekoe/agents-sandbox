@@ -4,10 +4,20 @@ import { useHUDPanel } from '../HUDPanelRegistry';
 import MiniMap from '../../MiniMap';
 import { useGameContext } from '../../GameContext';
 
-interface ModularMiniMapPanelProps {
-  gridSize?: number;
+export interface MiniMapDescriptor {
+  gridSize: number;
   tileWidth?: number;
   tileHeight?: number;
+}
+
+type NormalizedMiniMapDescriptor = {
+  gridSize: number;
+  tileWidth: number;
+  tileHeight: number;
+};
+
+interface ModularMiniMapPanelProps {
+  map?: MiniMapDescriptor;
   width?: number;
   height?: number;
   variant?: 'default' | 'compact' | 'minimal';
@@ -15,14 +25,30 @@ interface ModularMiniMapPanelProps {
 }
 
 export function ModularMiniMapPanel({
-  gridSize = 20,
-  tileWidth = 64,
-  tileHeight = 32,
+  map,
   width = 180,
   height = 132,
   variant = 'compact',
   collapsible = true,
 }: ModularMiniMapPanelProps) {
+  const normalizedMap = useMemo<NormalizedMiniMapDescriptor>(() => {
+    if (map) {
+      return {
+        gridSize: map.gridSize,
+        tileWidth: map.tileWidth ?? 64,
+        tileHeight: map.tileHeight ?? 32,
+      };
+    }
+
+    return {
+      gridSize: 20,
+      tileWidth: 64,
+      tileHeight: 32,
+    };
+  }, [map]);
+
+  const { gridSize, tileWidth, tileHeight } = normalizedMap;
+
   // Register this panel in the right sidebar
   useHUDPanel({
     config: {
@@ -38,7 +64,7 @@ export function ModularMiniMapPanel({
       },
     },
     component: ModularMiniMapPanel,
-    props: { gridSize, tileWidth, tileHeight, width, height, variant, collapsible },
+    props: { map: normalizedMap, width, height, variant, collapsible },
   });
 
   const { viewport } = useGameContext();
@@ -55,16 +81,19 @@ export function ModularMiniMapPanel({
     const onSelect = (e: any) => {
       if (!followSelection || !viewport) return;
       try {
-        const { gridX, gridY, tileWidth = 64, tileHeight = 32 } = e.detail || {};
-        const wx = (gridX - gridY) * (tileWidth / 2);
-        const wy = (gridX + gridY) * (tileHeight / 2);
+        const detail = e.detail || {};
+        const { gridX, gridY } = detail;
+        if (typeof gridX !== 'number' || typeof gridY !== 'number') return;
+        const detailTileWidth = detail.tileWidth ?? tileWidth;
+        const detailTileHeight = detail.tileHeight ?? tileHeight;
+        const wx = (gridX - gridY) * (detailTileWidth / 2);
+        const wy = (gridX + gridY) * (detailTileHeight / 2);
         viewport.moveCenter(wx, wy);
       } catch {}
     };
     window.addEventListener('ad_select_tile', onSelect as any);
     return () => window.removeEventListener('ad_select_tile', onSelect as any);
-  }, [followSelection, viewport]);
-
+  }, [followSelection, viewport, tileWidth, tileHeight]);
 
   const dims = useMemo(() => {
     // Slightly smaller map for compact/minimal

@@ -58,6 +58,9 @@ import { TimeSystem, timeSystem, TIME_SPEEDS, type TimeSpeed, GameTime as System
 
 type BuildTypeId = keyof typeof SIM_BUILDINGS;
 
+const ISO_TILE_WIDTH = 64;
+const ISO_TILE_HEIGHT = 32;
+
 
 
 interface StoredBuilding {
@@ -149,7 +152,28 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     logger.debug('Initial gridSize fallback to default: 32');
     return 32;
   });
-  
+
+  const effectiveGridSize = useMemo(() => {
+    if (typeof gridSize === 'number' && gridSize > 0) {
+      return gridSize;
+    }
+
+    const rows = tileTypes.length;
+    const cols = tileTypes[0]?.length ?? 0;
+    const derived = Math.max(rows, cols);
+
+    return derived > 0 ? derived : 32;
+  }, [gridSize, tileTypes]);
+
+  const miniMapDescriptor = useMemo(
+    () => ({
+      gridSize: effectiveGridSize,
+      tileWidth: ISO_TILE_WIDTH,
+      tileHeight: ISO_TILE_HEIGHT,
+    }),
+    [effectiveGridSize],
+  );
+
   // Load map data when gridSize changes - MUST be before conditional returns
   useEffect(() => {
     logger.debug('🔥 MAP USEEFFECT SETUP - gridSize:', gridSize);
@@ -1415,8 +1439,8 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
             <IsometricGrid
                gridSize={gridSize || 24}
                tileTypes={tileTypes}
-               tileWidth={64}
-               tileHeight={32}
+               tileWidth={ISO_TILE_WIDTH}
+               tileHeight={ISO_TILE_HEIGHT}
               onTileHover={(x,y,t)=>{ 
                 ensureCapacityAround(x,y,2); 
                 const tileType = t || 'grass';
@@ -1428,7 +1452,18 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
                 setSelectedTile({x,y,tileType});
                 setTooltipLocked(true);
                 setClickEffectKey(`click-${Date.now()}-${x}-${y}`);
-                try { window.dispatchEvent(new CustomEvent('ad_select_tile', { detail: { gridX: x, gridY: y, tileWidth: 64, tileHeight: 32 } })); } catch {}
+                try {
+                  window.dispatchEvent(
+                    new CustomEvent('ad_select_tile', {
+                      detail: {
+                        gridX: x,
+                        gridY: y,
+                        tileWidth: ISO_TILE_WIDTH,
+                        tileHeight: ISO_TILE_HEIGHT,
+                      },
+                    }),
+                  );
+                } catch {}
               }}
             />
           </ViewportManager>
@@ -1696,6 +1731,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
               workforce: { total: totalWorkers, idle: idleWorkers, needed: neededWorkers },
               time: { ...gameTime, isPaused, intervalMs: Number((state as any)?.tick_interval_ms ?? 60000) }
             }}
+            map={miniMapDescriptor}
             cityManagement={{
               stats: {
                 population: placedBuildings.reduce((sum, b) => sum + (b.workers || 0), 0),

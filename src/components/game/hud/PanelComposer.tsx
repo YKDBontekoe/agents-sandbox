@@ -4,7 +4,7 @@ import { useHUDLayoutPresets } from './HUDLayoutPresets';
 import { ModularResourcePanel } from './panels/ModularResourcePanel';
 import { TimeControlPanel } from '../TimeControlPanel';
 import { ModularActionPanel } from './panels/ModularActionPanel';
-import { ModularMiniMapPanel } from './panels/ModularMiniMapPanel';
+import { ModularMiniMapPanel, type MiniMapDescriptor } from './panels/ModularMiniMapPanel';
 import { ModularSkillTreePanel } from './panels/ModularSkillTreePanel';
 import CityManagementPanel, {
   CityStats,
@@ -65,6 +65,7 @@ export interface PanelComposerProps {
   };
   onGameAction: (action: string, data?: unknown) => void;
   className?: string;
+  map?: MiniMapDescriptor;
 }
 
 export function PanelComposer({
@@ -72,6 +73,7 @@ export function PanelComposer({
   gameData,
   onGameAction,
   cityManagement,
+  map,
   className = '',
 }: PanelComposerProps) {
   const { currentPreset } = useHUDLayoutPresets();
@@ -144,7 +146,7 @@ export function PanelComposer({
         <div className="mt-2" />
         <TimeControlPanel className="w-full" />
         <div className="mt-2" />
-        <ModularMiniMapPanel gridSize={20} />
+        <ModularMiniMapPanel map={map} />
         <div className="mt-2" />
         <ModularActionPanel
           onOpenCouncil={() => onGameAction('open-council')}
