@@ -75,6 +75,34 @@ export interface WorkerProfile {
   stressLevel: number; // 0-100
 }
 
+// Workplace and team dynamics
+export interface Workplace {
+  buildingId: string;
+  department: string;
+  manager?: string; // worker ID
+  workers: string[]; // worker IDs
+  teamCohesion: number; // 0-100
+  productivity: number; // 0-100
+  morale: number; // 0-100
+
+  // Work environment
+  workingConditions: {
+    safety: number; // 0-100
+    comfort: number; // 0-100
+    equipment: number; // 0-100
+    resources: number; // 0-100
+  };
+
+  // Team events and culture
+  cultureType: 'competitive' | 'collaborative' | 'innovative' | 'traditional';
+  teamEvents: Array<{
+    cycle: number;
+    type: string;
+    impact: number; // -100 to 100
+    participants: string[];
+  }>;
+}
+
 export interface WorkShift {
   startHour: number;
   endHour: number;
