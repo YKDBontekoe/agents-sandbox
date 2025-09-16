@@ -11,7 +11,13 @@ interface SkillTreeModalProps {
 }
 
 export default function SkillTreeModal({ isOpen, onClose, resources }: SkillTreeModalProps) {
-  const [seed] = useState<number>(12345);
+  const [skillTreeSeed, setSkillTreeSeed] = useState<number>(() => {
+    if (typeof window === 'undefined') return 12345;
+    const raw = localStorage.getItem('ad_skill_tree_seed');
+    if (!raw) return 12345;
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) ? parsed : 12345;
+  });
   const [query, setQuery] = useState('');
   const [focusNodeId, setFocusNodeId] = useState<string | undefined>(undefined);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -26,7 +32,10 @@ export default function SkillTreeModal({ isOpen, onClose, resources }: SkillTree
     }
   });
 
-  const [tree, setTree] = useState(() => generateSkillTree(seed, 10));
+  const [tree, setTree] = useState(() => generateSkillTree(skillTreeSeed, 10));
+  useEffect(() => {
+    setTree(generateSkillTree(skillTreeSeed, 10));
+  }, [skillTreeSeed]);
   const matches = useMemo(() => {
     if (!query) return [] as { id: string; title: string }[];
     const q = query.toLowerCase();
@@ -85,12 +94,26 @@ export default function SkillTreeModal({ isOpen, onClose, resources }: SkillTree
       try {
         const res = await fetch('/api/state');
         if (!res.ok) return;
-        const data: { id?: string; pinned_skill_targets?: string[] } = await res.json();
+        const data: { id?: string; pinned_skill_targets?: string[]; skills?: string[]; skill_tree_seed?: number } = await res.json();
         setStateId(data.id || null);
         if (Array.isArray(data.pinned_skill_targets)) setPinned(data.pinned_skill_targets);
+        if (typeof data.skill_tree_seed === 'number') setSkillTreeSeed(data.skill_tree_seed);
+        if (Array.isArray(data.skills)) {
+          const next = data.skills.reduce<Record<string, boolean>>((acc, id) => {
+            acc[id] = true;
+            return acc;
+          }, {});
+          setUnlocked(next);
+        }
       } catch {}
     })();
   }, [isOpen]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!Number.isFinite(skillTreeSeed)) return;
+    try { localStorage.setItem('ad_skill_tree_seed', String(skillTreeSeed)); } catch {}
+  }, [skillTreeSeed]);
 
   const pinSelected = useCallback(async () => {
     if (!stateId || !selectedNodeId) return;
@@ -217,7 +240,7 @@ export default function SkillTreeModal({ isOpen, onClose, resources }: SkillTree
                 const nearFrontier = selected.tier >= (tree.layout.maxTier - 2);
                 if (nearFrontier) {
                   // Expand deterministically
-                  setTimeout(() => { setTree(prev => expandSkillTree({ ...prev, nodes: [...prev.nodes], edges: [...prev.edges], layout: { ...prev.layout, tiers: { ...prev.layout!.tiers }, categoryDistribution: { ...prev.layout!.categoryDistribution }, maxTier: prev.layout!.maxTier || 0 } }, seed, 4)); }, 0);
+                  setTimeout(() => { setTree(prev => expandSkillTree({ ...prev, nodes: [...prev.nodes], edges: [...prev.edges], layout: { ...prev.layout, tiers: { ...prev.layout!.tiers }, categoryDistribution: { ...prev.layout!.categoryDistribution }, maxTier: prev.layout!.maxTier || 0 } }, skillTreeSeed, 4)); }, 0);
                 }
                 return null;
               })()}

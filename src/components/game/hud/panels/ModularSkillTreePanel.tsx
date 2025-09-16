@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ResponsivePanel, ResponsiveButton } from '../ResponsiveHUDPanels';
 import { useHUDPanel } from '../HUDPanelRegistry';
 import { generateSkillTree } from '../../skills/generate';
@@ -6,13 +6,12 @@ import type { SkillNode } from '../../skills/types';
 import SkillTreeModal from '../../skills/SkillTreeModal';
 
 interface ModularSkillTreePanelProps {
-  seed?: number;
   onUnlock?: (node: SkillNode) => boolean; // return true if unlocked
   variant?: 'default' | 'compact' | 'minimal';
   resources?: { coin?: number; mana?: number; favor?: number };
 }
 
-export function ModularSkillTreePanel({ seed = 12345, onUnlock, variant = 'compact', resources }: ModularSkillTreePanelProps) {
+export function ModularSkillTreePanel({ onUnlock, variant = 'compact', resources }: ModularSkillTreePanelProps) {
   const [open, setOpen] = useState(false);
   const [trend, setTrend] = useState<SkillNode['category'] | null>(null);
   useEffect(() => {
@@ -27,10 +26,17 @@ export function ModularSkillTreePanel({ seed = 12345, onUnlock, variant = 'compa
   useHUDPanel({
     config: { id: 'skill-tree', zone: 'sidebar-right', priority: 5, persistent: true },
     component: ModularSkillTreePanel,
-    props: { seed, variant }
+    props: { variant }
   });
 
-  const tree = useMemo(() => generateSkillTree(seed), [seed]);
+  const [skillTreeSeed, setSkillTreeSeed] = useState<number>(() => {
+    if (typeof window === 'undefined') return 12345;
+    const raw = localStorage.getItem('ad_skill_tree_seed');
+    if (!raw) return 12345;
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) ? parsed : 12345;
+  });
+  const tree = useMemo(() => generateSkillTree(skillTreeSeed), [skillTreeSeed]);
   const [query, setQuery] = useState('');
   const [showAll, setShowAll] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<Record<SkillNode['category'], boolean>>({
@@ -45,6 +51,40 @@ export function ModularSkillTreePanel({ seed = 12345, onUnlock, variant = 'compa
   useEffect(() => {
     try { localStorage.setItem('ad_skills_unlocked', JSON.stringify(unlocked)); } catch {}
   }, [unlocked]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!Number.isFinite(skillTreeSeed)) return;
+    try { localStorage.setItem('ad_skill_tree_seed', String(skillTreeSeed)); } catch {}
+  }, [skillTreeSeed]);
+
+  const fetchSkillState = useCallback(async () => {
+    try {
+      const res = await fetch('/api/state');
+      if (!res.ok) return;
+      const data: { skills?: string[]; skill_tree_seed?: number } = await res.json();
+      if (typeof data.skill_tree_seed === 'number') {
+        setSkillTreeSeed(data.skill_tree_seed);
+      }
+      if (Array.isArray(data.skills)) {
+        const next = data.skills.reduce<Record<string, boolean>>((acc, id) => {
+          acc[id] = true;
+          return acc;
+        }, {});
+        setUnlocked(next);
+      }
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    fetchSkillState();
+  }, [fetchSkillState]);
+
+  useEffect(() => {
+    if (open) {
+      fetchSkillState();
+    }
+  }, [open, fetchSkillState]);
 
   const canUnlock = (n: SkillNode) => {
     // prerequisites

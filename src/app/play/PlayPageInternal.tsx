@@ -79,6 +79,8 @@ interface GameState {
   routes?: TradeRoute[];
   edicts?: Record<string, number>;
   map_size?: number;
+  skills?: string[];
+  skill_tree_seed?: number;
 }
 
 interface TradeRoute {
@@ -396,10 +398,78 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     if (!hasMilestone('m_storehouse') && hasStore && connectedToStore) { setMilestone('m_storehouse'); await award({ coin: 20 }); }
   };
 
-  const [unlockedSkillIds, setUnlockedSkillIds] = useState<string[]>(() => {
-    if (typeof window === 'undefined') return [];
-    try { return Object.keys(JSON.parse(localStorage.getItem('ad_skills_unlocked') || '{}')).filter(k => JSON.parse(localStorage.getItem('ad_skills_unlocked') || '{}')[k]); } catch { return []; }
+  const [cachedSkillTreeSeed, setCachedSkillTreeSeed] = useState<number | undefined>(() => {
+    if (typeof initialState?.skill_tree_seed === 'number') return initialState.skill_tree_seed;
+    if (typeof window === 'undefined') return undefined;
+    try {
+      const raw = localStorage.getItem('ad_skill_tree_seed');
+      if (!raw) return undefined;
+      const parsed = Number(raw);
+      return Number.isFinite(parsed) ? parsed : undefined;
+    } catch {
+      return undefined;
+    }
   });
+  const [unlockedSkillIds, setUnlockedSkillIds] = useState<string[]>(() => {
+    if (Array.isArray(initialState?.skills)) return initialState.skills;
+    if (typeof window === 'undefined') return [];
+    try {
+      const raw = localStorage.getItem('ad_skills_unlocked');
+      if (!raw) return [];
+      const parsed = JSON.parse(raw) as Record<string, boolean>;
+      return Object.keys(parsed).filter(key => parsed[key]);
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    if (typeof state?.skill_tree_seed === 'number') {
+      setCachedSkillTreeSeed(state.skill_tree_seed);
+    }
+  }, [state?.skill_tree_seed]);
+
+  useEffect(() => {
+    const serverSkills = state?.skills;
+    if (!Array.isArray(serverSkills)) return;
+    setUnlockedSkillIds(prev => {
+      const serverSet = new Set(serverSkills);
+      if (prev.length === serverSkills.length && prev.every(id => serverSet.has(id))) {
+        return prev;
+      }
+      return [...serverSkills];
+    });
+  }, [state?.skills]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (typeof cachedSkillTreeSeed === 'number') {
+      try {
+        localStorage.setItem('ad_skill_tree_seed', String(cachedSkillTreeSeed));
+      } catch {}
+    }
+  }, [cachedSkillTreeSeed]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const payload = unlockedSkillIds.reduce<Record<string, boolean>>((acc, id) => {
+        acc[id] = true;
+        return acc;
+      }, {});
+      localStorage.setItem('ad_skills_unlocked', JSON.stringify(payload));
+    } catch {}
+  }, [unlockedSkillIds]);
+
+  const cachedSkillTreeSeedRef = useRef<number | undefined>(cachedSkillTreeSeed);
+  useEffect(() => {
+    cachedSkillTreeSeedRef.current = cachedSkillTreeSeed;
+  }, [cachedSkillTreeSeed]);
+
+  const unlockedSkillIdsRef = useRef<string[]>(unlockedSkillIds);
+  useEffect(() => {
+    unlockedSkillIdsRef.current = unlockedSkillIds;
+  }, [unlockedSkillIds]);
   useEffect(() => {
     logger.debug('localStorage useEffect running, window defined:', typeof window !== 'undefined');
     if (typeof window === 'undefined') return;
@@ -481,32 +551,52 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     logger.debug('🔥 TILETYPES USEEFFECT SETUP');
     logger.debug('🔍 TILETYPES CHANGED - length:', tileTypes.length);
   }, [tileTypes]);
-  
+
+  const saveState = useCallback(async (partial: { resources?: Record<string, number>; workers?: number; buildings?: StoredBuilding[]; routes?: TradeRoute[]; roads?: Array<{x:number;y:number}>; edicts?: Record<string, number>; map_size?: number; skills?: string[] }) => {
+    if (!state) return;
+    try {
+      const body: { id: string; resources?: Record<string, number>; workers?: number; buildings?: StoredBuilding[]; routes?: TradeRoute[]; roads?: Array<{x:number;y:number}>; edicts?: Record<string, number>; map_size?: number; skills?: string[] } = { id: state.id };
+      if (partial.resources) body.resources = partial.resources;
+      if (typeof partial.workers === 'number') body.workers = partial.workers;
+      if (partial.buildings) body.buildings = partial.buildings;
+      if (partial.routes) body.routes = partial.routes;
+      if (partial.roads) body.roads = partial.roads;
+      if (partial.edicts) body.edicts = partial.edicts;
+      if (typeof partial.map_size === 'number') body.map_size = partial.map_size;
+      if (partial.skills !== undefined) body.skills = partial.skills;
+      const res = await fetch('/api/state', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    } catch (err) {
+      logger.error('Failed to save state:', err);
+    }
+  }, [state]);
+
   // Listen for skill unlock events to deduct costs && persist
   useEffect(() => {
     const onUnlock = async (e: any) => {
       const n = e.detail as SkillNode;
       if (unlockedSkillIds.includes(n.id)) return;
+      if (!state) return;
       const needed = { coin: n.cost.coin || 0, mana: n.cost.mana || 0, favor: n.cost.favor || 0 } as Record<string, number>;
       const have = { coin: state?.resources.coin || 0, mana: state?.resources.mana || 0, favor: state?.resources.favor || 0 } as Record<string, number>;
       if (have.coin < needed.coin || have.mana < needed.mana || have.favor < needed.favor) return;
-      const newResServer = { ...state!.resources } as Record<string, number>;
+      const newResServer = { ...state.resources } as Record<string, number>;
       newResServer.coin = Math.max(0, newResServer.coin - needed.coin);
       newResServer.mana = Math.max(0, newResServer.mana - needed.mana);
       newResServer.favor = Math.max(0, newResServer.favor - needed.favor);
       const nextSkills = [...unlockedSkillIds, n.id];
-      setState(prev => prev ? { ...prev, resources: newResServer, skills: nextSkills as any } : prev);
-      await saveState({ resources: newResServer, buildings: placedBuildings, routes, workers: state?.workers, skills: nextSkills } as any);
+      setState(prev => prev ? { ...prev, resources: newResServer, skills: nextSkills } : prev);
+      await saveState({ resources: newResServer, buildings: placedBuildings, routes, workers: state?.workers, skills: nextSkills });
       setUnlockedSkillIds(nextSkills);
       notify({ type: 'success', title: 'Skill Unlocked', message: n.title })
-      try {
-        const prev = JSON.parse(localStorage.getItem('ad_skills_unlocked') || '{}');
-        prev[n.id] = true; localStorage.setItem('ad_skills_unlocked', JSON.stringify(prev));
-      } catch {}
     };
     window.addEventListener('ad_unlock_skill', onUnlock as any);
     return () => window.removeEventListener('ad_unlock_skill', onUnlock as any);
-  }, [state, unlockedSkillIds]);
+  }, [state, unlockedSkillIds, placedBuildings, routes, notify, saveState]);
   const [selectedTile, setSelectedTile] = useState<{ x: number; y: number; tileType?: string } | null>(null);
   const [hoverTile, setHoverTile] = useState<{ x: number; y: number; tileType?: string } | null>(null);
   const [previewTypeId, setPreviewTypeId] = useState<BuildTypeId | null>(null);
@@ -537,28 +627,6 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     return () => clearInterval(cleanup);
   }, []);
 
-  const saveState = useCallback(async (partial: { resources?: Record<string, number>; workers?: number; buildings?: StoredBuilding[]; routes?: TradeRoute[]; roads?: Array<{x:number;y:number}>; edicts?: Record<string, number>; map_size?: number }) => {
-    if (!state) return;
-    try {
-      const body: { id: string; resources?: Record<string, number>; workers?: number; buildings?: StoredBuilding[]; routes?: TradeRoute[]; roads?: Array<{x:number;y:number}>; edicts?: Record<string, number>; map_size?: number } = { id: state.id };
-      if (partial.resources) body.resources = partial.resources;
-      if (typeof partial.workers === 'number') body.workers = partial.workers;
-      if (partial.buildings) body.buildings = partial.buildings;
-      if (partial.routes) body.routes = partial.routes;
-      if (partial.roads) body.roads = partial.roads;
-      if (partial.edicts) body.edicts = partial.edicts;
-      if (typeof partial.map_size === 'number') body.map_size = partial.map_size;
-      const res = await fetch('/api/state', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    } catch (err) {
-      logger.error('Failed to save state:', err);
-    }
-  }, [state]);
-
   const confirmMapSize = useCallback(async () => {
     // Limit map size to prevent performance issues - max 48 for stability
     const n = Math.max(8, Math.min(48, Number(pendingMapSize) || 24));
@@ -566,7 +634,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     try { localStorage.setItem('ad_map_size', String(n)); } catch {}
     // Save map size to game state for persistence
     if (state) {
-      await saveState({ map_size: n } as any);
+      await saveState({ map_size: n });
     }
     setMapSizeModalOpen(false);
   }, [pendingMapSize, state, saveState]);
@@ -950,12 +1018,20 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
           resources: { grain: 1000, coin: 500, mana: 200, favor: 10, unrest: 0, threat: 0 },
           workers: 0,
           buildings: [],
+          skills: unlockedSkillIdsRef.current ? [...unlockedSkillIdsRef.current] : [],
+          skill_tree_seed: (cachedSkillTreeSeedRef.current ?? 12345),
         });
         return;
       }
       throw new Error(msg);
     }
     setState({ ...json, workers: json.workers ?? 0, buildings: json.buildings ?? [], routes: (json as any).routes ?? [], roads: (json as any).roads ?? [], citizens_seed: (json as any).citizens_seed, citizens_count: (json as any).citizens_count });
+    if (Array.isArray(json.skills)) {
+      setUnlockedSkillIds(json.skills);
+    }
+    if (typeof json.skill_tree_seed === 'number') {
+      setCachedSkillTreeSeed(json.skill_tree_seed);
+    }
     try { setIsPaused(!(json as any).auto_ticking); } catch {}
     try { setRoads(((json as any).roads as Array<{x:number;y:number}>) ?? []); } catch {}
     try { if ((json as any).citizens_count) setCitizensCount((json as any).citizens_count); } catch {}
@@ -999,6 +1075,12 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
       if (!res.ok) throw new Error(json.error || "Failed to tick");
       const serverState: GameState = { ...json.state, workers: json.state.workers ?? 0, buildings: json.state.buildings ?? [] };
       setState(serverState);
+      if (Array.isArray(serverState.skills)) {
+        setUnlockedSkillIds(serverState.skills);
+      }
+      if (typeof serverState.skill_tree_seed === 'number') {
+        setCachedSkillTreeSeed(serverState.skill_tree_seed);
+      }
       const assigned = serverState.buildings.reduce((sum, b) => sum + (b.workers || 0), 0);
       const simRes: SimResources = {
         grain: serverState.resources.grain || 0,
@@ -1256,6 +1338,14 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     threat: state.resources.threat || 0
   };
 
+  const skillTreeSeed = state.skill_tree_seed ?? cachedSkillTreeSeed ?? 12345;
+  const skillTree = useMemo(() => generateSkillTree(skillTreeSeed), [skillTreeSeed]);
+  const unlockedSkillNodes = useMemo(
+    () => skillTree.nodes.filter(n => unlockedSkillIds.includes(n.id)),
+    [skillTree, unlockedSkillIds]
+  );
+  const unlockedEffects = useMemo(() => accumulateEffects(unlockedSkillNodes), [unlockedSkillNodes]);
+
   const currentTime = timeSystem.getCurrentTime();
   const gameTime: GameTime = { 
     cycle: Math.floor(currentTime.totalMinutes / 60), // Convert to legacy cycle for HUD compatibility
@@ -1299,16 +1389,14 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     if (!simResources) {
       return { grain: 0, wood: 0, planks: 0, coin: 0, mana: 0, favor: 0, unrest: 0, threat: 0 } as any;
     }
-    const tree = generateSkillTree(12345);
-    const unlocked = tree.nodes.filter(n => unlockedSkillIds.includes(n.id));
-    const acc = accumulateEffects(unlocked);
+    const { resMul, bldMul, upkeepDelta } = unlockedEffects;
     const { updated } = projectCycleDeltas(simResources, placedBuildings, routes, SIM_BUILDINGS, {
       totalWorkers: totalWorkers,
       edicts,
       modifiers: {
-        resourceOutputMultiplier: acc.resMul as any,
-        buildingOutputMultiplier: acc.bldMul,
-        upkeepGrainPerWorkerDelta: acc.upkeepDelta,
+        resourceOutputMultiplier: resMul as any,
+        buildingOutputMultiplier: bldMul,
+        upkeepGrainPerWorkerDelta: upkeepDelta,
       }
     });
     return {
@@ -1321,7 +1409,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
       unrest: 0,
       threat: 0,
     } as any;
-  }, [simResources, placedBuildings, routes, totalWorkers, edicts, unlockedSkillIds]);
+  }, [simResources, placedBuildings, routes, totalWorkers, edicts, unlockedEffects]);
 
   // Shared PIXI context for Game + HUD (so HUD panels can access viewport)
   const [pixiApp, setPixiApp] = useState<PIXI.Application | null>(null);
@@ -2029,7 +2117,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
               tutorialFree={tutorialFree}
               onConsumeTutorialFree={(typeId) => setTutorialFree(prev => ({ ...prev, [typeId]: Math.max(0, (prev[typeId] || 0) - 1) }))}
               onTutorialProgress={(evt) => { if (evt.type === 'openedCouncil' && onboardingStep === 4) setOnboardingStep(5); }}
-              allowFineSawmill={(accumulateEffects(generateSkillTree(12345).nodes.filter(n => unlockedSkillIds.includes(n.id))).bldMul['sawmill'] ?? 1) > 1}
+              allowFineSawmill={(unlockedEffects.bldMul['sawmill'] ?? 1) > 1}
               onSetRecipe={async (buildingId, recipe) => {
                 const idx = placedBuildings.findIndex(b => b.id === buildingId);
                 if (idx === -1) return;
