@@ -15,6 +15,7 @@ import {
   drawConnections,
 } from './effects';
 import SkillTooltipContent from './SkillTooltipContent';
+import { collectUnlockBlockers } from './unlock';
 
 export default function ConstellationSkillTree({ tree, unlocked, onUnlock, colorFor, focusNodeId, resources, onSelectNode }: ConstellationSkillTreeProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -23,8 +24,6 @@ export default function ConstellationSkillTree({ tree, unlocked, onUnlock, color
   const [selected, setSelected] = useState<ConstellationNode | null>(null);
   const [pan, setPan] = useState<Vec2>({ x: 0, y: 0 });
   const [zoom, setZoom] = useState<number>(0.8); // Start slightly zoomed out for better overview
-  const [targetZoom, setTargetZoom] = useState<number>(0.8);
-  const [isZooming, setIsZooming] = useState<boolean>(false);
   const [tooltip, setTooltip] = useState<TooltipState>({
     visible: false,
     x: 0,
@@ -39,6 +38,7 @@ export default function ConstellationSkillTree({ tree, unlocked, onUnlock, color
   const particleSystemRef = useRef<ParticleSystem>(new ParticleSystem());
   const [highlightNodes, setHighlightNodes] = useState<Set<string>>(new Set());
   const [highlightEdges, setHighlightEdges] = useState<Set<string>>(new Set());
+  const lastAutoFitRadius = useRef<number | null>(null);
   const [nodeTransitions, setNodeTransitions] = useState<Map<string, {
     scale: number;
     opacity: number;
@@ -55,6 +55,23 @@ export default function ConstellationSkillTree({ tree, unlocked, onUnlock, color
     start: { x: 0, y: 0 },
     startPan: { x: 0, y: 0 }
   });
+  const zoomAnimationRef = useRef<number | null>(null);
+  const latestZoomRef = useRef(zoom);
+
+  const clearZoomAnimation = useCallback(() => {
+    if (zoomAnimationRef.current !== null) {
+      cancelAnimationFrame(zoomAnimationRef.current);
+      zoomAnimationRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    latestZoomRef.current = zoom;
+  }, [zoom]);
+
+  useEffect(() => () => {
+    clearZoomAnimation();
+  }, [clearZoomAnimation]);
 
   // Easing functions for smooth transitions
   const easeOutCubic = (t: number): number => 1 - Math.pow(1 - t, 3);
@@ -97,9 +114,9 @@ export default function ConstellationSkillTree({ tree, unlocked, onUnlock, color
       'Diplomat': { color: '#ff9ff3', theme: 'social' }
     };
 
-    const constellationSpacing = 450; // Increased constellation spacing
     const nodes: ConstellationNode[] = [];
     const nodesByConstellation: Record<string, ConstellationNode[]> = {};
+    let highestTierInNodes = 0;
 
     // Organize nodes by category into constellations
     tree.nodes.forEach((node) => {
@@ -115,9 +132,12 @@ export default function ConstellationSkillTree({ tree, unlocked, onUnlock, color
       if (!nodesByConstellation[constellation]) {
         nodesByConstellation[constellation] = [];
       }
+
       const tier = typeof node.tier === 'number' && Number.isFinite(node.tier)
-        ? node.tier
+        ? Math.max(0, Math.floor(node.tier))
         : 0;
+      highestTierInNodes = Math.max(highestTierInNodes, tier);
+
       nodesByConstellation[constellation].push({
         node,
         gridX: 0,
@@ -128,6 +148,22 @@ export default function ConstellationSkillTree({ tree, unlocked, onUnlock, color
         tier
       });
     });
+
+    const layoutMaxTier = typeof tree.layout?.maxTier === 'number' && Number.isFinite(tree.layout.maxTier)
+      ? Math.max(0, Math.floor(tree.layout.maxTier))
+      : highestTierInNodes;
+    const maxTier = Math.max(0, highestTierInNodes, layoutMaxTier);
+    const tierCount = Math.max(1, maxTier + 1);
+
+    const baseRingRadius = 80;
+    const minRingGap = 60;
+    const maxRingGap = 140;
+    const gapDenominator = Math.max(1, tierCount - 1);
+    const adaptiveGap = tierCount > 1 ? 320 / gapDenominator : maxRingGap;
+    const ringGap = Math.min(maxRingGap, Math.max(minRingGap, adaptiveGap));
+    const radiusByTier = Array.from({ length: tierCount }, (_, tierIndex) => baseRingRadius + tierIndex * ringGap);
+    const maxConstellationRadius = radiusByTier[radiusByTier.length - 1] ?? baseRingRadius;
+    const constellationSpacing = Math.max(450, maxConstellationRadius * 2 + 160);
 
     // Position constellations in a hexagonal pattern
     const constellationPositions = [
@@ -150,55 +186,38 @@ export default function ConstellationSkillTree({ tree, unlocked, onUnlock, color
       constellationNodes.forEach((cNode, nodeIndex) => {
         const angle = (nodeIndex / constellationNodes.length) * Math.PI * 2;
         const tier = typeof cNode.tier === 'number' && Number.isFinite(cNode.tier)
-          ? cNode.tier
+          ? Math.max(0, Math.floor(cNode.tier))
           : 0;
-        const radius = Math.min(80 + (tier * 40), 160);
-        
+        const radius = radiusByTier[tier] ?? (baseRingRadius + tier * ringGap);
+
         cNode.gridX = Math.round(centerX + Math.cos(angle) * radius);
         cNode.gridY = Math.round(centerY + Math.sin(angle) * radius);
         cNode.x = cNode.gridX;
         cNode.y = cNode.gridY;
-        
+
         nodes.push(cNode);
       });
-      
+
       constellationIndex++;
     });
 
-    return { nodes, constellations };
+    return {
+      nodes,
+      constellations,
+      metrics: {
+        baseRingRadius,
+        ringGap,
+        radiusByTier,
+        maxConstellationRadius,
+        maxTier,
+        constellationSpacing
+      }
+    };
   }, [tree]);
 
   // Unified unlock check with exclusivity and additional conditions
   const checkUnlock = useCallback((node: SkillNode) => {
-    const reasons: string[] = [];
-    if (node.requires && node.requires.length > 0) {
-      node.requires.forEach((reqId) => {
-        if (!unlocked[reqId]) {
-          const title = tree.nodes.find(n => n.id === reqId)?.title || reqId;
-          reasons.push(`Requires: ${title}`);
-        }
-      });
-    }
-    if (node.exclusiveGroup) {
-      const group = node.exclusiveGroup;
-      const taken = tree.nodes.find(
-        n => n.exclusiveGroup === group && n.id !== node.id && unlocked[n.id],
-      );
-      if (taken) reasons.push(`Path chosen: ${taken.title}`);
-    }
-    if (node.unlockConditions && node.unlockConditions.length > 0) {
-      const unlockConditions = node.unlockConditions;
-      const unlockedIds = Object.keys(unlocked).filter(k => unlocked[k]);
-      const byCat: Record<SkillNode['category'], number> = { economic:0,military:0,mystical:0,infrastructure:0,diplomatic:0,social:0 };
-      unlockedIds.forEach(id => { const n = tree.nodes.find(nn => nn.id === id); if (n) byCat[n.category] = (byCat[n.category]||0)+1; });
-      const highestTier = unlockedIds.reduce((m, id) => { const n = tree.nodes.find(nn => nn.id === id); return n && typeof n.tier === 'number' ? Math.max(m, n.tier) : m; }, -1);
-      unlockConditions.forEach(cond => {
-        if (cond.type === 'min_unlocked' && unlockedIds.length < cond.value) reasons.push(`Unlock at least ${cond.value} skills`);
-        if (cond.type === 'category_unlocked_at_least' && (byCat[cond.category]||0) < cond.value) reasons.push(`Unlock ${cond.value} ${cond.category} skills`);
-        if (cond.type === 'max_unlocked_in_category' && (byCat[cond.category]||0) > cond.value) reasons.push(`Too many in ${cond.category}: max ${cond.value}`);
-        if (cond.type === 'tier_before_required' && highestTier < cond.tier) reasons.push(`Reach tier ${cond.tier} first`);
-      });
-    }
+    const reasons = collectUnlockBlockers({ node, unlocked, nodes: tree.nodes });
     return { ok: reasons.length === 0, reasons };
   }, [tree.nodes, unlocked]);
 
@@ -243,11 +262,13 @@ export default function ConstellationSkillTree({ tree, unlocked, onUnlock, color
     const n = layoutById.get(focusNodeId);
     if (!n) return;
     // Center and zoom to node
-    const targetZoom = Math.min(2.5, Math.max(0.7, 1.4));
-    setZoom(targetZoom);
+    clearZoomAnimation();
+    const focusZoom = Math.min(2.5, Math.max(0.7, 1.4));
+    latestZoomRef.current = focusZoom;
+    setZoom(focusZoom);
     setPan({ x: -n.x, y: -n.y });
     setSelected(n);
-  }, [focusNodeId, layoutById]);
+  }, [clearZoomAnimation, focusNodeId, layoutById]);
 
   // Compute highlight sets for hover (ancestors and dependents)
   useEffect(() => {
@@ -822,60 +843,70 @@ export default function ConstellationSkillTree({ tree, unlocked, onUnlock, color
     }
   }, [hover, onUnlock, checkUnlock, selected, updateNodeTransition, colorFor, onSelectNode]);
 
+  const animateZoomTo = useCallback((nextTarget: number) => {
+    clearZoomAnimation();
+
+    const step = () => {
+      let shouldContinue = true;
+      setZoom(prev => {
+        const diff = nextTarget - prev;
+        if (Math.abs(diff) <= 0.001) {
+          latestZoomRef.current = nextTarget;
+          shouldContinue = false;
+          return nextTarget;
+        }
+        const next = prev + diff * 0.2;
+        latestZoomRef.current = next;
+        return next;
+      });
+
+      if (shouldContinue) {
+        zoomAnimationRef.current = requestAnimationFrame(step);
+      } else {
+        zoomAnimationRef.current = null;
+      }
+    };
+
+    zoomAnimationRef.current = requestAnimationFrame(step);
+  }, [clearZoomAnimation]);
+
   // Enhanced zoom with smooth animation and better limits
   const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
+    const currentZoom = latestZoomRef.current;
     const zoomFactor = e.deltaY > 0 ? 0.92 : 1.08; // Smoother zoom increments
-    const newZoom = Math.max(0.2, Math.min(4.0, zoom * zoomFactor)); // Extended zoom range
-    
-    setTargetZoom(newZoom);
-    setIsZooming(true);
-    
-    // Smooth zoom animation
-    const animateZoom = () => {
-      setZoom(prev => {
-        const diff = newZoom - prev;
-        if (Math.abs(diff) < 0.01) {
-          setIsZooming(false);
-          return newZoom;
-        }
-        return prev + diff * 0.15; // Smooth interpolation
-      });
-    };
-    
-    if (!isZooming) {
-      const zoomInterval = setInterval(() => {
-        animateZoom();
-        if (Math.abs(zoom - newZoom) < 0.01) {
-          clearInterval(zoomInterval);
-          setIsZooming(false);
-        }
-      }, 16); // 60fps animation
-    }
-  }, [zoom, isZooming]);
+    const newZoom = Math.max(0.2, Math.min(4.0, currentZoom * zoomFactor)); // Extended zoom range
+
+    animateZoomTo(newZoom);
+  }, [animateZoomTo]);
   
   // Zoom control functions
   const zoomIn = useCallback(() => {
-    const newZoom = Math.min(4.0, zoom * 1.2);
-    setTargetZoom(newZoom);
+    clearZoomAnimation();
+    const currentZoom = latestZoomRef.current;
+    const newZoom = Math.min(4.0, currentZoom * 1.2);
+    latestZoomRef.current = newZoom;
     setZoom(newZoom);
-  }, [zoom]);
-  
+  }, [clearZoomAnimation]);
+
   const zoomOut = useCallback(() => {
-    const newZoom = Math.max(0.2, zoom * 0.8);
-    setTargetZoom(newZoom);
+    clearZoomAnimation();
+    const currentZoom = latestZoomRef.current;
+    const newZoom = Math.max(0.2, currentZoom * 0.8);
+    latestZoomRef.current = newZoom;
     setZoom(newZoom);
-  }, [zoom]);
-  
+  }, [clearZoomAnimation]);
+
   const resetZoom = useCallback(() => {
-    setTargetZoom(1.0);
+    clearZoomAnimation();
+    latestZoomRef.current = 1.0;
     setZoom(1.0);
     setPan({ x: 0, y: 0 });
-  }, []);
+  }, [clearZoomAnimation]);
   
   const fitToView = useCallback(() => {
     if (layout.nodes.length === 0) return;
-    
+
     // Calculate bounding box of all nodes
     const bounds = layout.nodes.reduce((acc, node) => {
       return {
@@ -899,14 +930,34 @@ export default function ConstellationSkillTree({ tree, unlocked, onUnlock, color
       const centerX = (bounds.minX + bounds.maxX) / 2;
       const centerY = (bounds.minY + bounds.maxY) / 2;
       
+      clearZoomAnimation();
+      latestZoomRef.current = newZoom;
       setZoom(newZoom);
-      setTargetZoom(newZoom);
       setPan({
         x: -centerX * newZoom,
         y: -centerY * newZoom
       });
     }
-  }, [layout.nodes, size]);
+  }, [clearZoomAnimation, layout.nodes, size]);
+
+  useEffect(() => {
+    if (layout.nodes.length === 0) return;
+
+    const maxRadius = layout.metrics?.maxConstellationRadius ?? 0;
+    const prevRadius = lastAutoFitRadius.current;
+
+    if (focusNodeId) {
+      lastAutoFitRadius.current = maxRadius;
+      return;
+    }
+
+    if (prevRadius === null || maxRadius > prevRadius + 1) {
+      lastAutoFitRadius.current = maxRadius;
+      fitToView();
+    } else if (prevRadius !== maxRadius) {
+      lastAutoFitRadius.current = maxRadius;
+    }
+  }, [fitToView, focusNodeId, layout.metrics?.maxConstellationRadius, layout.nodes.length]);
 
   // Resize handler
   useEffect(() => {

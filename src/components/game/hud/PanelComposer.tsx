@@ -154,7 +154,9 @@ export function PanelComposer({
           onOpenOmens={() => onGameAction('open-omens')}
           onOpenSettings={() => onGameAction('open-settings')}
           intervalMs={gameData.time.intervalMs}
-          onChangeIntervalMs={(ms) => onGameAction('set-speed', { ms })}
+          onChangeIntervalMs={(ms) =>
+            onGameAction('set-speed', { intervalMs: ms, ms })
+          }
           variant={currentPreset.panelVariants['action-panel'] || 'default'}
         />
         <div className="mt-2" />

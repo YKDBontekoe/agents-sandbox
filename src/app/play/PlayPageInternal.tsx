@@ -54,8 +54,9 @@ import type { GameResources, GameTime } from '@/components/game/hud/types';
 import type { CategoryType } from '@arcane/ui';
 import { simulationSystem, EnhancedGameState } from '@engine'
 import { VisualIndicator } from '@engine';
-import { TimeSystem, timeSystem, TIME_SPEEDS, type TimeSpeed, GameTime as SystemGameTime } from '@engine';
 import { pauseSimulation, resumeSimulation } from './simulationControls';
+import { TimeSystem, timeSystem, TIME_SPEEDS, GameTime as SystemGameTime, type TimeSpeed } from '@engine';
+import { intervalMsToTimeSpeed, sanitizeIntervalMs } from './timeSpeedUtils';
 
 type BuildTypeId = keyof typeof SIM_BUILDINGS;
 
@@ -1788,23 +1789,28 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
               }
               if (action === 'set-speed') {
                 if (!state) return;
-                // Map speed payload to TIME_SPEEDS constants
-                const speedMap: Record<string, TimeSpeed> = { 
-                  '1': TIME_SPEEDS.NORMAL, 
-                  '2': TIME_SPEEDS.FAST, 
-                  '3': TIME_SPEEDS.VERY_FAST,
-                  '4': TIME_SPEEDS.ULTRA_FAST,
-                  '5': TIME_SPEEDS.HYPER_SPEED
-                };
-                const speed = speedMap[payload?.speed] || TIME_SPEEDS.NORMAL;
-                timeSystem.setSpeed(speed);
-                // Keep backward compatibility with server - faster speeds need shorter intervals
-                const ms = speed === TIME_SPEEDS.NORMAL ? 12000 : 
-                          speed === TIME_SPEEDS.FAST ? 6000 : 
-                          speed === TIME_SPEEDS.VERY_FAST ? 3000 :
-                          speed === TIME_SPEEDS.ULTRA_FAST ? 1500 : 600;
-                void fetch('/api/state', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: state.id, tick_interval_ms: ms }) });
-                setState(prev => prev ? { ...prev, tick_interval_ms: ms } as any : prev);
+                const rawPayload = payload && typeof payload === 'object' ? payload : null;
+                const requestedMs = rawPayload && 'intervalMs' in rawPayload
+                  ? (rawPayload as { intervalMs?: unknown }).intervalMs
+                  : rawPayload && 'ms' in rawPayload
+                    ? (rawPayload as { ms?: unknown }).ms
+                    : null;
+                const sanitizedMs = sanitizeIntervalMs(requestedMs);
+                if (sanitizedMs == null) {
+                  logger.warn('Ignoring invalid speed payload', payload);
+                  return;
+                }
+
+                const nextSpeed = intervalMsToTimeSpeed(sanitizedMs);
+                timeSystem.setSpeed(nextSpeed);
+
+                setState(prev => (prev ? { ...prev, tick_interval_ms: sanitizedMs } as any : prev));
+
+                void fetch('/api/state', {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ id: state.id, tick_interval_ms: sanitizedMs })
+                });
               }
               if (action === 'open-council') setIsCouncilOpen(true);
               if (action === 'open-edicts') setIsEdictsOpen(true);
