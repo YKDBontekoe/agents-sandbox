@@ -52,16 +52,168 @@ import type { CityStats, ManagementTool, ZoneType, ServiceType } from '@/compone
 // layout preferences not used on this page
 import type { GameResources, GameTime } from '@/components/game/hud/types';
 import type { CategoryType } from '@arcane/ui';
-import { simulationSystem, EnhancedGameState } from '@engine'
-import { VisualIndicator } from '@engine';
+import {
+  simulationSystem,
+  EnhancedGameState,
+  VisualIndicator,
+  TimeSystem,
+  timeSystem,
+  TIME_SPEEDS,
+  GameTime as SystemGameTime,
+  type TimeSpeed,
+  createGameTime,
+  type ActiveEvent,
+} from '@engine';
+import OmenPanel from '@/components/game/OmenPanel';
+import type { SeasonalEvent, OmenReading } from '@/components/game/omen/types';
 import { pauseSimulation, resumeSimulation } from './simulationControls';
-import { TimeSystem, timeSystem, TIME_SPEEDS, GameTime as SystemGameTime, type TimeSpeed } from '@engine';
 import { intervalMsToTimeSpeed, sanitizeIntervalMs } from './timeSpeedUtils';
 
 type BuildTypeId = keyof typeof SIM_BUILDINGS;
 
 const ISO_TILE_WIDTH = 64;
 const ISO_TILE_HEIGHT = 32;
+
+const OMEN_READING_COST = 25;
+const KNOWN_SEASONS: SeasonalEvent['season'][] = ['spring', 'summer', 'autumn', 'winter'];
+
+const normalizeSeason = (season: string | null | undefined): SeasonalEvent['season'] => {
+  if (season && KNOWN_SEASONS.includes(season as SeasonalEvent['season'])) {
+    return season as SeasonalEvent['season'];
+  }
+  return 'spring';
+};
+
+const ICON_TYPE_TO_EVENT_TYPE: Record<ActiveEvent['iconType'], SeasonalEvent['type']> = {
+  positive: 'blessing',
+  neutral: 'neutral',
+  warning: 'curse',
+  critical: 'crisis',
+};
+
+const formatSignedValue = (value: number, suffix = ''): string => {
+  const sign = value >= 0 ? '+' : '-';
+  const absolute = Math.abs(value);
+  const formatted = Number.isInteger(absolute)
+    ? absolute.toString()
+    : absolute.toFixed(2).replace(/\.00$/, '');
+  return `${sign}${formatted}${suffix}`;
+};
+
+const formatMultiplier = (value: number): string => {
+  const normalized = Number.isFinite(value) ? value : 1;
+  const formatted = normalized.toFixed(2).replace(/\.00$/, '');
+  return `x${formatted}`;
+};
+
+const formatLabel = (key: string): string =>
+  key
+    .replace(/[_-]+/g, ' ')
+    .split(' ')
+    .filter(Boolean)
+    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+
+const clampProbability = (value: number): number =>
+  Math.round(Math.max(0, Math.min(1, value)) * 100);
+
+const cloneImpact = (impact: ActiveEvent['impact']): ActiveEvent['impact'] => ({
+  ...impact,
+  resources: { ...impact.resources },
+  citizenMood: { ...impact.citizenMood },
+  buildingEffects: { ...impact.buildingEffects },
+  economicEffects: { ...impact.economicEffects },
+});
+
+const mapActiveEventToSeasonalEvent = (
+  event: ActiveEvent,
+  currentCycle: number,
+  fallbackSeason: SeasonalEvent['season'],
+): SeasonalEvent => {
+  const probability = clampProbability(event.impact.probability);
+  const cycleOffset = Math.max(0, event.startCycle - currentCycle);
+  const startSeason = normalizeSeason(createGameTime(event.startCycle * 60).season);
+  const effects: SeasonalEvent['effects'] = [];
+
+  for (const [resourceKey, rawValue] of Object.entries(event.impact.resources ?? {})) {
+    if (typeof rawValue !== 'number' || rawValue === 0) continue;
+    effects.push({ resource: formatLabel(resourceKey), impact: formatSignedValue(rawValue) });
+  }
+
+  const { happiness, stress, motivation } = event.impact.citizenMood;
+  if (happiness) effects.push({ resource: 'Happiness', impact: formatSignedValue(happiness) });
+  if (stress) effects.push({ resource: 'Stress', impact: formatSignedValue(stress) });
+  if (motivation) effects.push({ resource: 'Motivation', impact: formatSignedValue(motivation) });
+
+  const { conditionChange, efficiencyMultiplier, maintenanceCostMultiplier } = event.impact.buildingEffects;
+  if (conditionChange) {
+    effects.push({ resource: 'Building Condition', impact: formatSignedValue(conditionChange) });
+  }
+  if (efficiencyMultiplier && efficiencyMultiplier !== 1) {
+    effects.push({ resource: 'Efficiency', impact: formatMultiplier(efficiencyMultiplier) });
+  }
+  if (maintenanceCostMultiplier && maintenanceCostMultiplier !== 1) {
+    effects.push({ resource: 'Maintenance Cost', impact: formatMultiplier(maintenanceCostMultiplier) });
+  }
+
+  const { wageMultiplier, tradeMultiplier, growthRate } = event.impact.economicEffects;
+  if (wageMultiplier && wageMultiplier !== 1) {
+    effects.push({ resource: 'Wages', impact: formatMultiplier(wageMultiplier) });
+  }
+  if (tradeMultiplier && tradeMultiplier !== 1) {
+    effects.push({ resource: 'Trade', impact: formatMultiplier(tradeMultiplier) });
+  }
+  if (growthRate) {
+    effects.push({ resource: 'Growth Rate', impact: formatSignedValue(growthRate, '%') });
+  }
+
+  if (effects.length === 0) {
+    effects.push({ resource: 'Outlook', impact: 'Subtle shifts expected' });
+  }
+
+  const impact = cloneImpact(event.impact);
+
+  return {
+    id: event.id,
+    name: event.title,
+    description: event.description,
+    type: ICON_TYPE_TO_EVENT_TYPE[event.iconType] ?? 'neutral',
+    season: startSeason || fallbackSeason,
+    cycleOffset,
+    probability,
+    effects,
+    duration: impact.duration > 0 ? impact.duration : undefined,
+    isRevealed: event.isActive,
+    severity: event.severity,
+    iconType: event.iconType,
+    color: event.color,
+    animationType: event.animationType,
+    startCycle: event.startCycle,
+    endCycle: event.endCycle,
+    isActive: event.isActive,
+    sourceEventType: event.type,
+    impact,
+    responses: event.responses?.map(response => ({
+      ...response,
+      cost: { ...(response.cost ?? {}) },
+      effect: { ...(response.effect ?? {}) },
+    })),
+    triggers: event.triggers?.map(trigger => ({ ...trigger })),
+  };
+};
+
+const mapActiveEventToReading = (event: ActiveEvent, currentCycle: number): OmenReading => ({
+  id: `reading-${event.id}`,
+  title: event.title,
+  description: event.description,
+  confidence: clampProbability(event.impact.probability),
+  revealedAt: currentCycle,
+  events: [event.id],
+  relatedEventType: event.type,
+  severity: event.severity,
+  iconType: event.iconType,
+  color: event.color,
+});
 
 
 
@@ -100,20 +252,6 @@ interface Proposal {
   description: string;
   status: "pending" | "accepted" | "rejected" | "applied";
   predicted_delta: Record<string, number>;
-}
-
-interface SeasonalEvent {
-  id: string;
-  name: string;
-  description: string;
-  cycle: number;
-}
-
-interface OmenReading {
-  id: string;
-  text: string;
-  type: string;
-  cycle: number;
 }
 
 interface PlayPageProps {
@@ -250,7 +388,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   }, []);
   const [tutorialFree, setTutorialFree] = useState<Partial<Record<BuildTypeId, number>>>({ farm: 1, house: 1, council_hall: 1 });
   const [isEdictsOpen, setIsEdictsOpen] = useState(false);
-  const [, setIsOmensOpen] = useState(false);
+  const [isOmensOpen, setIsOmensOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [dismissedGuide, setDismissedGuide] = useState(false);
   const [acceptedNotice, setAcceptedNotice] = useState<{ title: string; delta: Record<string, number> } | null>(null);
@@ -685,8 +823,8 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     },
   ]), [edicts]);
   const totalEdictCost = useMemo(() => Object.keys(pendingEdictChanges).length * 1, [pendingEdictChanges]);
-  const [upcomingEvents, _setUpcomingEvents] = useState<SeasonalEvent[]>([]);
-  const [omenReadings, _setOmenReadings] = useState<OmenReading[]>([]);
+  const [upcomingEvents, setUpcomingEvents] = useState<SeasonalEvent[]>([]);
+  const [omenReadings, setOmenReadings] = useState<OmenReading[]>([]);
 
   useEffect(() => {
     const onStartRoute = (e: any) => {
@@ -1067,10 +1205,22 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
         setEnhancedGameState(enhancedState);
         const indicators = simulationSystem.generateVisualIndicators(enhancedState);
         setVisualIndicators(indicators);
+        const currentCycleFromTime = Math.floor(simulationInput.gameTime.totalMinutes / 60);
+        const fallbackSeason = normalizeSeason(simulationInput.gameTime.season);
+        setUpcomingEvents(
+          enhancedState.activeEvents.map(event =>
+            mapActiveEventToSeasonalEvent(event, currentCycleFromTime, fallbackSeason)
+          )
+        );
+        setOmenReadings(
+          enhancedState.activeEvents.map(event =>
+            mapActiveEventToReading(event, currentCycleFromTime)
+          )
+        );
       } catch (simError) {
         logger.warn('Simulation system update failed:', simError);
       }
-      
+
       // Flavor events disabled for stability
       return { simRes, state: serverState };
     } catch (e: unknown) {
@@ -1148,6 +1298,17 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
       setLoading(false);
     }
   }, [proposals, selectedTile, fetchProposals, generateId]);
+
+  const handleRequestOmenReading = useCallback(() => {
+    logger.info('Omen reading requested (stub)');
+    notify({
+      type: 'info',
+      title: 'Ritual Pending',
+      message: 'The seers are preparing a deeper reading. (Feature under development.)',
+      dedupeKey: 'omen-reading-stub',
+      dedupeMs: 10000,
+    });
+  }, [notify]);
 
   useEffect(() => {
     (async () => {
@@ -1293,10 +1454,11 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   };
 
   const currentTime = timeSystem.getCurrentTime();
-  const gameTime: GameTime = { 
+  const currentSeason = normalizeSeason(currentTime.season);
+  const gameTime: GameTime = {
     cycle: Math.floor(currentTime.totalMinutes / 60), // Convert to legacy cycle for HUD compatibility
-    season: 'spring', // TODO: Implement seasons based on currentTime.month
-    timeRemaining 
+    season: currentSeason,
+    timeRemaining
   };
   const totalAssigned = placedBuildings.reduce((sum, b) => sum + b.workers, 0);
   const totalWorkers = totalAssigned + (simResources?.workers ?? 0);
@@ -1883,6 +2045,18 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
             />
 
           </IntegratedHUDSystem>
+          <OmenPanel
+            isOpen={isOmensOpen}
+            onClose={() => setIsOmensOpen(false)}
+            upcomingEvents={upcomingEvents}
+            omenReadings={omenReadings}
+            currentCycle={gameTime.cycle}
+            currentSeason={currentSeason}
+            onRequestReading={handleRequestOmenReading}
+            canRequestReading={!loading}
+            readingCost={OMEN_READING_COST}
+            currentMana={resources.mana}
+          />
           <NotificationHost />
           </GameProvider>
 
