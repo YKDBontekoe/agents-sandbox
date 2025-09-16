@@ -174,7 +174,7 @@ export default function PreviewLayer({ hoverTile, selectedTile, tileTypes, build
 
     // Compact potential tooltip (at full staffing, level 1)
     if (previewTypeId) {
-      const def = (SIM_BUILDINGS as any)[previewTypeId];
+      const def = SIM_BUILDINGS[previewTypeId];
       if (def) {
         // compute adjacency modifiers roughly matching engine
         const dirs = [ [1,0], [-1,0], [0,1], [0,-1] ];

@@ -20,7 +20,17 @@ export interface SimBuildingType {
   maxLevel?: number;
 }
 
-export const SIM_BUILDINGS: Record<string, SimBuildingType> = {
+type ExtractString<T> = T extends string ? T : never;
+
+export type SimBuildingDefinition<TKey extends string = string> = SimBuildingType & { id: TKey };
+
+export function defineSimBuildings<TCatalog extends Record<string, SimBuildingDefinition>>(catalog: {
+  [K in keyof TCatalog]: SimBuildingDefinition<ExtractString<K>>;
+}) {
+  return catalog;
+}
+
+export const SIM_BUILDINGS = defineSimBuildings({
   council_hall: {
     id: 'council_hall',
     name: 'Council Hall',
@@ -105,4 +115,7 @@ export const SIM_BUILDINGS: Record<string, SimBuildingType> = {
     workCapacity: 2,
     maxLevel: 3,
   },
-};
+});
+
+export type SimBuildingCatalog = typeof SIM_BUILDINGS;
+export type SimBuildingId = keyof SimBuildingCatalog;
