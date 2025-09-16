@@ -57,6 +57,8 @@ export default function ConstellationSkillTree({ tree, unlocked, onUnlock, color
   });
   const zoomAnimationRef = useRef<number | null>(null);
   const latestZoomRef = useRef(zoom);
+  const hoverTimeoutRef = useRef<ReturnType<typeof globalThis.setTimeout> | null>(null);
+  const hoverTargetRef = useRef<ConstellationNode | null>(null);
 
   const clearZoomAnimation = useCallback(() => {
     if (zoomAnimationRef.current !== null) {
@@ -65,13 +67,37 @@ export default function ConstellationSkillTree({ tree, unlocked, onUnlock, color
     }
   }, []);
 
+  const clearHoverTimeout = useCallback(() => {
+    if (hoverTimeoutRef.current !== null) {
+      clearTimeout(hoverTimeoutRef.current);
+      hoverTimeoutRef.current = null;
+    }
+  }, []);
+
   useEffect(() => {
     latestZoomRef.current = zoom;
   }, [zoom]);
 
+  const hideTooltip = useCallback(() => {
+    clearHoverTimeout();
+    setTooltip(prev => {
+      if (!prev.visible && prev.node === null && prev.fadeIn === 0) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        visible: false,
+        fadeIn: 0,
+        node: null
+      };
+    });
+  }, [clearHoverTimeout]);
+
   useEffect(() => () => {
     clearZoomAnimation();
-  }, [clearZoomAnimation]);
+    clearHoverTimeout();
+  }, [clearZoomAnimation, clearHoverTimeout]);
 
   // Easing functions for smooth transitions
   const easeOutCubic = (t: number): number => 1 - Math.pow(1 - t, 3);
@@ -664,14 +690,23 @@ export default function ConstellationSkillTree({ tree, unlocked, onUnlock, color
     const rect = canvas.getBoundingClientRect();
     const mouseX = e.clientX - rect.left;
     const mouseY = e.clientY - rect.top;
-    
-    // Transform mouse coordinates to world space
-    const worldX = (mouseX - size.w / 2 - pan.x) / zoom;
-    const worldY = (mouseY - size.h / 2 - pan.y) / zoom;
 
     if (dragRef.current.dragging) {
       const dx = mouseX - dragRef.current.start.x;
       const dy = mouseY - dragRef.current.start.y;
+
+      if (dx !== 0 || dy !== 0) {
+        hoverTargetRef.current = null;
+        if (hover) {
+          updateNodeTransition(hover.node.id, {
+            scale: 1,
+            glowIntensity: 0
+          });
+          setHover(null);
+        }
+        hideTooltip();
+      }
+
       setPan({
         x: dragRef.current.startPan.x + dx,
         y: dragRef.current.startPan.y + dy
@@ -679,13 +714,17 @@ export default function ConstellationSkillTree({ tree, unlocked, onUnlock, color
       return;
     }
 
+    // Transform mouse coordinates to world space
+    const worldX = (mouseX - size.w / 2 - pan.x) / zoom;
+    const worldY = (mouseY - size.h / 2 - pan.y) / zoom;
+
     // Check for node hover
     let hoveredNode: ConstellationNode | null = null;
     for (const cNode of layout.nodes) {
       const dx = worldX - cNode.x;
       const dy = worldY - cNode.y;
       const distance = Math.sqrt(dx * dx + dy * dy);
-      
+
       if (distance <= 20) {
         hoveredNode = cNode;
         break;
@@ -696,14 +735,14 @@ export default function ConstellationSkillTree({ tree, unlocked, onUnlock, color
     if (hoveredNode && hoveredNode !== hover) {
       const nodeColor = colorFor(hoveredNode.node.category);
       particleSystemRef.current.addParticles(hoveredNode.x, hoveredNode.y, 'hover', 4, nodeColor);
-      
+
       // Apply hover transition
       updateNodeTransition(hoveredNode.node.id, {
         scale: 1.1,
         glowIntensity: 0.8
       });
     }
-    
+
     // Clear previous hover transitions
     if (hover && hoveredNode !== hover) {
       updateNodeTransition(hover.node.id, {
@@ -711,27 +750,28 @@ export default function ConstellationSkillTree({ tree, unlocked, onUnlock, color
         glowIntensity: 0
       });
     }
-    
+
+    hoverTargetRef.current = hoveredNode;
     setHover(hoveredNode);
-    
+
     // Enhanced tooltip positioning with smart anchor detection
     if (hoveredNode && hoveredNode !== hover) {
-      const canvas = canvasRef.current;
-      if (canvas) {
-        const rect = canvas.getBoundingClientRect();
-        const canvasWidth = rect.width;
-        const canvasHeight = rect.height;
-        
+      const hoverCanvas = canvasRef.current;
+      if (hoverCanvas) {
+        const hoverRect = hoverCanvas.getBoundingClientRect();
+        const canvasWidth = hoverRect.width;
+        const canvasHeight = hoverRect.height;
+
         // Calculate optimal tooltip position and anchor
         let tooltipX = mouseX;
         let tooltipY = mouseY;
         let anchor: 'top' | 'bottom' | 'left' | 'right' = 'top';
         let offset = { x: 15, y: -10 };
-        
+
         // Smart positioning to keep tooltip in viewport
         const tooltipWidth = 250; // Estimated tooltip width
         const tooltipHeight = 120; // Estimated tooltip height
-        
+
         // Check right edge
         if (mouseX + tooltipWidth + 20 > canvasWidth) {
           anchor = 'left';
@@ -747,27 +787,47 @@ export default function ConstellationSkillTree({ tree, unlocked, onUnlock, color
           anchor = 'top';
           offset = { x: 15, y: 15 };
         }
-        
+
         tooltipX = Math.max(10, Math.min(canvasWidth - tooltipWidth - 10, mouseX + offset.x));
         tooltipY = Math.max(10, Math.min(canvasHeight - tooltipHeight - 10, mouseY + offset.y));
-        
-        // Reduced delay and improved timing
-        setTimeout(() => {
+
+        clearHoverTimeout();
+        const targetNodeId = hoveredNode.node.id;
+        const targetAnchor = anchor;
+        const targetOffset = offset;
+        const targetX = tooltipX;
+        const targetY = tooltipY;
+
+        hoverTimeoutRef.current = globalThis.setTimeout(() => {
+          if (hoverTargetRef.current?.node.id !== targetNodeId) {
+            return;
+          }
+
           setTooltip({
             visible: true,
-            x: tooltipX,
-            y: tooltipY,
+            x: targetX,
+            y: targetY,
             node: hoveredNode.node,
             fadeIn: 0,
-            anchor,
-            offset
+            anchor: targetAnchor,
+            offset: targetOffset
           });
         }, 150); // Reduced delay for better responsiveness
       }
     } else if (!hoveredNode) {
-      setTooltip(prev => ({ ...prev, visible: false, fadeIn: 0 }));
+      hideTooltip();
     }
-  }, [layout, hover, pan, zoom, size, colorFor, updateNodeTransition]);
+  }, [
+    layout,
+    hover,
+    pan,
+    zoom,
+    size,
+    colorFor,
+    updateNodeTransition,
+    hideTooltip,
+    clearHoverTimeout
+  ]);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     const canvas = canvasRef.current;
@@ -776,17 +836,33 @@ export default function ConstellationSkillTree({ tree, unlocked, onUnlock, color
     const rect = canvas.getBoundingClientRect();
     const mouseX = e.clientX - rect.left;
     const mouseY = e.clientY - rect.top;
-    
+
     dragRef.current = {
       dragging: true,
       start: { x: mouseX, y: mouseY },
       startPan: { ...pan }
     };
-  }, [pan]);
+    clearHoverTimeout();
+  }, [pan, clearHoverTimeout]);
 
   const handleMouseUp = useCallback(() => {
     dragRef.current.dragging = false;
   }, []);
+
+  const handleMouseLeave = useCallback(() => {
+    dragRef.current.dragging = false;
+    hoverTargetRef.current = null;
+
+    if (hover) {
+      updateNodeTransition(hover.node.id, {
+        scale: 1,
+        glowIntensity: 0
+      });
+      setHover(null);
+    }
+
+    hideTooltip();
+  }, [hover, hideTooltip, updateNodeTransition]);
 
   const handleClick = useCallback(() => {
     if (dragRef.current.dragging) return;
@@ -981,7 +1057,7 @@ export default function ConstellationSkillTree({ tree, unlocked, onUnlock, color
         onMouseMove={handleMouseMove}
         onMouseDown={handleMouseDown}
         onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
+        onMouseLeave={handleMouseLeave}
         onClick={handleClick}
         onWheel={handleWheel}
       />
