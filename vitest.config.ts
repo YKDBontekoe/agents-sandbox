@@ -7,6 +7,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 export default defineConfig({
   resolve: {
     alias: {
+      '@/utils/performance': resolve(__dirname, 'packages/utils/performance'),
+      '@': resolve(__dirname, 'src'),
       '@arcane/ui': resolve(__dirname, 'packages/ui/src'),
       '@engine': resolve(__dirname, 'packages/engine/src'),
     },

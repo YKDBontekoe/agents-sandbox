@@ -128,6 +128,35 @@ interface PlayPageProps {
   initialProposals?: Proposal[];
 }
 
+type SkillUnlockNotification = Pick<Notification, 'type' | 'title' | 'message'> & {
+  dedupeKey?: string;
+  dedupeMs?: number;
+};
+
+export function ensureStateForSkillUnlock(
+  state: GameState | null | undefined,
+  skill: SkillNode,
+  notify?: (notification: SkillUnlockNotification) => void,
+): state is GameState {
+  if (state) {
+    return true;
+  }
+
+  const skillLabel = skill?.title || skill?.id || 'this skill';
+  const skillId = skill?.id || 'unknown';
+  logger.warn(`Received skill unlock "${skillId}" before state hydration`);
+  if (notify) {
+    notify({
+      type: 'warning',
+      title: 'Syncing game data',
+      message: `Please wait for your city to finish loading, then try unlocking ${skillLabel} again.`,
+      dedupeKey: `skill-unlock-${skillId}-deferred`,
+      dedupeMs: 5000,
+    });
+  }
+  return false;
+}
+
 export default function PlayPage({ initialState = null, initialProposals = [] }: PlayPageProps) {
   logger.debug('🚀 PlayPage component mounting/rendering');
   const generateId = useIdGenerator();
@@ -542,16 +571,19 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     const onUnlock = async (e: any) => {
       const n = e.detail as SkillNode;
       if (unlockedSkillIds.includes(n.id)) return;
+      if (!ensureStateForSkillUnlock(state, n, notify)) {
+        return;
+      }
       const needed = { coin: n.cost.coin || 0, mana: n.cost.mana || 0, favor: n.cost.favor || 0 } as Record<string, number>;
-      const have = { coin: state?.resources.coin || 0, mana: state?.resources.mana || 0, favor: state?.resources.favor || 0 } as Record<string, number>;
+      const have = { coin: state.resources.coin || 0, mana: state.resources.mana || 0, favor: state.resources.favor || 0 } as Record<string, number>;
       if (have.coin < needed.coin || have.mana < needed.mana || have.favor < needed.favor) return;
-      const newResServer = { ...state!.resources } as Record<string, number>;
+      const newResServer = { ...state.resources } as Record<string, number>;
       newResServer.coin = Math.max(0, newResServer.coin - needed.coin);
       newResServer.mana = Math.max(0, newResServer.mana - needed.mana);
       newResServer.favor = Math.max(0, newResServer.favor - needed.favor);
       const nextSkills = [...unlockedSkillIds, n.id];
       setState(prev => prev ? { ...prev, resources: newResServer, skills: nextSkills as any } : prev);
-      await saveState({ resources: newResServer, buildings: placedBuildings, routes, workers: state?.workers, skills: nextSkills } as any);
+      await saveState({ resources: newResServer, buildings: placedBuildings, routes, workers: state.workers, skills: nextSkills } as any);
       setUnlockedSkillIds(nextSkills);
       notify({ type: 'success', title: 'Skill Unlocked', message: n.title })
     };
