@@ -40,6 +40,16 @@ export interface ProductionModifiers {
   resourceOutputMultiplier?: Partial<Record<SimResourceKey, number>>;
   buildingOutputMultiplier?: Partial<Record<string, number>>; // by building typeId
   upkeepGrainPerWorkerDelta?: number; // adds to per-worker upkeep (can be negative)
+  /** Global multiplier applied after building/resource specific multipliers. */
+  globalBuildingOutputMultiplier?: number;
+  /** Global multiplier applied to all non-worker resource outputs. */
+  globalResourceOutputMultiplier?: number;
+  /** Additional multiplier for route-generated coin. */
+  routeCoinOutputMultiplier?: number;
+  /** Multiplier for patrol upkeep costs on trade routes. */
+  patrolCoinUpkeepMultiplier?: number;
+  /** Multiplier applied to building input consumption (values < 1 reduce costs). */
+  buildingInputMultiplier?: number;
 }
 
 export function applyProduction(
@@ -94,11 +104,15 @@ export function projectCycleDeltas(
   const shortages: Partial<SimResources> = {};
   const edicts = opts?.edicts || {};
   const tariffValue = Math.max(0, Math.min(100, Number(edicts['tariffs'] ?? 50)));
-  const routeCoinMultiplier = 0.8 + (tariffValue * 0.006);
-  const patrolsEnabled = Number(edicts['patrols'] ?? 0) === 1;
   const mods = opts?.modifiers || {};
   const resMul = mods.resourceOutputMultiplier || {};
   const bldMul = mods.buildingOutputMultiplier || {};
+  const globalBuildingMultiplier = Math.max(0, mods.globalBuildingOutputMultiplier ?? 1);
+  const globalResourceMultiplier = Math.max(0, mods.globalResourceOutputMultiplier ?? 1);
+  const routeCoinMultiplier = (0.8 + (tariffValue * 0.006)) * Math.max(0, mods.routeCoinOutputMultiplier ?? 1);
+  const patrolCoinUpkeepMultiplier = Math.max(0, mods.patrolCoinUpkeepMultiplier ?? 1);
+  const inputMultiplier = Math.max(0, mods.buildingInputMultiplier ?? 1);
+  const patrolsEnabled = Number(edicts['patrols'] ?? 0) === 1;
 
   // Build quick lookup by id for route effects
   const byId: Record<string, typeof buildings[0]> = {};
@@ -139,18 +153,21 @@ export function projectCycleDeltas(
 
       for (const key of Object.keys(inputs) as Array<keyof SimResources>) {
         const amount = inputs[key];
-        const need = (amount ?? 0) * ratio;
-        if (next[key] < need) {
+        const requiredRaw = Math.max(0, (amount ?? 0) * ratio * inputMultiplier);
+        const required = Math.max(0, Math.round(requiredRaw * 100) / 100);
+        const current = next[key] ?? 0;
+        if (current < required) {
           canProduce = false;
-          shortages[key] = (shortages[key] ?? 0) + (need - next[key]);
+          shortages[key] = (shortages[key] ?? 0) + (required - current);
         }
       }
     if (!canProduce) return;
 
       for (const key of Object.keys(inputs) as Array<keyof SimResources>) {
         const amount = inputs[key];
-        const need = Math.max(0, Math.round((amount ?? 0) * ratio));
-        next[key] = Math.max(0, (next[key] ?? 0) - need);
+        const requiredRaw = Math.max(0, (amount ?? 0) * ratio * inputMultiplier);
+        const required = Math.max(0, Math.round(requiredRaw * 100) / 100);
+        next[key] = Math.max(0, (next[key] ?? 0) - required);
       }
       for (const key of Object.keys(outputs) as Array<keyof SimResources>) {
         const amount = outputs[key];
@@ -178,7 +195,8 @@ export function projectCycleDeltas(
       // Apply skill modifiers
       const bm = bldMul[b.typeId] ?? 1;
       const rm = resMul[key as SimResourceKey] ?? 1;
-      out *= bm * rm;
+      const resGlobal = key === 'workers' ? 1 : globalResourceMultiplier;
+      out *= bm * rm * globalBuildingMultiplier * resGlobal;
       out = Math.max(0, Math.round(out));
       next[key] = (next[key] ?? 0) + out;
     }
@@ -191,7 +209,8 @@ export function projectCycleDeltas(
   });
   // Patrol upkeep (coin)
   if (routes.length > 0 && patrolsEnabled) {
-    next.coin = Math.max(0, (next.coin ?? 0) - 2);
+    const penalty = Math.max(0, Math.round(2 * patrolCoinUpkeepMultiplier));
+    next.coin = Math.max(0, (next.coin ?? 0) - penalty);
   }
   // Worker upkeep on total workers, not just idle
   const totalWorkers = Math.max(0, Number(opts?.totalWorkers ?? 0));
