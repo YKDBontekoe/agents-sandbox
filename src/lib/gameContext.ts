@@ -57,7 +57,7 @@ export function buildGameContext(state: unknown): GameContext {
   const skills: string[] = Array.isArray(stateObj.skills) ? stateObj.skills : []
   if (skills.length > 0) {
     try {
-      const tree = generateSkillTree(stateObj.skill_tree_seed ?? 12345)
+      const tree = generateSkillTree(stateObj.skill_tree_seed ?? 12345, 8, { unlockedCount: skills.length })
       const unlocked = tree.nodes.filter(n => skills.includes(n.id))
       const acc = accumulateEffects(unlocked)
       skillModifiers = {

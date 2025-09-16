@@ -22,11 +22,78 @@ function pick<T>(rng: () => number, arr: T[]): T {
   return arr[Math.floor(rng() * arr.length)];
 }
 
-export function generateSkillTree(seed = 42, tiers: number = 8): SkillTree {
+export interface SkillCostScalingOptions {
+  unlockedCount?: number;
+}
+
+export const RARITY_BASE_COST: Record<SkillNode['rarity'], number> = {
+  common: 1,
+  uncommon: 1.5,
+  rare: 2,
+  legendary: 3,
+};
+
+export const RARITY_MULTIPLIER_BONUS: Record<SkillNode['rarity'], number> = {
+  common: 0,
+  uncommon: 0.12,
+  rare: 0.28,
+  legendary: 0.5,
+};
+
+function sanitizeTier(tier: number | undefined): number {
+  if (typeof tier !== 'number' || !Number.isFinite(tier)) return 0;
+  return tier < 0 ? 0 : tier;
+}
+
+function sanitizeUnlockedCount(unlockedCount: number | undefined): number {
+  if (typeof unlockedCount !== 'number' || !Number.isFinite(unlockedCount)) return 0;
+  return unlockedCount < 0 ? 0 : unlockedCount;
+}
+
+function rollBaseCost(rng: () => number, rarity: SkillNode['rarity']): SkillNode['baseCost'] {
+  const base = RARITY_BASE_COST[rarity];
+  return {
+    coin: Math.round((15 + rng() * 35) * base),
+    mana: Math.round((3 + rng() * 8) * base),
+    favor: Math.round((2 + rng() * 6) * base),
+  };
+}
+
+function scaleCost(baseCost: SkillNode['baseCost'], multiplier: number): SkillNode['cost'] {
+  const scaled: SkillNode['cost'] = {};
+  if (typeof baseCost.coin === 'number') scaled.coin = Math.max(0, Math.round(baseCost.coin * multiplier));
+  if (typeof baseCost.mana === 'number') scaled.mana = Math.max(0, Math.round(baseCost.mana * multiplier));
+  if (typeof baseCost.favor === 'number') scaled.favor = Math.max(0, Math.round(baseCost.favor * multiplier));
+  return scaled;
+}
+
+export function getCostMultiplier(
+  tier: number | undefined,
+  rarity: SkillNode['rarity'],
+  unlockedCount: number,
+): number {
+  const tierIndex = sanitizeTier(tier);
+  const rarityBonus = RARITY_MULTIPLIER_BONUS[rarity];
+  const sanitizedUnlocked = sanitizeUnlockedCount(unlockedCount);
+  const tierContribution = tierIndex * 0.15; // 15% per tier step
+  const unlockContribution = Math.min(1.2, Math.log1p(sanitizedUnlocked) * 0.18); // soft cap to avoid runaway costs
+  return 1 + rarityBonus + tierContribution + unlockContribution;
+}
+
+export function calculateNodeCost(
+  node: Pick<SkillNode, 'baseCost' | 'rarity' | 'tier'>,
+  unlockedCount: number,
+): SkillNode['cost'] {
+  const multiplier = getCostMultiplier(node.tier ?? 0, node.rarity, unlockedCount);
+  return scaleCost(node.baseCost, multiplier);
+}
+
+export function generateSkillTree(seed = 42, tiers: number = 8, options: SkillCostScalingOptions = {}): SkillTree {
   const rng = mulberry32(seed);
   const categories: SkillNode['category'][] = ['economic', 'military', 'mystical', 'infrastructure', 'diplomatic', 'social'];
   const nodes: SkillNode[] = [];
   const edges: Array<{ from: string; to: string }> = [];
+  const unlockedForCosts = sanitizeUnlockedCount(options.unlockedCount);
 
   const id = (i: number) => `skill_${i}`;
   const titlesByCat: Record<SkillNode['category'], string[]> = {
@@ -60,22 +127,10 @@ export function generateSkillTree(seed = 42, tiers: number = 8): SkillTree {
     }
   };
 
-  const makeCost = (rarity: SkillNode['rarity'], unlockCount: number = 0): { cost: SkillNode['cost']; baseCost: SkillNode['baseCost'] } => {
-    const base = rarity === 'common' ? 1 : rarity === 'uncommon' ? 1.5 : rarity === 'rare' ? 2 : 3;
-    const progressiveMultiplier = 1 + (unlockCount * 0.15); // 15% increase per unlocked node
-    
-    const baseCost = {
-      coin: Math.round((15 + rng() * 35) * base),
-      mana: Math.round((3 + rng() * 8) * base),
-      favor: Math.round((2 + rng() * 6) * base),
-    };
-    
-    const cost = {
-      coin: Math.round(baseCost.coin! * progressiveMultiplier),
-      mana: Math.round(baseCost.mana! * progressiveMultiplier),
-      favor: Math.round(baseCost.favor! * progressiveMultiplier),
-    };
-    
+  const makeCost = (tier: number, rarity: SkillNode['rarity']): { cost: SkillNode['cost']; baseCost: SkillNode['baseCost'] } => {
+    const baseCost = rollBaseCost(rng, rarity);
+    const multiplier = getCostMultiplier(tier, rarity, unlockedForCosts);
+    const cost = scaleCost(baseCost, multiplier);
     return { cost, baseCost };
   };
 
@@ -193,7 +248,7 @@ export function generateSkillTree(seed = 42, tiers: number = 8): SkillTree {
       const importance = calculateImportance(t, rarity, requires.length);
       const quality = pickQuality(t);
       const qualityMultiplier = getQualityMultiplier(quality);
-      const { cost, baseCost } = makeCost(rarity, nodes.length);
+      const { cost, baseCost } = makeCost(t, rarity);
       const specialAbility = createSpecialAbility(quality, cat);
       
       // Occasionally create mutually exclusive paths within a tier/category
@@ -384,7 +439,7 @@ export function generateSkillTree(seed = 42, tiers: number = 8): SkillTree {
       categoryDistribution
     },
     progressionData: {
-      totalUnlocked: 0,
+      totalUnlocked: unlockedForCosts,
       qualityDistribution: { common: 0, rare: 0, epic: 0, legendary: 0 },
       achievements,
       challenges: [
@@ -425,11 +480,17 @@ export function generateSkillTree(seed = 42, tiers: number = 8): SkillTree {
 }
 
 // Expand an existing skill tree with more tiers deterministically by seed
-export function expandSkillTree(tree: SkillTree, seed: number, moreTiers: number = 4): SkillTree {
+export function expandSkillTree(
+  tree: SkillTree,
+  seed: number,
+  moreTiers: number = 4,
+  options: SkillCostScalingOptions = {},
+): SkillTree {
   const rng = mulberry32(seed + (tree.layout?.maxTier ?? 0) * 1009);
   const categories: SkillNode['category'][] = ['economic', 'military', 'mystical', 'infrastructure', 'diplomatic', 'social'];
   const nextStartTier = (tree.layout?.maxTier ?? -1) + 1;
   if (!tree.layout) tree.layout = { tiers: {}, maxTier: -1, categoryDistribution: { economic: [], military: [], mystical: [], infrastructure: [], diplomatic: [], social: [] } };
+  const unlockedForCosts = sanitizeUnlockedCount(options.unlockedCount ?? tree.progressionData?.totalUnlocked ?? 0);
 
   const existingByCategory: Record<SkillNode['category'], string[]> = { economic: [], military: [], mystical: [], infrastructure: [], diplomatic: [], social: [] };
   tree.nodes.forEach(n => { existingByCategory[n.category].push(n.id); });
@@ -443,11 +504,10 @@ export function expandSkillTree(tree: SkillTree, seed: number, moreTiers: number
   const pickRarity = (): SkillNode['rarity'] => { const r = rng(); return r < 0.55 ? 'common' : r < 0.85 ? 'uncommon' : r < 0.97 ? 'rare' : 'legendary'; };
   const pickQuality = (tier: number): NodeQuality => { const r = rng(); const tb = tier * 0.05; return r < 0.4 - tb ? 'common' : r < 0.7 - tb ? 'rare' : r < 0.9 - tb ? 'epic' : 'legendary'; };
   const getQualityMultiplier = (q: NodeQuality) => q === 'common' ? 1.0 : q === 'rare' ? 1.3 : q === 'epic' ? 1.6 : 2.0;
-  const makeCost = (rarity: SkillNode['rarity'], unlockCount: number = 0) => {
-    const base = rarity === 'common' ? 1 : rarity === 'uncommon' ? 1.5 : rarity === 'rare' ? 2 : 3;
-    const progressiveMultiplier = 1 + (unlockCount * 0.15);
-    const baseCost = { coin: Math.round((15 + rng() * 35) * base), mana: Math.round((3 + rng() * 8) * base), favor: Math.round((2 + rng() * 6) * base) };
-    const cost = { coin: Math.round(baseCost.coin! * progressiveMultiplier), mana: Math.round(baseCost.mana! * progressiveMultiplier), favor: Math.round(baseCost.favor! * progressiveMultiplier) };
+  const makeCost = (tier: number, rarity: SkillNode['rarity']) => {
+    const baseCost = rollBaseCost(rng, rarity);
+    const multiplier = getCostMultiplier(tier, rarity, unlockedForCosts);
+    const cost = scaleCost(baseCost, multiplier);
     return { cost, baseCost };
   };
   const createSpecialAbility = (quality: NodeQuality, category: SkillNode['category']): SpecialAbility | undefined => {
@@ -494,7 +554,7 @@ export function expandSkillTree(tree: SkillTree, seed: number, moreTiers: number
       const importance = Math.min(1.0, t * 0.2 + (rarity === 'common' ? 0.1 : rarity === 'uncommon' ? 0.3 : rarity === 'rare' ? 0.6 : 1.0) + requires.length * 0.15);
       const quality = pickQuality(t);
       const qm = getQualityMultiplier(quality);
-      const { cost, baseCost } = makeCost(rarity, idCounter);
+      const { cost, baseCost } = makeCost(t, rarity);
       const node: SkillNode = {
         id: id(),
         title: pick(titlesByCat[cat]),

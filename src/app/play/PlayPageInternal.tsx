@@ -27,7 +27,7 @@ import { EdictsPanel, EdictSetting } from '@/components/game/hud/EdictsPanel';
 import type { District } from '@/components/game/districts';
 import type { Leyline } from '../../../apps/web/features/leylines';
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
-import { generateSkillTree } from '@/components/game/skills/generate';
+import { calculateNodeCost, generateSkillTree } from '@/components/game/skills/generate';
 import { accumulateEffects } from '@/components/game/skills/progression';
 import type { SkillNode } from '@/components/game/skills/types';
 import TileTooltip from '@/components/game/TileTooltip';
@@ -487,7 +487,12 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     const onUnlock = async (e: any) => {
       const n = e.detail as SkillNode;
       if (unlockedSkillIds.includes(n.id)) return;
-      const needed = { coin: n.cost.coin || 0, mana: n.cost.mana || 0, favor: n.cost.favor || 0 } as Record<string, number>;
+      const cost = calculateNodeCost(n, unlockedSkillIds.length);
+      const needed = {
+        coin: cost.coin || 0,
+        mana: cost.mana || 0,
+        favor: cost.favor || 0,
+      } as Record<string, number>;
       const have = { coin: state?.resources.coin || 0, mana: state?.resources.mana || 0, favor: state?.resources.favor || 0 } as Record<string, number>;
       if (have.coin < needed.coin || have.mana < needed.mana || have.favor < needed.favor) return;
       const newResServer = { ...state!.resources } as Record<string, number>;
@@ -1299,7 +1304,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     if (!simResources) {
       return { grain: 0, wood: 0, planks: 0, coin: 0, mana: 0, favor: 0, unrest: 0, threat: 0 } as any;
     }
-    const tree = generateSkillTree(12345);
+    const tree = generateSkillTree(12345, 8, { unlockedCount: unlockedSkillIds.length });
     const unlocked = tree.nodes.filter(n => unlockedSkillIds.includes(n.id));
     const acc = accumulateEffects(unlocked);
     const { updated } = projectCycleDeltas(simResources, placedBuildings, routes, SIM_BUILDINGS, {
@@ -2029,7 +2034,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
               tutorialFree={tutorialFree}
               onConsumeTutorialFree={(typeId) => setTutorialFree(prev => ({ ...prev, [typeId]: Math.max(0, (prev[typeId] || 0) - 1) }))}
               onTutorialProgress={(evt) => { if (evt.type === 'openedCouncil' && onboardingStep === 4) setOnboardingStep(5); }}
-              allowFineSawmill={(accumulateEffects(generateSkillTree(12345).nodes.filter(n => unlockedSkillIds.includes(n.id))).bldMul['sawmill'] ?? 1) > 1}
+              allowFineSawmill={(accumulateEffects(generateSkillTree(12345, 8, { unlockedCount: unlockedSkillIds.length }).nodes.filter(n => unlockedSkillIds.includes(n.id))).bldMul['sawmill'] ?? 1) > 1}
               onSetRecipe={async (buildingId, recipe) => {
                 const idx = placedBuildings.findIndex(b => b.id === buildingId);
                 if (idx === -1) return;

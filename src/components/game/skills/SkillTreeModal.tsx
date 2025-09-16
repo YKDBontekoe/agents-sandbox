@@ -1,7 +1,7 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import ConstellationSkillTree from './ConstellationSkillTree';
-import { generateSkillTree, expandSkillTree } from './generate';
+import { calculateNodeCost, expandSkillTree, generateSkillTree } from './generate';
 import type { SkillNode } from './types';
 
 interface SkillTreeModalProps {
@@ -10,6 +10,18 @@ interface SkillTreeModalProps {
   resources?: { coin?: number; mana?: number; favor?: number };
 }
 
+const readUnlockedFromStorage = (): Record<string, boolean> => {
+  if (typeof window === 'undefined') return {};
+  try {
+    const stored = JSON.parse(localStorage.getItem('ad_skills_unlocked') || '{}');
+    if (stored && typeof stored === 'object') return stored as Record<string, boolean>;
+  } catch {}
+  return {};
+};
+
+const countUnlocked = (map: Record<string, boolean>): number =>
+  Object.values(map).filter(Boolean).length;
+
 export default function SkillTreeModal({ isOpen, onClose, resources }: SkillTreeModalProps) {
   const [seed] = useState<number>(12345);
   const [query, setQuery] = useState('');
@@ -17,16 +29,15 @@ export default function SkillTreeModal({ isOpen, onClose, resources }: SkillTree
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [stateId, setStateId] = useState<string | null>(null);
   const [pinned, setPinned] = useState<string[]>([]);
-  const [unlocked, setUnlocked] = useState<Record<string, boolean>>(() => {
-    if (typeof window === 'undefined') return {};
-    try { 
-      return JSON.parse(localStorage.getItem('ad_skills_unlocked') || '{}'); 
-    } catch { 
-      return {}; 
-    }
-  });
+  const initialUnlockedRef = useRef<Record<string, boolean> | null>(null);
+  if (!initialUnlockedRef.current) {
+    initialUnlockedRef.current = readUnlockedFromStorage();
+  }
+  const [unlocked, setUnlocked] = useState<Record<string, boolean>>(() => initialUnlockedRef.current || {});
 
-  const [tree, setTree] = useState(() => generateSkillTree(seed, 10));
+  const [tree, setTree] = useState(() =>
+    generateSkillTree(seed, 10, { unlockedCount: countUnlocked(initialUnlockedRef.current || {}) })
+  );
   const matches = useMemo(() => {
     if (!query) return [] as { id: string; title: string }[];
     const q = query.toLowerCase();
@@ -55,13 +66,20 @@ export default function SkillTreeModal({ isOpen, onClose, resources }: SkillTree
   }, [tree, unlocked]);
 
   const plannedPath = useMemo(() => selectedNodeId ? computePathTo(selectedNodeId) : [], [selectedNodeId, computePathTo]);
+  const unlockedIds = useMemo(() => Object.keys(unlocked).filter(id => unlocked[id]), [unlocked]);
+  const unlockedCount = unlockedIds.length;
   const plannedCost = useMemo(() => {
-    return plannedPath.reduce<{ coin: number; mana: number; favor: number }>((acc, n) => ({
-      coin: acc.coin + (n.cost.coin || 0),
-      mana: acc.mana + (n.cost.mana || 0),
-      favor: acc.favor + (n.cost.favor || 0)
-    }), { coin: 0, mana: 0, favor: 0 });
-  }, [plannedPath]);
+    let runningUnlocked = unlockedCount;
+    return plannedPath.reduce<{ coin: number; mana: number; favor: number }>((acc, n) => {
+      const cost = calculateNodeCost(n, runningUnlocked);
+      runningUnlocked += 1;
+      return {
+        coin: acc.coin + (cost.coin || 0),
+        mana: acc.mana + (cost.mana || 0),
+        favor: acc.favor + (cost.favor || 0),
+      };
+    }, { coin: 0, mana: 0, favor: 0 });
+  }, [plannedPath, unlockedCount]);
 
   // Simulate spend: find failing step id given current resources
   const failingNodeId = useMemo(() => {
@@ -69,14 +87,16 @@ export default function SkillTreeModal({ isOpen, onClose, resources }: SkillTree
     const target = tree.nodes.find(n => n.id === selectedNodeId);
     const path = [...plannedPath, ...(target ? [target] : [])];
     let coin = resources.coin || 0, mana = resources.mana || 0, favor = resources.favor || 0;
+    let runningUnlocked = unlockedCount;
     for (const n of path) {
-      const c: { coin?: number; mana?: number; favor?: number } = n.cost || {};
+      const c = calculateNodeCost(n, runningUnlocked);
+      runningUnlocked += 1;
       const needCoin = c.coin || 0, needMana = c.mana || 0, needFavor = c.favor || 0;
       if (coin < needCoin || mana < needMana || favor < needFavor) return n.id;
       coin -= needCoin; mana -= needMana; favor -= needFavor;
     }
     return null;
-  }, [resources, selectedNodeId, plannedPath, tree.nodes]);
+  }, [resources, selectedNodeId, plannedPath, tree.nodes, unlockedCount]);
 
   // Load state and pinned targets on open
   useEffect(() => {
@@ -116,13 +136,15 @@ export default function SkillTreeModal({ isOpen, onClose, resources }: SkillTree
   const handleUnlock = (node: SkillNode) => {
     const reqMet = (node.requires || []).every(r => unlocked[r]);
     if (!reqMet || unlocked[node.id]) return;
-    
-    try { 
-      window.dispatchEvent(new CustomEvent('ad_unlock_skill', { 
-        detail: node 
-      })); 
+
+    const effectiveCost = calculateNodeCost(node, unlockedCount);
+
+    try {
+      window.dispatchEvent(new CustomEvent('ad_unlock_skill', {
+        detail: { ...node, cost: effectiveCost }
+      }));
     } catch {}
-    
+
     setUnlocked(prev => ({ ...prev, [node.id]: true }));
   };
 
@@ -217,7 +239,14 @@ export default function SkillTreeModal({ isOpen, onClose, resources }: SkillTree
                 const nearFrontier = selected.tier >= (tree.layout.maxTier - 2);
                 if (nearFrontier) {
                   // Expand deterministically
-                  setTimeout(() => { setTree(prev => expandSkillTree({ ...prev, nodes: [...prev.nodes], edges: [...prev.edges], layout: { ...prev.layout, tiers: { ...prev.layout!.tiers }, categoryDistribution: { ...prev.layout!.categoryDistribution }, maxTier: prev.layout!.maxTier || 0 } }, seed, 4)); }, 0);
+                  setTimeout(() => {
+                    setTree(prev => expandSkillTree(
+                      { ...prev, nodes: [...prev.nodes], edges: [...prev.edges], layout: { ...prev.layout, tiers: { ...prev.layout!.tiers }, categoryDistribution: { ...prev.layout!.categoryDistribution }, maxTier: prev.layout!.maxTier || 0 } },
+                      seed,
+                      4,
+                      { unlockedCount }
+                    ));
+                  }, 0);
                 }
                 return null;
               })()}

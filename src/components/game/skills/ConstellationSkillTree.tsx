@@ -14,6 +14,7 @@ import {
   drawParticles,
   drawConnections,
 } from './effects';
+import { calculateNodeCost } from './generate';
 
 export default function ConstellationSkillTree({ tree, unlocked, onUnlock, colorFor, focusNodeId, resources, onSelectNode }: ConstellationSkillTreeProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -161,6 +162,8 @@ export default function ConstellationSkillTree({ tree, unlocked, onUnlock, color
     return { nodes, constellations };
   }, [tree]);
 
+  const unlockedCount = useMemo(() => Object.values(unlocked).filter(Boolean).length, [unlocked]);
+
   // Unified unlock check with exclusivity and additional conditions
   const checkUnlock = useCallback((node: SkillNode) => {
     const reasons: string[] = [];
@@ -198,13 +201,13 @@ export default function ConstellationSkillTree({ tree, unlocked, onUnlock, color
   // Affordability check
   const canAfford = useCallback((node: SkillNode) => {
     if (!resources) return true;
-    const c: SkillNode['cost'] = node.cost ?? {};
+    const c = calculateNodeCost(node, unlockedCount);
     const r = resources;
     if (typeof c.coin === 'number' && (r.coin || 0) < c.coin) return false;
     if (typeof c.mana === 'number' && (r.mana || 0) < c.mana) return false;
     if (typeof c.favor === 'number' && (r.favor || 0) < c.favor) return false;
     return true;
-  }, [resources]);
+  }, [resources, unlockedCount]);
 
   // Generate star field background (reduced count for performance)
   useEffect(() => {

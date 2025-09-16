@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ResponsivePanel, ResponsiveButton } from '../ResponsiveHUDPanels';
 import { useHUDPanel } from '../HUDPanelRegistry';
-import { generateSkillTree } from '../../skills/generate';
+import { calculateNodeCost, generateSkillTree } from '../../skills/generate';
 import type { SkillNode } from '../../skills/types';
 import SkillTreeModal from '../../skills/SkillTreeModal';
 
@@ -30,7 +30,6 @@ export function ModularSkillTreePanel({ seed = 12345, onUnlock, variant = 'compa
     props: { seed, variant }
   });
 
-  const tree = useMemo(() => generateSkillTree(seed), [seed]);
   const [query, setQuery] = useState('');
   const [showAll, setShowAll] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<Record<SkillNode['category'], boolean>>({
@@ -45,6 +44,9 @@ export function ModularSkillTreePanel({ seed = 12345, onUnlock, variant = 'compa
   useEffect(() => {
     try { localStorage.setItem('ad_skills_unlocked', JSON.stringify(unlocked)); } catch {}
   }, [unlocked]);
+
+  const unlockedCount = useMemo(() => Object.values(unlocked).filter(Boolean).length, [unlocked]);
+  const tree = useMemo(() => generateSkillTree(seed, 8, { unlockedCount }), [seed, unlockedCount]);
 
   const canUnlock = (n: SkillNode) => {
     // prerequisites
@@ -78,12 +80,12 @@ export function ModularSkillTreePanel({ seed = 12345, onUnlock, variant = 'compa
 
   const handleUnlock = (n: SkillNode) => {
     if (!canUnlock(n)) return;
-    try { window.dispatchEvent(new CustomEvent('ad_unlock_skill', { detail: n })); } catch {}
+    const cost = calculateNodeCost(n, unlockedCount);
+    try { window.dispatchEvent(new CustomEvent('ad_unlock_skill', { detail: { ...n, cost } })); } catch {}
     setUnlocked(prev => ({ ...prev, [n.id]: true }));
   };
 
   const available = useMemo(() => tree.nodes.filter(n => canUnlock(n) && !unlocked[n.id]), [tree, unlocked]);
-  const unlockedCount = useMemo(() => Object.values(unlocked).filter(Boolean).length, [unlocked]);
   const filtered = useMemo(() => {
     const base = available.filter(n => categoryFilter[n.category]);
     if (!query) return base;
@@ -193,7 +195,8 @@ export function ModularSkillTreePanel({ seed = 12345, onUnlock, variant = 'compa
           };
           const colors = categoryColors[n.category];
           const isHighlighted = trend === n.category;
-          
+          const cost = calculateNodeCost(n, unlockedCount);
+
           return (
             <div 
               key={n.id} 
@@ -221,9 +224,9 @@ export function ModularSkillTreePanel({ seed = 12345, onUnlock, variant = 'compa
                   <div className="flex items-center gap-3 text-[11px] text-gray-400">
                     <span className="capitalize font-medium">{n.category}</span>
                     <div className="flex items-center gap-1">
-                      {n.cost.coin && <span className="flex items-center gap-0.5">🜚 {n.cost.coin}</span>}
-                      {n.cost.mana && <span className="flex items-center gap-0.5">✨ {n.cost.mana}</span>}
-                      {n.cost.favor && <span className="flex items-center gap-0.5">☼ {n.cost.favor}</span>}
+                      {cost.coin && <span className="flex items-center gap-0.5">🜚 {cost.coin}</span>}
+                      {cost.mana && <span className="flex items-center gap-0.5">✨ {cost.mana}</span>}
+                      {cost.favor && <span className="flex items-center gap-0.5">☼ {cost.favor}</span>}
                     </div>
                   </div>
                 </div>
