@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
-import { SupabaseUnitOfWork } from '@arcane/infrastructure/supabase'
-import { SIM_BUILDINGS } from '@engine'
-import { processTick } from '@engine'
 import { config } from '@/infrastructure/config'
+import { SupabaseUnitOfWork } from '@arcane/infrastructure/supabase'
+import { processTick, SIM_BUILDINGS } from '@engine'
+import type { GameStateUpdatePayload, EngineState } from './types'
 
 // Advance one cycle: delegate to engine and persist results
 export async function POST() {
@@ -15,35 +15,40 @@ export async function POST() {
 
   const accepted = await uow.proposals.listByState(state.id, ['accepted'])
 
-  const { state: nextState, crisis } = processTick(state as any, accepted ?? [], SIM_BUILDINGS)
+  const { state: nextState, crisis } = processTick(state, accepted, SIM_BUILDINGS)
+  const isoNow = new Date().toISOString()
+  const updatePayload: GameStateUpdatePayload = {
+    cycle: nextState.cycle,
+    max_cycle: nextState.max_cycle,
+    resources: nextState.resources,
+    workers: nextState.workers,
+    buildings: nextState.buildings ?? [],
+    routes: nextState.routes ?? [],
+    edicts: nextState.edicts ?? undefined,
+    updated_at: isoNow,
+    last_tick_at: isoNow,
+  }
 
-  let updated
+  let updated: EngineState = nextState
   try {
-    updated = await uow.gameStates.update(state.id, {
-      cycle: nextState.cycle,
-      max_cycle: nextState.max_cycle,
-      resources: nextState.resources,
-      workers: nextState.workers,
-      buildings: nextState.buildings ?? [],
-      routes: nextState.routes ?? [],
-      edicts: nextState.edicts ?? undefined,
-      updated_at: new Date().toISOString(),
-      last_tick_at: new Date().toISOString() as any,
-    })
+    updated = await uow.gameStates.update(state.id, updatePayload)
   } catch (upErr: unknown) {
     const message = upErr instanceof Error ? upErr.message : String(upErr)
     return NextResponse.json({ error: message }, { status: 500 })
   }
 
-  if ((accepted?.length ?? 0) > 0) {
+  if (accepted.length > 0) {
     await uow.proposals.updateMany(
-      accepted!.map(p => p.id),
+      accepted.map(p => p.id),
       { status: 'applied' },
     )
   }
 
   if (crisis) {
-    try { updated = await uow.gameStates.update(state.id, { auto_ticking: false } as any) } catch {}
+    const disableAutoTick: Partial<EngineState> = { auto_ticking: false }
+    try {
+      updated = await uow.gameStates.update(state.id, disableAutoTick)
+    } catch {}
   }
   return NextResponse.json({ state: updated, crisis })
 }
