@@ -60,6 +60,24 @@ export default function ChunkedIsometricGrid({
   const lastMemoryCleanupRef = useRef<number>(0);
   const memoryStatsRef = useRef({ totalSprites: 0, totalTextures: 0, totalContainers: 0 });
   const renderStatsRef = useRef({ chunksLoaded: 0, chunksUnloaded: 0, spritesCreated: 0, spritesDestroyed: 0 });
+  const onTileHoverRef = useRef(onTileHover);
+  const onTileClickRef = useRef(onTileClick);
+
+  useEffect(() => {
+    onTileHoverRef.current = onTileHover;
+  }, [onTileHover]);
+
+  useEffect(() => {
+    onTileClickRef.current = onTileClick;
+  }, [onTileClick]);
+
+  const handleTileHover = useCallback((x: number, y: number, tileType?: string) => {
+    onTileHoverRef.current?.(x, y, tileType);
+  }, []);
+
+  const handleTileClick = useCallback((x: number, y: number, tileType?: string) => {
+    onTileClickRef.current?.(x, y, tileType);
+  }, []);
 
   // Convert world coordinates to chunk coordinates (via inverse isometric transform)
   const worldToChunk = useCallback((worldX: number, worldY: number) => {
@@ -349,8 +367,8 @@ export default function ChunkedIsometricGrid({
 
   // Initialize world container
   useEffect(() => {
-    if (!viewport || isInitialized) return;
-    
+    if (!viewport || worldContainerRef.current) return;
+
     const worldContainer = new PIXI.Container();
     worldContainer.name = 'chunked-world';
     worldContainer.sortableChildren = true;
@@ -378,8 +396,8 @@ export default function ChunkedIsometricGrid({
         }
         return 'grass';
       },
-      onTileHover,
-      onTileClick,
+      onTileHover: handleTileHover,
+      onTileClick: handleTileClick,
     });
     
     // Set initial viewport position and zoom
@@ -451,9 +469,7 @@ export default function ChunkedIsometricGrid({
       // NOTE: Do not set state in cleanup to avoid triggering re-renders during effect teardown
       // setIsInitialized(false);
     };
-  // Intentionally exclude onTileHover/onTileClick and isInitialized to avoid re-init/cleanup loops
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [viewport, tileWidth, tileHeight, chunkSize]);
+  }, [viewport, tileWidth, tileHeight, chunkSize, handleTileHover, handleTileClick]);
 
   // Handle viewport changes with throttling
   useEffect(() => {
