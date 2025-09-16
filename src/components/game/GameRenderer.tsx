@@ -167,9 +167,21 @@ function GameRendererContent({
 
   return (
     <div ref={containerRef} className="relative w-full h-full bg-gray-900">
-      {/* Grid rendering is now handled by ChunkedIsometricGrid in PlayPageInternal */}
-      {/* Removed GameCanvas and IsometricGrid to prevent flickering from multiple overlapping grid systems */}
-      
+      <GameCanvas
+        width={dims.w}
+        height={dims.h}
+        onTileHover={onTileHover}
+        onTileClick={onTileClick}
+      />
+
+      {gridSize > 0 && (
+        <div className="absolute bottom-4 right-4 hidden sm:block pointer-events-auto">
+          <div className="bg-gray-900/80 border border-gray-700 rounded-lg shadow-lg p-2">
+            <MiniMap gridSize={gridSize} />
+          </div>
+        </div>
+      )}
+
       {showHelp && (
         <div className="absolute top-2 left-2 pointer-events-none">
           <div className="bg-gray-800/90 backdrop-blur-sm border border-gray-700 rounded-lg shadow-md px-3 py-2 text-[11px] sm:text-xs text-gray-200 max-w-xs pointer-events-none">
