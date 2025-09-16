@@ -464,10 +464,16 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   // Chunk fetching for unknown tiles
   const fetchChunk = useCallback(async (chunkX: number, chunkY: number, chunkSize: number = 16) => {
     try {
-      const response = await fetch(`/api/map/chunk?x=${chunkX}&y=${chunkY}&size=${chunkSize}&seed=${citizensSeed}`);
+      const response = await fetch(
+        `/api/map/chunk?chunkX=${chunkX}&chunkY=${chunkY}&chunkSize=${chunkSize}&seed=${citizensSeed}&detail=minimal`
+      );
       if (!response.ok) return null;
       const data = await response.json();
-      return data.tiles as string[][];
+      const tiles = data?.tiles;
+      if (!Array.isArray(tiles)) {
+        return null;
+      }
+      return tiles as string[][];
     } catch (error) {
       logger.warn('Failed to fetch chunk:', error);
       return null;

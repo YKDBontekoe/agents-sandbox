@@ -7,20 +7,45 @@ import logger from "@/lib/logger";
 import { worldToGrid } from "@/lib/isometric";
 import { createTileSprite, type GridTile } from "./grid/TileRenderer";
 import { TileOverlay } from "./grid/TileOverlay";
+import type { RegionFeatures } from "@/lib/world/generator";
 
-interface ChunkData {
-  chunk: string[][];
+interface ChunkFieldMaps {
+  height: number[][];
+  temperature: number[][];
+  moisture: number[][];
+  climate: string[][];
+  isRiver: boolean[][];
+  isWater: boolean[][];
+}
+
+interface ChunkMetadata {
+  dominantClimate: string | null;
+  dominantBiome: string | null;
+  riverCount: number;
+  coastlineTiles: number;
+  elevation: { min: number; max: number; mean: number };
+}
+
+interface ChunkApiResponse {
   chunkX: number;
   chunkY: number;
   chunkSize: number;
-  biome: string;
-  metadata: {
-    hasVillage: boolean;
-    hasRuins: boolean;
-    hasSpecialResources: boolean;
-    waterCoverage: number;
-    forestCoverage: number;
-  };
+  seed: number;
+  tiles: string[][];
+  biomes?: string[][];
+  fields?: ChunkFieldMaps;
+  features?: RegionFeatures;
+  metadata?: ChunkMetadata;
+}
+
+interface ChunkData {
+  chunkX: number;
+  chunkY: number;
+  chunkSize: number;
+  tiles: string[][];
+  biomes?: string[][];
+  features?: RegionFeatures;
+  metadata?: ChunkMetadata;
 }
 
 interface LoadedChunk {
@@ -88,7 +113,7 @@ export default function ChunkedIsometricGrid({
   }, [chunkSize, tileWidth, tileHeight]);
 
   // Load chunk data from API
-  const loadChunkData = useCallback(async (chunkX: number, chunkY: number): Promise<ChunkData | null> => {
+  const loadChunkData = useCallback(async (chunkX: number, chunkY: number): Promise<ChunkApiResponse | null> => {
     try {
       const response = await fetch(
         `/api/map/chunk?chunkX=${chunkX}&chunkY=${chunkY}&chunkSize=${chunkSize}&seed=${worldSeed}`
@@ -96,7 +121,8 @@ export default function ChunkedIsometricGrid({
       if (!response.ok) {
         throw new Error(`Failed to load chunk (${chunkX}, ${chunkY}): ${response.statusText}`);
       }
-      return await response.json();
+      const payload = (await response.json()) as ChunkApiResponse;
+      return payload;
     } catch (error) {
       logger.error(`Error loading chunk (${chunkX}, ${chunkY}):`, error);
       return null;
@@ -104,7 +130,7 @@ export default function ChunkedIsometricGrid({
   }, [chunkSize, worldSeed]);
 
   // Create visual representation of a chunk
-  const createChunkContainer = useCallback((chunkData: ChunkData): { container: PIXI.Container; tiles: Map<string, GridTile> } => {
+  const createChunkContainer = useCallback((chunkData: ChunkApiResponse): { container: PIXI.Container; tiles: Map<string, GridTile> } => {
     const container = new PIXI.Container();
     container.name = `chunk-${chunkData.chunkX}-${chunkData.chunkY}`;
     container.sortableChildren = true;
@@ -116,12 +142,22 @@ export default function ChunkedIsometricGrid({
       return { container, tiles };
     }
 
+    const heightMap = chunkData.fields?.height;
+    const temperatureMap = chunkData.fields?.temperature;
+    const moistureMap = chunkData.fields?.moisture;
+    const climateMap = chunkData.fields?.climate;
+
     // Create tiles for this chunk
     for (let localY = 0; localY < chunkData.chunkSize; localY++) {
       for (let localX = 0; localX < chunkData.chunkSize; localX++) {
         const globalX = chunkData.chunkX * chunkData.chunkSize + localX;
         const globalY = chunkData.chunkY * chunkData.chunkSize + localY;
-        const tileType = chunkData.chunk[localY]?.[localX] || 'grass';
+        const tileType = chunkData.tiles[localY]?.[localX] || 'grass';
+        const biome = chunkData.biomes?.[localY]?.[localX];
+        const heightValue = heightMap?.[localY]?.[localX];
+        const temperatureValue = temperatureMap?.[localY]?.[localX];
+        const moistureValue = moistureMap?.[localY]?.[localX];
+        const climateValue = climateMap?.[localY]?.[localX];
 
         // Create tile sprite with global coordinates
         const tile = createTileSprite(
@@ -130,10 +166,27 @@ export default function ChunkedIsometricGrid({
           container,
           tileWidth,
           tileHeight,
-          [[tileType]],
+          chunkData.tiles,
           app.renderer,
+          { tileTypeOverride: tileType },
         );
         tile.tileType = tileType;
+        tile.biome = biome;
+        tile.height = heightValue;
+        tile.temperature = temperatureValue;
+        tile.moisture = moistureValue;
+        tile.climate = climateValue;
+
+        if (typeof heightValue === 'number' && !['water', 'deep_water', 'river', 'coast'].includes(tileType)) {
+          const shade = Math.max(0.65, Math.min(1, 0.72 + heightValue * 0.28));
+          const shadeChannel = Math.round(shade * 255);
+          const tintHex = (shadeChannel << 16) | (shadeChannel << 8) | shadeChannel;
+          tile.sprite.tint = tintHex;
+        }
+
+        if (tileType === 'river') {
+          tile.sprite.alpha = 0.95;
+        }
 
         const key = `${globalX},${globalY}`;
         tiles.set(key, tile);
@@ -174,7 +227,8 @@ export default function ChunkedIsometricGrid({
       }
       
       const { container, tiles } = createChunkContainer(chunkData);
-      
+      const { fields: _fields, ...persistable } = chunkData;
+
       // Update memory stats
       memoryStatsRef.current.totalContainers++;
       memoryStatsRef.current.totalSprites += tiles.size;
@@ -187,7 +241,15 @@ export default function ChunkedIsometricGrid({
       logger.debug(`[GRAPHICS] Added chunk container ${chunkKey} to world container. World children: ${worldContainerRef.current.children.length}`);
       
       const loadedChunk: LoadedChunk = {
-        data: chunkData,
+        data: {
+          chunkX: persistable.chunkX,
+          chunkY: persistable.chunkY,
+          chunkSize: persistable.chunkSize,
+          tiles: persistable.tiles,
+          biomes: persistable.biomes,
+          features: persistable.features,
+          metadata: persistable.metadata,
+        },
         container,
         tiles,
         lastAccessed: Date.now(),
@@ -392,7 +454,7 @@ export default function ChunkedIsometricGrid({
         if (chunk) {
           const localX = x - chunkX * chunkSize;
           const localY = y - chunkY * chunkSize;
-          return chunk.data.chunk[localY]?.[localX] || 'grass';
+          return chunk.data.tiles[localY]?.[localX] || 'grass';
         }
         return 'grass';
       },
