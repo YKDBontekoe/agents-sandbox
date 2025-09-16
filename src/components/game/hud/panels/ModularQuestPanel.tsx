@@ -18,10 +18,6 @@ const QUESTS: Array<{ id: string; text: string }> = [
 ];
 
 export default function ModularQuestPanel({ completed, variant = 'default', collapsible = true }: ModularQuestPanelProps) {
-  // Count remaining to surface a smart title and auto-hide when done
-  const remaining = QUESTS.reduce((n, q) => n + (completed[q.id] ? 0 : 1), 0);
-  const next = QUESTS.find(q => !completed[q.id]);
-  if (remaining === 0) return null; // hide panel entirely when all early quests are done
   // Default to collapsed; users can peek as needed
   const [isCollapsed, setIsCollapsed] = useState(true);
 
@@ -36,6 +32,13 @@ export default function ModularQuestPanel({ completed, variant = 'default', coll
     component: ModularQuestPanel,
     props: { variant, collapsible }
   });
+
+  // Count remaining to surface a smart title and auto-hide when done
+  const remaining = QUESTS.reduce((n, q) => n + (completed[q.id] ? 0 : 1), 0);
+  if (remaining === 0) {
+    return null; // hide panel entirely when all early quests are done
+  }
+  const next = QUESTS.find(q => !completed[q.id]);
 
   const titleIcon = (
     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

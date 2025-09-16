@@ -8,28 +8,31 @@ const level = config.logLevel as log.LogLevelDesc;
 logger.setLevel(level);
 
 // Enhanced logger that also outputs to server console in development
+const shouldMirrorToConsole = () =>
+  config.nodeEnv === 'development' && typeof window === 'undefined';
+
 const enhancedLogger = {
-  debug: (message: string, ...args: any[]) => {
+  debug: (message: string, ...args: unknown[]) => {
     logger.debug(message, ...args);
-    if (config.nodeEnv === 'development' && typeof window === 'undefined') {
+    if (shouldMirrorToConsole()) {
       console.log(`[DEBUG] ${message}`, ...args);
     }
   },
-  info: (message: string, ...args: any[]) => {
+  info: (message: string, ...args: unknown[]) => {
     logger.info(message, ...args);
-    if (config.nodeEnv === 'development' && typeof window === 'undefined') {
+    if (shouldMirrorToConsole()) {
       console.log(`[INFO] ${message}`, ...args);
     }
   },
-  warn: (message: string, ...args: any[]) => {
+  warn: (message: string, ...args: unknown[]) => {
     logger.warn(message, ...args);
-    if (config.nodeEnv === 'development' && typeof window === 'undefined') {
+    if (shouldMirrorToConsole()) {
       console.warn(`[WARN] ${message}`, ...args);
     }
   },
-  error: (message: string, ...args: any[]) => {
+  error: (message: string, ...args: unknown[]) => {
     logger.error(message, ...args);
-    if (config.nodeEnv === 'development' && typeof window === 'undefined') {
+    if (shouldMirrorToConsole()) {
       console.error(`[ERROR] ${message}`, ...args);
     }
   }
