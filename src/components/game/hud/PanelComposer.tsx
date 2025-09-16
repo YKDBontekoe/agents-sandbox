@@ -66,6 +66,7 @@ export interface PanelComposerProps {
   onGameAction: (action: string, data?: unknown) => void;
   className?: string;
   map?: MiniMapDescriptor;
+  isLeylineDrawing?: boolean;
 }
 
 export function PanelComposer({
@@ -75,6 +76,7 @@ export function PanelComposer({
   cityManagement,
   map,
   className = '',
+  isLeylineDrawing = false,
 }: PanelComposerProps) {
   const { currentPreset } = useHUDLayoutPresets();
 
@@ -153,11 +155,13 @@ export function PanelComposer({
           onOpenEdicts={() => onGameAction('open-edicts')}
           onOpenOmens={() => onGameAction('open-omens')}
           onOpenSettings={() => onGameAction('open-settings')}
+          onToggleLeylineDrawing={() => onGameAction('toggle-leylines')}
           intervalMs={gameData.time.intervalMs}
           onChangeIntervalMs={(ms) =>
             onGameAction('set-speed', { intervalMs: ms, ms })
           }
           variant={currentPreset.panelVariants['action-panel'] || 'default'}
+          isLeylineDrawing={isLeylineDrawing}
         />
         <div className="mt-2" />
         <ModularSkillTreePanel

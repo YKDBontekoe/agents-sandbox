@@ -64,6 +64,9 @@ export interface GameLayersProps {
   leylines: Leyline[];
   selectedLeyline: Leyline | null;
   setSelectedLeyline: (l: Leyline | null) => void;
+  isLeylineDrawing?: boolean;
+  onLeylineCreate?: (fromX: number, fromY: number, toX: number, toY: number) => void;
+  onLeylineRemove?: (leylineId: string) => void;
   resources: GameResources;
   cycle: number;
   constructionEvents: Array<{
@@ -101,6 +104,9 @@ const GameLayers: React.FC<GameLayersProps> = ({
   leylines,
   selectedLeyline,
   setSelectedLeyline,
+  isLeylineDrawing = false,
+  onLeylineCreate,
+  onLeylineRemove,
   resources,
   cycle,
   constructionEvents,
@@ -146,7 +152,14 @@ const GameLayers: React.FC<GameLayersProps> = ({
         affordable={previewTypeId ? ((tutorialFree[previewTypeId] || 0) > 0 || (simResources ? canAfford(SIM_BUILDINGS[previewTypeId].cost, simResources) : false)) : false}
       />
       <DistrictSprites districts={districts} tileTypes={tileTypes} onDistrictHover={() => {}} />
-      <LeylineSystem leylines={leylines} onLeylineCreate={() => {}} onLeylineSelect={setSelectedLeyline} selectedLeyline={selectedLeyline} isDrawingMode={false} />
+      <LeylineSystem
+        leylines={leylines}
+        onLeylineCreate={onLeylineCreate}
+        onLeylineSelect={setSelectedLeyline}
+        selectedLeyline={selectedLeyline}
+        isDrawingMode={isLeylineDrawing}
+        onLeylineRemove={onLeylineRemove}
+      />
       <HeatLayer gridSize={Math.max(tileTypes.length, tileTypes[0]?.length ?? 0)} tileWidth={64} tileHeight={32} unrest={resources.unrest} threat={resources.threat} />
       {(() => {
         const connected = new Set<string>();

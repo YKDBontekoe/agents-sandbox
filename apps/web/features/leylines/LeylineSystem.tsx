@@ -19,6 +19,7 @@ export interface LeylineSystemProps {
   onLeylineSelect?: (leyline: Leyline | null) => void;
   selectedLeyline?: Leyline | null;
   isDrawingMode?: boolean;
+  onLeylineRemove?: (leylineId: string) => void;
 }
 
 export const LeylineSystem: React.FC<LeylineSystemProps> = ({
@@ -26,7 +27,8 @@ export const LeylineSystem: React.FC<LeylineSystemProps> = ({
   onLeylineCreate,
   onLeylineSelect,
   selectedLeyline,
-  isDrawingMode = false
+  isDrawingMode = false,
+  onLeylineRemove,
 }) => {
   const { app, viewport } = useGameContext();
   const containerRef = useRef<PIXI.Container | null>(null);
@@ -111,12 +113,22 @@ export const LeylineSystem: React.FC<LeylineSystemProps> = ({
       fromWorld.x + thickness, fromWorld.y + thickness
     ]);
     
-    graphics.on('pointerdown', () => {
+    graphics.on('pointerdown', (event: PIXI.FederatedPointerEvent) => {
+      if (event.button === 2) {
+        event.preventDefault();
+        onLeylineRemove?.(leyline.id);
+        return;
+      }
       onLeylineSelect?.(leyline);
     });
-    
+
+    graphics.on('rightdown', (event: PIXI.FederatedPointerEvent) => {
+      event.preventDefault();
+      onLeylineRemove?.(leyline.id);
+    });
+
     return graphics;
-  }, [gridToWorld, selectedLeyline, onLeylineSelect]);
+  }, [gridToWorld, selectedLeyline, onLeylineSelect, onLeylineRemove]);
 
   // Create capacity label
   const createCapacityLabel = useCallback((leyline: Leyline) => {
