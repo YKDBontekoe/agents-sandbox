@@ -15,6 +15,7 @@ import {
   drawConnections,
 } from './effects';
 import SkillTooltipContent from './SkillTooltipContent';
+import { collectUnlockBlockers } from './unlock';
 
 export default function ConstellationSkillTree({ tree, unlocked, onUnlock, colorFor, focusNodeId, resources, onSelectNode }: ConstellationSkillTreeProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -201,35 +202,7 @@ export default function ConstellationSkillTree({ tree, unlocked, onUnlock, color
 
   // Unified unlock check with exclusivity and additional conditions
   const checkUnlock = useCallback((node: SkillNode) => {
-    const reasons: string[] = [];
-    if (node.requires && node.requires.length > 0) {
-      node.requires.forEach((reqId) => {
-        if (!unlocked[reqId]) {
-          const title = tree.nodes.find(n => n.id === reqId)?.title || reqId;
-          reasons.push(`Requires: ${title}`);
-        }
-      });
-    }
-    if (node.exclusiveGroup) {
-      const group = node.exclusiveGroup;
-      const taken = tree.nodes.find(
-        n => n.exclusiveGroup === group && n.id !== node.id && unlocked[n.id],
-      );
-      if (taken) reasons.push(`Path chosen: ${taken.title}`);
-    }
-    if (node.unlockConditions && node.unlockConditions.length > 0) {
-      const unlockConditions = node.unlockConditions;
-      const unlockedIds = Object.keys(unlocked).filter(k => unlocked[k]);
-      const byCat: Record<SkillNode['category'], number> = { economic:0,military:0,mystical:0,infrastructure:0,diplomatic:0,social:0 };
-      unlockedIds.forEach(id => { const n = tree.nodes.find(nn => nn.id === id); if (n) byCat[n.category] = (byCat[n.category]||0)+1; });
-      const highestTier = unlockedIds.reduce((m, id) => { const n = tree.nodes.find(nn => nn.id === id); return n && typeof n.tier === 'number' ? Math.max(m, n.tier) : m; }, -1);
-      unlockConditions.forEach(cond => {
-        if (cond.type === 'min_unlocked' && unlockedIds.length < cond.value) reasons.push(`Unlock at least ${cond.value} skills`);
-        if (cond.type === 'category_unlocked_at_least' && (byCat[cond.category]||0) < cond.value) reasons.push(`Unlock ${cond.value} ${cond.category} skills`);
-        if (cond.type === 'max_unlocked_in_category' && (byCat[cond.category]||0) > cond.value) reasons.push(`Too many in ${cond.category}: max ${cond.value}`);
-        if (cond.type === 'tier_before_required' && highestTier < cond.tier) reasons.push(`Reach tier ${cond.tier} first`);
-      });
-    }
+    const reasons = collectUnlockBlockers({ node, unlocked, nodes: tree.nodes });
     return { ok: reasons.length === 0, reasons };
   }, [tree.nodes, unlocked]);
 
