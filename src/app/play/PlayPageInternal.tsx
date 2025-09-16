@@ -564,6 +564,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     const normalized = sanitizeSkillList(value);
     setUnlockedSkillIds(prev => (arraysEqual(prev, normalized) ? prev : normalized));
   }, [setUnlockedSkillIds]);
+
   const [selectedTile, setSelectedTile] = useState<{ x: number; y: number; tileType?: string } | null>(null);
   const [hoverTile, setHoverTile] = useState<{ x: number; y: number; tileType?: string } | null>(null);
   const [previewTypeId, setPreviewTypeId] = useState<BuildTypeId | null>(null);
@@ -616,6 +617,43 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
       logger.error('Failed to save state:', err);
     }
   }, [state]);
+
+  // Listen for skill unlock events to deduct costs & persist the latest state slices
+  const onUnlock = useCallback(async (e: any) => {
+    const n = e.detail as SkillNode;
+    if (unlockedSkillIds.includes(n.id)) return;
+    if (!state) return;
+
+    const needed = { coin: n.cost.coin || 0, mana: n.cost.mana || 0, favor: n.cost.favor || 0 } as Record<string, number>;
+    const have = {
+      coin: state.resources.coin || 0,
+      mana: state.resources.mana || 0,
+      favor: state.resources.favor || 0,
+    } as Record<string, number>;
+    if (have.coin < needed.coin || have.mana < needed.mana || have.favor < needed.favor) return;
+
+    const newResServer = { ...state.resources } as Record<string, number>;
+    newResServer.coin = Math.max(0, newResServer.coin - needed.coin);
+    newResServer.mana = Math.max(0, newResServer.mana - needed.mana);
+    newResServer.favor = Math.max(0, newResServer.favor - needed.favor);
+
+    const nextSkills = [...unlockedSkillIds, n.id];
+    setState(prev => prev ? { ...prev, resources: newResServer, skills: nextSkills as any } : prev);
+    await saveState({ resources: newResServer, buildings: placedBuildings, routes, workers: state?.workers, skills: nextSkills } as any);
+    setUnlockedSkillIds(nextSkills);
+    notify({ type: 'success', title: 'Skill Unlocked', message: n.title });
+
+    try {
+      const prev = JSON.parse(localStorage.getItem('ad_skills_unlocked') || '{}');
+      prev[n.id] = true;
+      localStorage.setItem('ad_skills_unlocked', JSON.stringify(prev));
+    } catch {}
+  }, [state, unlockedSkillIds, placedBuildings, routes, saveState, notify]);
+
+  useEffect(() => {
+    window.addEventListener('ad_unlock_skill', onUnlock as any);
+    return () => window.removeEventListener('ad_unlock_skill', onUnlock as any);
+  }, [onUnlock]);
 
   const confirmMapSize = useCallback(async () => {
     // Limit map size to prevent performance issues - max 48 for stability
