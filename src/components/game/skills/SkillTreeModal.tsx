@@ -63,28 +63,56 @@ export default function SkillTreeModal({ isOpen, onClose, resources }: SkillTree
   }, [tree, unlocked]);
 
   const plannedPath = useMemo(() => selectedNodeId ? computePathTo(selectedNodeId) : [], [selectedNodeId, computePathTo]);
-  const plannedCost = useMemo(() => {
-    return plannedPath.reduce<{ coin: number; mana: number; favor: number }>((acc, n) => ({
-      coin: acc.coin + (n.cost.coin || 0),
-      mana: acc.mana + (n.cost.mana || 0),
-      favor: acc.favor + (n.cost.favor || 0)
-    }), { coin: 0, mana: 0, favor: 0 });
-  }, [plannedPath]);
 
-  // Simulate spend: find failing step id given current resources
-  const failingNodeId = useMemo(() => {
-    if (!resources || !selectedNodeId) return null;
-    const target = tree.nodes.find(n => n.id === selectedNodeId);
-    const path = [...plannedPath, ...(target ? [target] : [])];
-    let coin = resources.coin || 0, mana = resources.mana || 0, favor = resources.favor || 0;
-    for (const n of path) {
-      const c: { coin?: number; mana?: number; favor?: number } = n.cost || {};
-      const needCoin = c.coin || 0, needMana = c.mana || 0, needFavor = c.favor || 0;
-      if (coin < needCoin || mana < needMana || favor < needFavor) return n.id;
-      coin -= needCoin; mana -= needMana; favor -= needFavor;
+  const { fullPlannedPath, failingNodeId } = useMemo(() => {
+    if (!selectedNodeId) {
+      return { fullPlannedPath: [] as SkillNode[], failingNodeId: null as string | null };
     }
-    return null;
-  }, [resources, selectedNodeId, plannedPath, tree.nodes]);
+
+    const target = tree.nodes.find(n => n.id === selectedNodeId);
+    const combinedPath = [...plannedPath, ...(target ? [target] : [])];
+
+    if (!resources) {
+      return { fullPlannedPath: combinedPath, failingNodeId: null };
+    }
+
+    let coin = resources.coin ?? 0;
+    let mana = resources.mana ?? 0;
+    let favor = resources.favor ?? 0;
+    let failure: string | null = null;
+
+    for (const node of combinedPath) {
+      const cost = node.cost || {};
+      const needCoin = cost.coin ?? 0;
+      const needMana = cost.mana ?? 0;
+      const needFavor = cost.favor ?? 0;
+
+      if (coin < needCoin || mana < needMana || favor < needFavor) {
+        failure = node.id;
+        break;
+      }
+
+      coin -= needCoin;
+      mana -= needMana;
+      favor -= needFavor;
+    }
+
+    return { fullPlannedPath: combinedPath, failingNodeId: failure };
+  }, [plannedPath, resources, selectedNodeId, tree.nodes]);
+
+  const plannedCost = useMemo(() => {
+    return fullPlannedPath.reduce<{ coin: number; mana: number; favor: number }>((acc, node) => ({
+      coin: acc.coin + (node.cost?.coin ?? 0),
+      mana: acc.mana + (node.cost?.mana ?? 0),
+      favor: acc.favor + (node.cost?.favor ?? 0)
+    }), { coin: 0, mana: 0, favor: 0 });
+  }, [fullPlannedPath]);
+
+  const failureStep = useMemo(() => {
+    if (!failingNodeId) return null;
+    const index = fullPlannedPath.findIndex(node => node.id === failingNodeId);
+    return index >= 0 ? index + 1 : null;
+  }, [failingNodeId, fullPlannedPath]);
 
   // Load state and pinned targets on open
   useEffect(() => {
@@ -177,14 +205,14 @@ export default function SkillTreeModal({ isOpen, onClose, resources }: SkillTree
                   )}
                 </div>
                 {/* Path cost summary */}
-                {selectedNodeId && plannedPath.length > 0 && (
+                {selectedNodeId && fullPlannedPath.length > 0 && (
                   <div className="hidden md:flex items-center gap-2 text-xs bg-gray-800/70 border border-gray-700 rounded px-2 py-1 text-gray-200">
-                    <span>Path: {plannedPath.length} steps</span>
+                    <span>Path: {fullPlannedPath.length} steps</span>
                     <span>• 🜚 {plannedCost.coin}</span>
                     <span>• ✨ {plannedCost.mana}</span>
                     <span>• ☼ {plannedCost.favor}</span>
-                    {failingNodeId && (
-                      <span className="text-red-300">• fails at step: {plannedPath.findIndex(n => n.id === failingNodeId) + 1}</span>
+                    {failureStep !== null && (
+                      <span className="text-red-300">• fails at step: {failureStep}</span>
                     )}
                   </div>
                 )}
