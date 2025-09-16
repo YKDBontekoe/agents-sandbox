@@ -1223,44 +1223,22 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   // To keep the patch concise, we delegate the JSX rendering to the existing file via a dynamic import
   // pattern would be overkill here. Instead, we mirror the original conditional gates:
 
-  if (error) {
-    return (
-      <div className="h-screen flex items-center justify-center bg-red-50">
-        <div className="max-w-lg text-center">
-          <h2 className="text-xl font-semibold text-red-800">Error</h2>
-          <p className="mt-2 text-red-700">{error}</p>
-          <button className="mt-4 px-4 py-2 bg-red-700 text-white rounded" onClick={() => { setError(null); fetchState().catch(() => {}); }}>Retry</button>
-        </div>
-      </div>
-    );
-  }
-
-  if (!state) {
-    return (
-      <div className="h-screen flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-gray-600">Initializing game state...</p>
-        </div>
-      </div>
-    );
-  }
-
   const resources: GameResources = {
-    grain: state.resources.grain || 0,
-    coin: state.resources.coin || 0,
-    mana: state.resources.mana || 0,
-    favor: state.resources.favor || 0,
-    wood: (simResources?.wood ?? 0),
-    planks: (simResources?.planks ?? 0),
-    unrest: state.resources.unrest || 0,
-    threat: state.resources.threat || 0
+    grain: state?.resources?.grain ?? 0,
+    coin: state?.resources?.coin ?? 0,
+    mana: state?.resources?.mana ?? 0,
+    favor: state?.resources?.favor ?? 0,
+    wood: simResources?.wood ?? 0,
+    planks: simResources?.planks ?? 0,
+    unrest: state?.resources?.unrest ?? 0,
+    threat: state?.resources?.threat ?? 0,
   };
 
   const currentTime = timeSystem.getCurrentTime();
-  const gameTime: GameTime = { 
+  const gameTime: GameTime = {
     cycle: Math.floor(currentTime.totalMinutes / 60), // Convert to legacy cycle for HUD compatibility
     season: 'spring', // TODO: Implement seasons based on currentTime.month
-    timeRemaining 
+    timeRemaining,
   };
   const totalAssigned = placedBuildings.reduce((sum, b) => sum + b.workers, 0);
   const totalWorkers = totalAssigned + (simResources?.workers ?? 0);
@@ -1326,6 +1304,28 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   // Shared PIXI context for Game + HUD (so HUD panels can access viewport)
   const [pixiApp, setPixiApp] = useState<PIXI.Application | null>(null);
   const [pixiViewport, setPixiViewport] = useState<Viewport | null>(null);
+
+  if (error) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-red-50">
+        <div className="max-w-lg text-center">
+          <h2 className="text-xl font-semibold text-red-800">Error</h2>
+          <p className="mt-2 text-red-700">{error}</p>
+          <button className="mt-4 px-4 py-2 bg-red-700 text-white rounded" onClick={() => { setError(null); fetchState().catch(() => {}); }}>Retry</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!state) {
+    return (
+      <div className="h-screen flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-gray-600">Initializing game state...</p>
+        </div>
+      </div>
+    );
+  }
 
   const applyRoads = (tiles: Array<{x:number;y:number}>) => {
     setRoads(prev => {

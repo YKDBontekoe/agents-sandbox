@@ -139,7 +139,7 @@ export default function ViewportManager({
 
     let frameCount = 0;
     let lastTime = performance.now();
-    let fpsHistory: number[] = [];
+    const fpsHistory: number[] = [];
     let monitoringCounter = 0;
     const MONITORING_INTERVAL = 60; // Only check every 60 frames (~1 second at 60fps)
 
