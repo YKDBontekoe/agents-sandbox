@@ -55,6 +55,7 @@ import type { CategoryType } from '@arcane/ui';
 import { simulationSystem, EnhancedGameState } from '@engine'
 import { VisualIndicator } from '@engine';
 import { TimeSystem, timeSystem, TIME_SPEEDS, type TimeSpeed, GameTime as SystemGameTime } from '@engine';
+import { pauseSimulation, resumeSimulation } from './simulationControls';
 
 type BuildTypeId = keyof typeof SIM_BUILDINGS;
 
@@ -276,7 +277,17 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     timeSystemRef.current.start();
   }
   const timeSystem = timeSystemRef.current;
-  
+
+  const stateId = state?.id ?? null;
+
+  const handlePauseSimulation = useCallback(() => {
+    pauseSimulation({ stateId, setIsPaused, controller: timeSystem ?? undefined });
+  }, [stateId, setIsPaused, timeSystem]);
+
+  const handleResumeSimulation = useCallback(() => {
+    resumeSimulation({ stateId, setIsPaused, controller: timeSystem ?? undefined });
+  }, [stateId, setIsPaused, timeSystem]);
+
   // Handle TimeSystem cleanup
   useEffect(() => {
     return () => {
@@ -1753,7 +1764,13 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
               selectedServiceType,
               onServiceTypeSelect: setSelectedServiceType,
               isSimulationRunning: !isPaused,
-              onToggleSimulation: () => setIsPaused(!isPaused),
+              onToggleSimulation: () => {
+                if (isPaused) {
+                  handleResumeSimulation();
+                } else {
+                  handlePauseSimulation();
+                }
+              },
               onResetCity: () => {
                 logger.info('Reset city requested');
                 // Add reset logic here
@@ -1763,15 +1780,11 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
             }}
             onGameAction={(action, payload: any) => {
               if (action === 'advance-cycle') { tick(); if (onboardingStep < 6) setOnboardingStep(6); }
-              if (action === 'pause') { 
-                timeSystem.setSpeed(TIME_SPEEDS.PAUSED);
-                setIsPaused(true);
-                if (state) { void fetch('/api/state', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: state.id, auto_ticking: false }) }); }
+              if (action === 'pause') {
+                handlePauseSimulation();
               }
               if (action === 'resume') {
-                timeSystem.setSpeed(TIME_SPEEDS.NORMAL);
-                setIsPaused(false);
-                if (state) { void fetch('/api/state', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: state.id, auto_ticking: true, last_tick_at: new Date().toISOString() }) }); }
+                handleResumeSimulation();
               }
               if (action === 'set-speed') {
                 if (!state) return;
