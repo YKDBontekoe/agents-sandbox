@@ -42,3 +42,15 @@ export function intervalMsToTimeSpeed(intervalMs: number): TimeSpeed {
 
   return closest.speed;
 }
+
+export function timeSpeedToIntervalMs(speed: TimeSpeed): number {
+  const target = SPEED_RATIO_TARGETS.find(candidate => candidate.speed === speed);
+  if (!target || !Number.isFinite(target.ratio) || target.ratio <= 0) {
+    return BASE_INTERVAL_MS;
+  }
+  const interval = BASE_INTERVAL_MS / target.ratio;
+  if (!Number.isFinite(interval) || interval <= 0) {
+    return BASE_INTERVAL_MS;
+  }
+  return Math.max(1, Math.round(interval));
+}

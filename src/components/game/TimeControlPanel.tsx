@@ -1,22 +1,34 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { timeSystem, TIME_SPEEDS, TimeOfDay, type GameTime, type TimeSpeed } from '@engine';
+import { TIME_SPEEDS, TimeOfDay, type GameTime, type TimeSpeed, type TimeSystem } from '@engine';
 import { faPlay, faPause, faForward, faClock, faSun, faMoon, faCloudSun } from '@fortawesome/free-solid-svg-icons';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 
 interface TimeControlPanelProps {
   className?: string;
+  timeSystem: TimeSystem;
+  onPause: () => void;
+  onResume: () => void;
+  onSetSpeed: (speed: TimeSpeed) => void;
 }
 
-export const TimeControlPanel: React.FC<TimeControlPanelProps> = ({ className = '' }) => {
+export const TimeControlPanel: React.FC<TimeControlPanelProps> = ({
+  className = '',
+  timeSystem,
+  onPause,
+  onResume,
+  onSetSpeed,
+}) => {
   const [currentTime, setCurrentTime] = useState<GameTime>(timeSystem.getCurrentTime());
   const [currentSpeed, setCurrentSpeed] = useState<TimeSpeed>(timeSystem.getCurrentSpeed());
   const [isPaused, setIsPaused] = useState<boolean>(timeSystem.isPaused());
 
   useEffect(() => {
-    // Start the time system
-    timeSystem.start();
+    // Sync with the latest time system snapshot
+    setCurrentTime(timeSystem.getCurrentTime());
+    setCurrentSpeed(timeSystem.getCurrentSpeed());
+    setIsPaused(timeSystem.isPaused());
 
     // Listen for time updates
     const handleTimeUpdate = (time: GameTime) => {
@@ -41,7 +53,7 @@ export const TimeControlPanel: React.FC<TimeControlPanelProps> = ({ className = 
       timeSystem.off('speed-changed', handleSpeedChange);
       timeSystem.off('pause-toggled', handlePauseToggle);
     };
-  }, []);
+  }, [timeSystem]);
 
   // Get time of day icon
   const getTimeOfDayIcon = (timeOfDay: string) => {
@@ -94,12 +106,16 @@ export const TimeControlPanel: React.FC<TimeControlPanelProps> = ({ className = 
 
   // Handle speed change
   const handleSpeedChange = (speed: TimeSpeed) => {
-    timeSystem.setSpeed(speed);
+    onSetSpeed(speed);
   };
 
   // Handle pause toggle
   const handlePauseToggle = () => {
-    timeSystem.togglePause();
+    if (isPaused) {
+      onResume();
+    } else {
+      onPause();
+    }
   };
 
   // Calculate day progress for visual indicator

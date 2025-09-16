@@ -7,7 +7,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import ModularActionPanel from '../../../components/game/hud/panels/ModularActionPanel';
 import { HUDLayoutProvider } from '../../../components/game/hud/HUDLayoutSystem';
 import { HUDPanelRegistryProvider } from '../../../components/game/hud/HUDPanelRegistry';
-import { intervalMsToTimeSpeed, sanitizeIntervalMs } from '../timeSpeedUtils';
+import { intervalMsToTimeSpeed, sanitizeIntervalMs, timeSpeedToIntervalMs } from '../timeSpeedUtils';
 import { TIME_SPEEDS } from '@engine';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -73,6 +73,15 @@ describe('timeSpeedUtils', () => {
     expect(intervalMsToTimeSpeed(7000)).toBe(TIME_SPEEDS.ULTRA_FAST);
     expect(intervalMsToTimeSpeed(2000)).toBe(TIME_SPEEDS.HYPER_SPEED);
     expect(intervalMsToTimeSpeed(-1)).toBe(TIME_SPEEDS.NORMAL);
+  });
+
+  it('maps TimeSpeed tiers to canonical intervals', () => {
+    expect(timeSpeedToIntervalMs(TIME_SPEEDS.PAUSED)).toBe(60000);
+    expect(timeSpeedToIntervalMs(TIME_SPEEDS.NORMAL)).toBe(60000);
+    expect(timeSpeedToIntervalMs(TIME_SPEEDS.FAST)).toBe(30000);
+    expect(timeSpeedToIntervalMs(TIME_SPEEDS.VERY_FAST)).toBe(15000);
+    expect(timeSpeedToIntervalMs(TIME_SPEEDS.ULTRA_FAST)).toBe(7500);
+    expect(timeSpeedToIntervalMs(TIME_SPEEDS.HYPER_SPEED)).toBe(3000);
   });
 });
 

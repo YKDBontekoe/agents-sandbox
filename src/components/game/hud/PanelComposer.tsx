@@ -3,6 +3,7 @@ import { HUDContainer, HUDZone } from './HUDLayoutSystem';
 import { useHUDLayoutPresets } from './HUDLayoutPresets';
 import { ModularResourcePanel } from './panels/ModularResourcePanel';
 import { TimeControlPanel } from '../TimeControlPanel';
+import type { TimeSystem, TimeSpeed } from '@engine';
 import { ModularActionPanel } from './panels/ModularActionPanel';
 import { ModularMiniMapPanel, type MiniMapDescriptor } from './panels/ModularMiniMapPanel';
 import { ModularSkillTreePanel } from './panels/ModularSkillTreePanel';
@@ -66,6 +67,7 @@ export interface PanelComposerProps {
   onGameAction: (action: string, data?: unknown) => void;
   className?: string;
   map?: MiniMapDescriptor;
+  timeSystem: TimeSystem;
 }
 
 export function PanelComposer({
@@ -75,6 +77,7 @@ export function PanelComposer({
   cityManagement,
   map,
   className = '',
+  timeSystem,
 }: PanelComposerProps) {
   const { currentPreset } = useHUDLayoutPresets();
 
@@ -144,7 +147,13 @@ export function PanelComposer({
           />
         )}
         <div className="mt-2" />
-        <TimeControlPanel className="w-full" />
+        <TimeControlPanel
+          className="w-full"
+          timeSystem={timeSystem}
+          onPause={() => onGameAction('pause')}
+          onResume={() => onGameAction('resume')}
+          onSetSpeed={(speed: TimeSpeed) => onGameAction('set-speed', { speed })}
+        />
         <div className="mt-2" />
         <ModularMiniMapPanel map={map} />
         <div className="mt-2" />

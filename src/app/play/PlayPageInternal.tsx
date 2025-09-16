@@ -54,8 +54,8 @@ import type { GameResources, GameTime } from '@/components/game/hud/types';
 import type { CategoryType } from '@arcane/ui';
 import { simulationSystem, EnhancedGameState } from '@engine'
 import { VisualIndicator } from '@engine';
-import { TimeSystem, timeSystem, TIME_SPEEDS, GameTime as SystemGameTime } from '@engine';
-import { intervalMsToTimeSpeed, sanitizeIntervalMs } from './timeSpeedUtils';
+import { TimeSystem, TIME_SPEEDS, type TimeSpeed } from '@engine';
+import { intervalMsToTimeSpeed, sanitizeIntervalMs, timeSpeedToIntervalMs } from './timeSpeedUtils';
 
 type BuildTypeId = keyof typeof SIM_BUILDINGS;
 
@@ -276,7 +276,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     timeSystemRef.current = new TimeSystem();
     timeSystemRef.current.start();
   }
-  const timeSystem = timeSystemRef.current;
+  const activeTimeSystem = timeSystemRef.current!;
   
   // Handle TimeSystem cleanup
   useEffect(() => {
@@ -1050,7 +1050,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
         const simulationInput = {
           buildings: serverState.buildings,
           resources: simRes,
-          gameTime: timeSystem.getCurrentTime()
+          gameTime: activeTimeSystem.getCurrentTime()
         };
         const enhancedState = simulationSystem.updateSimulation(simulationInput, 1.0);
         setEnhancedGameState(enhancedState);
@@ -1281,7 +1281,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     threat: state.resources.threat || 0
   };
 
-  const currentTime = timeSystem.getCurrentTime();
+  const currentTime = activeTimeSystem.getCurrentTime();
   const gameTime: GameTime = { 
     cycle: Math.floor(currentTime.totalMinutes / 60), // Convert to legacy cycle for HUD compatibility
     season: 'spring', // TODO: Implement seasons based on currentTime.month
@@ -1732,6 +1732,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
               workforce: { total: totalWorkers, idle: idleWorkers, needed: neededWorkers },
               time: { ...gameTime, isPaused, intervalMs: Number((state as any)?.tick_interval_ms ?? 60000) }
             }}
+            timeSystem={activeTimeSystem}
             map={miniMapDescriptor}
             cityManagement={{
               stats: {
@@ -1764,32 +1765,55 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
             }}
             onGameAction={(action, payload: any) => {
               if (action === 'advance-cycle') { tick(); if (onboardingStep < 6) setOnboardingStep(6); }
-              if (action === 'pause') { 
-                timeSystem.setSpeed(TIME_SPEEDS.PAUSED);
+              if (action === 'pause') {
+                activeTimeSystem.setSpeed(TIME_SPEEDS.PAUSED);
                 setIsPaused(true);
-                if (state) { void fetch('/api/state', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: state.id, auto_ticking: false }) }); }
+                if (state) {
+                  void fetch('/api/state', {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: state.id, auto_ticking: false })
+                  });
+                }
               }
               if (action === 'resume') {
-                timeSystem.setSpeed(TIME_SPEEDS.NORMAL);
+                const intervalMs = Number((state as any)?.tick_interval_ms ?? 60000);
+                const resumeSpeed = intervalMsToTimeSpeed(intervalMs);
+                activeTimeSystem.setSpeed(resumeSpeed);
                 setIsPaused(false);
-                if (state) { void fetch('/api/state', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: state.id, auto_ticking: true, last_tick_at: new Date().toISOString() }) }); }
+                if (state) {
+                  void fetch('/api/state', {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: state.id, auto_ticking: true, last_tick_at: new Date().toISOString() })
+                  });
+                }
               }
               if (action === 'set-speed') {
                 if (!state) return;
-                const rawPayload = payload && typeof payload === 'object' ? payload : null;
+                const rawPayload = payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : null;
+                const speedPayload = rawPayload && typeof rawPayload.speed === 'number'
+                  ? (rawPayload.speed as TimeSpeed)
+                  : null;
                 const requestedMs = rawPayload && 'intervalMs' in rawPayload
-                  ? (rawPayload as { intervalMs?: unknown }).intervalMs
+                  ? (rawPayload.intervalMs as unknown)
                   : rawPayload && 'ms' in rawPayload
-                    ? (rawPayload as { ms?: unknown }).ms
+                    ? (rawPayload.ms as unknown)
                     : null;
-                const sanitizedMs = sanitizeIntervalMs(requestedMs);
+
+                let sanitizedMs = sanitizeIntervalMs(requestedMs);
+                if (speedPayload != null && sanitizedMs == null) {
+                  sanitizedMs = timeSpeedToIntervalMs(speedPayload);
+                }
+
                 if (sanitizedMs == null) {
                   logger.warn('Ignoring invalid speed payload', payload);
                   return;
                 }
 
-                const nextSpeed = intervalMsToTimeSpeed(sanitizedMs);
-                timeSystem.setSpeed(nextSpeed);
+                const nextSpeed = speedPayload != null ? speedPayload : intervalMsToTimeSpeed(sanitizedMs);
+                activeTimeSystem.setSpeed(nextSpeed);
+                setIsPaused(nextSpeed === TIME_SPEEDS.PAUSED);
 
                 setState(prev => (prev ? { ...prev, tick_interval_ms: sanitizedMs } as any : prev));
 
