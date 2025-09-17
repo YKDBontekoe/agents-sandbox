@@ -1,4 +1,4 @@
-import type { SimulatedBuilding } from '../buildingSimulation';
+import type { SimulatedBuilding } from '../buildings';
 import type { ZoneCell, ZoneDemand } from './types';
 import { inferZoneTypeFromBuilding } from './zoneRules';
 

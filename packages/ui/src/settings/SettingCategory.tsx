@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faChevronDown, faChevronRight } from '@fortawesome/free-solid-svg-icons';
-import type { SettingCategory as SettingCategoryType } from './config';
+import type { SettingCategory as SettingCategoryType } from './types';
 import SettingItem from './SettingItem';
 
 interface SettingCategoryProps {
