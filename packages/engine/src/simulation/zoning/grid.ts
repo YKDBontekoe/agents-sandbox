@@ -1,7 +1,9 @@
 import type { GameTime } from '../../types/gameTime';
 import type { SimulatedBuilding } from '../buildingSimulation';
 import type { ZoneCell, ZoneDemand, ZoneStats, ZoneType } from './types';
-import { calculateInitialDemand, updateZoneDemand } from './demand';
+import { calculateInitialDemand } from './demand';
+import { areZonesCompatible, calculateInitialLandValue, type GridSize } from './zoneRules';
+import { calculateZoneUpdate } from './zoneUpdates';
 
 export class ZoneGrid {
   private zones: Map<string, ZoneCell> = new Map();
@@ -57,7 +59,7 @@ export class ZoneGrid {
     for (let x = x1; x <= x2; x++) {
       for (let y = y1; y <= y2; y++) {
         const existingZone = this.zoneGrid[x][y];
-        if (existingZone && !this.areZonesCompatible(existingZone.type, zoneType)) {
+        if (existingZone && !areZonesCompatible(existingZone.type, zoneType)) {
           return false;
         }
       }
@@ -66,22 +68,9 @@ export class ZoneGrid {
     return true;
   }
 
-  private areZonesCompatible(existing: ZoneType, newType: ZoneType): boolean {
-    if (existing === newType) return true;
-    if (existing === 'unzoned' || newType === 'unzoned') return true;
-    if (existing === 'mixed' || newType === 'mixed') return true;
-
-    if ((existing === 'industrial' && newType === 'residential') ||
-        (existing === 'residential' && newType === 'industrial')) {
-      return false;
-    }
-
-    return true;
-  }
-
   private createZoneCell(x: number, y: number, zoneType: ZoneType, density: ZoneCell['density']): void {
     const zoneId = `${x},${y}`;
-
+    const gridSize: GridSize = { width: this.gridWidth, height: this.gridHeight };
     const zone: ZoneCell = {
       x,
       y,
@@ -90,7 +79,7 @@ export class ZoneGrid {
       level: 1,
       demand: calculateInitialDemand(zoneType, density),
       pollution: 0,
-      landValue: this.calculateInitialLandValue(x, y, zoneType),
+      landValue: calculateInitialLandValue(x, y, zoneType, gridSize),
       services: {
         power: false,
         water: false,
@@ -107,33 +96,6 @@ export class ZoneGrid {
 
     this.zones.set(zoneId, zone);
     this.zoneGrid[x][y] = zone;
-  }
-
-  private calculateInitialLandValue(x: number, y: number, zoneType: ZoneType): number {
-    let value = 100;
-    const centerX = this.gridWidth / 2;
-    const centerY = this.gridHeight / 2;
-    const distanceFromCenter = Math.sqrt(
-      Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2)
-    );
-    const maxDistance = Math.sqrt(centerX * centerX + centerY * centerY);
-    const centerBonus = (1 - distanceFromCenter / maxDistance) * 200;
-
-    value += centerBonus;
-
-    const zoneModifiers = {
-      residential: 1.0,
-      commercial: 1.2,
-      industrial: 0.8,
-      office: 1.3,
-      mixed: 1.1,
-      special: 1.5,
-      unzoned: 0.5
-    } as Record<ZoneType, number>;
-
-    value *= zoneModifiers[zoneType];
-
-    return Math.max(10, Math.min(1000, value));
   }
 
   unzoneArea(x1: number, y1: number, x2: number, y2: number): void {
@@ -153,105 +115,12 @@ export class ZoneGrid {
 
   updateZones(gameTime: GameTime, buildings: SimulatedBuilding[], demand: ZoneDemand): void {
     for (const zone of this.zones.values()) {
-      this.updateZoneServices(zone, buildings);
-      this.updateZonePollution(zone, buildings);
-      this.updateZoneHappiness(zone);
-      updateZoneDemand(zone, demand);
-      this.updateZoneLevel(zone, buildings);
-      zone.lastUpdate = Date.now();
+      const result = calculateZoneUpdate(zone, {
+        buildings,
+        globalDemand: demand
+      });
+      Object.assign(zone, result, { lastUpdate: Date.now() });
     }
-  }
-
-  private updateZoneServices(zone: ZoneCell, buildings: SimulatedBuilding[]): void {
-    const serviceRange = 10;
-
-    const nearbyBuildings = buildings.filter(building => {
-      const distance = Math.sqrt(
-        Math.pow(building.x - zone.x, 2) + Math.pow(building.y - zone.y, 2)
-      );
-      return distance <= serviceRange;
-    });
-
-    Object.keys(zone.services).forEach(service => {
-      zone.services[service as keyof ZoneCell['services']] = false;
-    });
-
-    for (const building of nearbyBuildings) {
-      if (building.typeId.includes('power')) zone.services.power = true;
-      if (building.typeId.includes('water')) zone.services.water = true;
-      if (building.typeId.includes('sewage')) zone.services.sewage = true;
-      if (building.typeId.includes('garbage')) zone.services.garbage = true;
-      if (building.typeId.includes('fire')) zone.services.fire = true;
-      if (building.typeId.includes('police')) zone.services.police = true;
-      if (building.typeId.includes('hospital') || building.typeId.includes('clinic')) zone.services.healthcare = true;
-      if (building.typeId.includes('school') || building.typeId.includes('university')) zone.services.education = true;
-    }
-  }
-
-  private updateZonePollution(zone: ZoneCell, buildings: SimulatedBuilding[]): void {
-    let pollution = 0;
-    const pollutionRange = 15;
-
-    const nearbyBuildings = buildings.filter(building => {
-      const distance = Math.sqrt(
-        Math.pow(building.x - zone.x, 2) + Math.pow(building.y - zone.y, 2)
-      );
-      return distance <= pollutionRange;
-    });
-
-    for (const building of nearbyBuildings) {
-      if (this.getBuildingZoneType(building.typeId) === 'industrial') {
-        const distance = Math.sqrt(
-          Math.pow(building.x - zone.x, 2) + Math.pow(building.y - zone.y, 2)
-        );
-        const pollutionAmount = Math.max(0, 50 - distance * 3);
-        pollution += pollutionAmount;
-      }
-    }
-
-    zone.pollution = Math.min(100, pollution);
-  }
-
-  private updateZoneHappiness(zone: ZoneCell): void {
-    let happiness = 50;
-    const serviceCount = Object.values(zone.services).filter(Boolean).length;
-    happiness += serviceCount * 5;
-    happiness -= zone.pollution * 0.3;
-    happiness += (zone.landValue / 1000) * 20;
-
-    if (zone.type === 'residential') {
-      happiness += zone.services.education ? 10 : -5;
-      happiness += zone.services.healthcare ? 8 : -3;
-    } else if (zone.type === 'commercial') {
-      happiness += zone.services.police ? 5 : 0;
-    } else if (zone.type === 'industrial') {
-      happiness -= 10;
-    }
-
-    zone.happiness = Math.max(0, Math.min(100, happiness));
-  }
-
-  private updateZoneLevel(zone: ZoneCell, buildings: SimulatedBuilding[]): void {
-    const buildingsInZone = buildings.filter(b =>
-      Math.floor(b.x) === zone.x && Math.floor(b.y) === zone.y
-    );
-
-    if (buildingsInZone.length === 0) {
-      zone.level = 1;
-      return;
-    }
-
-    const avgBuildingLevel = buildingsInZone.reduce((sum, b) => sum + (b.level || 1), 0) / buildingsInZone.length;
-    let targetLevel = Math.floor(avgBuildingLevel);
-
-    if (zone.happiness > 80) targetLevel += 1;
-    if (zone.demand > 50) targetLevel += 1;
-    if (zone.pollution > 50) targetLevel -= 1;
-
-    const serviceCount = Object.values(zone.services).filter(Boolean).length;
-    if (serviceCount >= 6) targetLevel += 1;
-
-    zone.level = Math.max(1, Math.min(5, targetLevel));
   }
 
   updateLandValues(): void {
@@ -374,19 +243,4 @@ export class ZoneGrid {
     };
   }
 
-  private getBuildingZoneType(buildingTypeId: string): ZoneType {
-    if (buildingTypeId.includes('house') || buildingTypeId.includes('apartment')) {
-      return 'residential';
-    }
-    if (buildingTypeId.includes('shop') || buildingTypeId.includes('store') || buildingTypeId.includes('mall')) {
-      return 'commercial';
-    }
-    if (buildingTypeId.includes('factory') || buildingTypeId.includes('warehouse') || buildingTypeId.includes('plant')) {
-      return 'industrial';
-    }
-    if (buildingTypeId.includes('office') || buildingTypeId.includes('tower')) {
-      return 'office';
-    }
-    return 'unzoned';
-  }
 }
