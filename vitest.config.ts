@@ -15,9 +15,15 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    environmentMatchGlobs: [[
-      'src/state/**/*.test.{ts,tsx}',
-      'jsdom',
-    ]],
+    environmentMatchGlobs: [
+      [
+        'src/state/**/*.test.{ts,tsx}',
+        'jsdom',
+      ],
+      [
+        'src/components/**/*.test.{ts,tsx}',
+        'jsdom',
+      ],
+    ],
   },
 });
