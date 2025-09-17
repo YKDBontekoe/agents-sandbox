@@ -8,7 +8,13 @@ import type { Viewport } from "pixi-viewport";
 import logger from "@/lib/logger";
 
 import { TileOverlay } from "./TileOverlay";
-import { createTileSprite, getTileTexture, releaseTileTexture, type GridTile } from "./TileRenderer";
+import {
+  createTileSprite,
+  ensureTileAtlas,
+  getTileTexture,
+  releaseTileTexture,
+  type GridTile,
+} from "./TileRenderer";
 
 export type VisibilityUpdateOptions = {
   overlayUpdate?: boolean;
@@ -47,19 +53,19 @@ export function updateGridTileTexture({
   const tileKey = `${gridTile.x},${gridTile.y}`;
   const previousType = gridTile.tileType;
   const previousTextureKey = gridTile.textureCacheKey;
-  const nextTextureKey = `${nextType}-${tileWidth}x${tileHeight}`;
 
-  const nextTexture = getTileTexture(nextType, tileWidth, tileHeight, renderer, tileKey);
+  const nextTextureLookup = getTileTexture(nextType, tileWidth, tileHeight, renderer, tileKey);
+  const nextTexture = nextTextureLookup.texture;
 
   if (gridTile.sprite.texture !== nextTexture) {
     gridTile.sprite.texture = nextTexture;
     gridTile.sprite.texture.updateUvs();
   }
 
-  gridTile.textureCacheKey = nextTextureKey;
+  gridTile.textureCacheKey = nextTextureLookup.cacheKey;
   gridTile.tileType = nextType;
 
-  if (previousTextureKey && previousTextureKey !== nextTextureKey) {
+  if (previousTextureKey && previousTextureKey !== nextTextureLookup.cacheKey) {
     releaseTileTexture(previousTextureKey);
   }
 
@@ -159,59 +165,96 @@ export function useIsometricGridSetup({
 
     initializedRef.current = true;
 
-    const gridContainer = new PIXI.Container();
-    gridContainer.name = "isometric-grid";
-    gridContainer.sortableChildren = true;
-    gridContainer.zIndex = 100;
-    (gridContainer as unknown as { eventMode: string }).eventMode = "static";
+    let cancelled = false;
+    let localGridContainer: PIXI.Container | null = null;
 
-    viewport.addChild(gridContainer);
-    gridContainerRef.current = gridContainer;
-
-    const tiles = new Map<string, GridTile>();
-    const initialTileTypes = tileTypesRef.current;
-
-    for (let x = 0; x < gridSize; x++) {
-      for (let y = 0; y < gridSize; y++) {
-        const tile = createTileSprite(
-          x,
-          y,
-          gridContainer,
-          tileWidth,
-          tileHeight,
-          initialTileTypes,
-          app.renderer,
-        );
-        const key = `${x},${y}`;
-        tiles.set(key, tile);
-        gridContainer.addChild(tile.sprite);
+    const setup = async () => {
+      try {
+        await ensureTileAtlas(app.renderer, tileWidth, tileHeight);
+      } catch (error) {
+        if (process.env.NODE_ENV === "production") {
+          logger.error("useIsometricGridSetup: Failed to load tile atlas", error);
+          initializedRef.current = false;
+          return;
+        }
       }
-    }
 
-    logger.debug(`Created ${tiles.size} tiles for ${gridSize}x${gridSize} grid`);
-    logger.debug("Grid container children count:", gridContainer.children.length);
-    tilesRef.current = tiles;
+      if (cancelled) {
+        initializedRef.current = false;
+        return;
+      }
 
-    overlayManagerRef.current = new TileOverlay(gridContainer, {
-      tileWidth,
-      tileHeight,
-      getTileType: (x, y) => tileTypesRef.current[y]?.[x],
-      onTileHover: (x, y, tileType) => {
-        onTileHoverRef.current?.(x, y, tileType);
-      },
-      onTileClick: (x, y, tileType) => {
-        onTileClickRef.current?.(x, y, tileType);
-      },
-    });
+      const gridContainer = new PIXI.Container();
+      localGridContainer = gridContainer;
+      gridContainer.name = "isometric-grid";
+      gridContainer.sortableChildren = true;
+      gridContainer.zIndex = 100;
+      (gridContainer as unknown as { eventMode: string }).eventMode = "static";
+
+      viewport.addChild(gridContainer);
+      gridContainerRef.current = gridContainer;
+
+      const tiles = new Map<string, GridTile>();
+      const initialTileTypes = tileTypesRef.current;
+
+      for (let x = 0; x < gridSize; x++) {
+        for (let y = 0; y < gridSize; y++) {
+          const tile = createTileSprite(
+            x,
+            y,
+            gridContainer,
+            tileWidth,
+            tileHeight,
+            initialTileTypes,
+            app.renderer,
+          );
+          const key = `${x},${y}`;
+          tiles.set(key, tile);
+          gridContainer.addChild(tile.sprite);
+        }
+      }
+
+      logger.debug(`Created ${tiles.size} tiles for ${gridSize}x${gridSize} grid`);
+      logger.debug("Grid container children count:", gridContainer.children.length);
+      tilesRef.current = tiles;
+
+      overlayManagerRef.current = new TileOverlay(gridContainer, {
+        tileWidth,
+        tileHeight,
+        getTileType: (x, y) => tileTypesRef.current[y]?.[x],
+        onTileHover: (x, y, tileType) => {
+          onTileHoverRef.current?.(x, y, tileType);
+        },
+        onTileClick: (x, y, tileType) => {
+          onTileClickRef.current?.(x, y, tileType);
+        },
+      });
+    };
+
+    void setup();
 
     return () => {
+      cancelled = true;
+
       overlayManagerRef.current?.destroy();
       overlayManagerRef.current = null;
-      if (gridContainer.parent) {
-        gridContainer.parent.removeChild(gridContainer);
-      }
-      gridContainer.destroy({ children: true });
+
+      tilesRef.current.forEach((tile) => {
+        try {
+          tile.dispose();
+        } catch (error) {
+          logger.error(`[TILE_DISPOSE] Error disposing tile ${tile.x},${tile.y}`, error);
+        }
+      });
       tilesRef.current.clear();
+
+      if (localGridContainer) {
+        if (localGridContainer.parent) {
+          localGridContainer.parent.removeChild(localGridContainer);
+        }
+        localGridContainer.destroy({ children: true });
+      }
+
       gridContainerRef.current = null;
       initializedRef.current = false;
     };
@@ -220,6 +263,8 @@ export function useIsometricGridSetup({
   useEffect(() => {
     const gridContainer = gridContainerRef.current;
     if (!gridContainer || !app?.renderer) return;
+
+    void ensureTileAtlas(app.renderer, tileWidth, tileHeight);
 
     const tiles = tilesRef.current;
     let added = 0;

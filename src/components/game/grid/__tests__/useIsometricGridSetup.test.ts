@@ -45,8 +45,12 @@ describe("useIsometricGridSetup", () => {
       textureCacheKey: "grass-64x32",
     };
 
-    const nextTexture = { updateUvs: vi.fn() } as unknown as PIXI.RenderTexture;
-    getTileTextureMock.mockReturnValue(nextTexture);
+    const nextTexture = { updateUvs: vi.fn() } as unknown as PIXI.Texture;
+    getTileTextureMock.mockReturnValue({
+      texture: nextTexture,
+      cacheKey: "water-64x32",
+      source: "atlas",
+    });
 
     const renderer = {} as PIXI.Renderer;
 

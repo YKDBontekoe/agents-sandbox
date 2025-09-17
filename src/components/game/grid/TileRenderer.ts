@@ -1,7 +1,11 @@
 import * as PIXI from "pixi.js";
 import type { Renderer } from "pixi.js";
-import { gridToWorld, TILE_COLORS } from "@/lib/isometric";
+
+import { gridToWorld } from "@/lib/isometric";
 import logger from "@/lib/logger";
+
+import { createTileGraphics } from "./tileArt";
+import { getLoadedTileAtlasResource, loadTileAtlasResource } from "./tileAtlas";
 
 interface TextureCacheEntry {
   texture: PIXI.RenderTexture;
@@ -21,40 +25,50 @@ export interface GridTile {
   moisture?: number;
   sprite: PIXI.Sprite;
   overlay?: PIXI.Graphics;
-  dispose: () => void; // Add cleanup method
+  dispose: () => void;
   textureCacheKey: string | null;
 }
 
-// Texture cache to prevent memory leaks
-const textureCache = new Map<string, TextureCacheEntry>();
+const fallbackTextureCache = new Map<string, TextureCacheEntry>();
 const MAX_CACHED_TEXTURES = 100;
 
 const ANIMATED_TILE_TYPES = new Set(["water", "forest", "river"]);
 
 const polygonCache = new Map<string, PIXI.Polygon>();
 
-// Clean up texture cache when it gets too large
-function cleanupTextureCache() {
-  if (textureCache.size <= MAX_CACHED_TEXTURES) {
+let atlasDisabledForSession = false;
+
+type TileTextureSource = "atlas" | "fallback";
+
+interface TileTextureLookup {
+  texture: PIXI.Texture;
+  cacheKey: string | null;
+  source: TileTextureSource;
+}
+
+function cleanupFallbackTextureCache() {
+  if (fallbackTextureCache.size <= MAX_CACHED_TEXTURES) {
     return;
   }
 
-  const zeroRefEntries = Array.from(textureCache.entries()).filter(([, entry]) => entry.refCount === 0);
+  const zeroRefEntries = Array.from(fallbackTextureCache.entries()).filter(([, entry]) => entry.refCount === 0);
 
   if (zeroRefEntries.length === 0) {
     logger.debug(
-      `[TILE_TEXTURE] Cleanup skipped - no zero-ref textures available. Cache size remains ${textureCache.size}.`,
+      `[TILE_TEXTURE] Fallback cleanup skipped - no zero-ref textures available. Cache size remains ${fallbackTextureCache.size}.`,
     );
     return;
   }
 
   for (const [key, entry] of zeroRefEntries) {
     entry.texture.destroy(true);
-    textureCache.delete(key);
+    fallbackTextureCache.delete(key);
 
-    logger.debug(`[TILE_TEXTURE] Cleaned up unused texture ${key}. Remaining cache size: ${textureCache.size}`);
+    logger.debug(
+      `[TILE_TEXTURE] Cleaned up unused fallback texture ${key}. Remaining cache size: ${fallbackTextureCache.size}`,
+    );
 
-    if (textureCache.size <= MAX_CACHED_TEXTURES) {
+    if (fallbackTextureCache.size <= MAX_CACHED_TEXTURES) {
       break;
     }
   }
@@ -78,13 +92,6 @@ function getSharedDiamondHitArea(tileWidth: number, tileHeight: number): PIXI.Po
   return polygon;
 }
 
-function shade(hex: number, factor: number): number {
-  const r = Math.max(0, Math.min(255, Math.round(((hex >> 16) & 0xff) * factor)));
-  const g = Math.max(0, Math.min(255, Math.round(((hex >> 8) & 0xff) * factor)));
-  const b = Math.max(0, Math.min(255, Math.round((hex & 0xff) * factor)));
-  return (r << 16) | (g << 8) | b;
-}
-
 function getTextureCacheKey(tileType: string, tileWidth: number, tileHeight: number) {
   return `${tileType}-${tileWidth}x${tileHeight}`;
 }
@@ -94,7 +101,7 @@ export function releaseTileTexture(cacheKey: string | null) {
     return;
   }
 
-  const cacheEntry = textureCache.get(cacheKey);
+  const cacheEntry = fallbackTextureCache.get(cacheKey);
   if (!cacheEntry) {
     return;
   }
@@ -103,9 +110,100 @@ export function releaseTileTexture(cacheKey: string | null) {
     cacheEntry.refCount -= 1;
   }
 
-  logger.debug(`[TILE_TEXTURE] Released texture ${cacheKey}. New refCount: ${cacheEntry.refCount}`);
+  logger.debug(`[TILE_TEXTURE] Released fallback texture ${cacheKey}. New refCount: ${cacheEntry.refCount}`);
 
-  cleanupTextureCache();
+  cleanupFallbackTextureCache();
+}
+
+function createFallbackTexture(
+  tileType: string,
+  tileWidth: number,
+  tileHeight: number,
+  renderer: Renderer,
+): PIXI.RenderTexture {
+  const tileContainer = createTileGraphics(tileType, tileWidth, tileHeight);
+  const renderTexture = PIXI.RenderTexture.create({ width: tileWidth, height: tileHeight });
+  renderer.render({ container: tileContainer, target: renderTexture, clear: true });
+  tileContainer.destroy({ children: true });
+  return renderTexture;
+}
+
+function getFallbackTileTexture(
+  tileType: string,
+  tileWidth: number,
+  tileHeight: number,
+  renderer: Renderer,
+  tileKey: string,
+): TileTextureLookup {
+  const cacheKey = getTextureCacheKey(tileType, tileWidth, tileHeight);
+  const cached = fallbackTextureCache.get(cacheKey);
+  if (cached) {
+    cached.refCount += 1;
+    logger.debug(
+      `[TILE_TEXTURE] Fallback cache hit for ${tileKey} using key ${cacheKey}. RefCount now ${cached.refCount}`,
+    );
+    return { texture: cached.texture, cacheKey, source: "fallback" };
+  }
+
+  const startTime = performance.now();
+  const renderTexture = createFallbackTexture(tileType, tileWidth, tileHeight, renderer);
+
+  fallbackTextureCache.set(cacheKey, { texture: renderTexture, refCount: 1 });
+  cleanupFallbackTextureCache();
+
+  const createTime = performance.now() - startTime;
+  logger.debug(
+    `[TILE_TEXTURE] Generated fallback texture for ${tileKey} (type: ${tileType}) in ${createTime.toFixed(2)}ms`,
+  );
+
+  return { texture: renderTexture, cacheKey, source: "fallback" };
+}
+
+function getAtlasTexture(
+  tileType: string,
+  tileWidth: number,
+  tileHeight: number,
+  tileKey: string,
+): TileTextureLookup | null {
+  const atlas = getLoadedTileAtlasResource(tileWidth, tileHeight);
+  if (!atlas) {
+    return null;
+  }
+
+  const atlasTexture = atlas.textures[tileType] ?? atlas.textures.unknown;
+  if (!atlasTexture) {
+    logger.error(`[TILE_ATLAS] Missing texture for tile type ${tileType} (${tileKey}) in atlas`);
+    return null;
+  }
+
+  logger.debug(`[TILE_TEXTURE] Atlas hit for ${tileKey} using type ${tileType}`);
+  return { texture: atlasTexture, cacheKey: null, source: "atlas" };
+}
+
+export async function ensureTileAtlas(
+  renderer: Renderer | null | undefined,
+  tileWidth: number,
+  tileHeight: number,
+): Promise<void> {
+  if (!renderer) {
+    throw new Error("Renderer is required to load tile atlas");
+  }
+
+  if (atlasDisabledForSession) {
+    return;
+  }
+
+  try {
+    await loadTileAtlasResource({ renderer, tileWidth, tileHeight });
+  } catch (error) {
+    atlasDisabledForSession = true;
+    logger.error(`[TILE_ATLAS] Failed to load atlas ${tileWidth}x${tileHeight}`, error);
+    if (process.env.NODE_ENV !== "production") {
+      logger.warn(`[TILE_ATLAS] Falling back to runtime tile texture generation for development builds.`);
+    } else {
+      throw error;
+    }
+  }
 }
 
 export function getTileTexture(
@@ -114,116 +212,25 @@ export function getTileTexture(
   tileHeight: number,
   renderer: Renderer,
   tileKey: string,
-): PIXI.RenderTexture {
-  const cacheKey = getTextureCacheKey(tileType, tileWidth, tileHeight);
-  const cached = textureCache.get(cacheKey);
-  if (cached) {
-    cached.refCount += 1;
-    logger.debug(
-      `[TILE_TEXTURE] Cache hit for ${tileKey} using key ${cacheKey}. RefCount now ${cached.refCount}`,
-    );
-    return cached.texture;
+): TileTextureLookup {
+  if (!renderer) {
+    throw new Error(`Renderer is required to fetch tile textures. Missing for tile ${tileKey}`);
   }
 
-  const startTime = performance.now();
-  const tempContainer = new PIXI.Container();
-  const baseGraphic = new PIXI.Graphics();
-  baseGraphic.position.set(tileWidth / 2, tileHeight / 2);
-
-  const baseColor = TILE_COLORS[tileType] ?? 0xdde7f7;
-  const lighter = shade(baseColor, 1.08);
-  const darker = shade(baseColor, 0.85);
-
-  // Base diamond with subtle center light and beveled edges
-  baseGraphic.fill({ color: baseColor, alpha: 0.96 });
-  baseGraphic.moveTo(0, -tileHeight / 2);
-  baseGraphic.lineTo(tileWidth / 2, 0);
-  baseGraphic.lineTo(0, tileHeight / 2);
-  baseGraphic.lineTo(-tileWidth / 2, 0);
-  baseGraphic.closePath();
-  baseGraphic.fill();
-
-  // Inner highlight diamond
-  baseGraphic.fill({ color: lighter, alpha: 0.12 });
-  baseGraphic.moveTo(0, -tileHeight * 0.36);
-  baseGraphic.lineTo(tileWidth * 0.36, 0);
-  baseGraphic.lineTo(0, tileHeight * 0.36);
-  baseGraphic.lineTo(-tileWidth * 0.36, 0);
-  baseGraphic.closePath();
-  baseGraphic.fill();
-
-  // Bevel: darker stroke on right/bottom edges
-  baseGraphic.setStrokeStyle({ width: 1.5, color: darker, alpha: 0.55 });
-  baseGraphic.moveTo(0, tileHeight / 2);
-  baseGraphic.lineTo(tileWidth / 2, 0);
-  baseGraphic.lineTo(0, -tileHeight / 2);
-  baseGraphic.stroke();
-  // Fine outline
-  baseGraphic.setStrokeStyle({ width: 1, color: 0x334155, alpha: 0.35 });
-  baseGraphic.moveTo(0, -tileHeight / 2);
-  baseGraphic.lineTo(tileWidth / 2, 0);
-  baseGraphic.lineTo(0, tileHeight / 2);
-  baseGraphic.lineTo(-tileWidth / 2, 0);
-  baseGraphic.lineTo(0, -tileHeight / 2);
-  baseGraphic.stroke();
-
-  tempContainer.addChild(baseGraphic);
-
-  // Subtle terrain micro-textures (drawn into the same render texture)
-  const detailGraphic = new PIXI.Graphics();
-  detailGraphic.position.set(tileWidth / 2, tileHeight / 2);
-  (detailGraphic as unknown as { eventMode: string }).eventMode = "none";
-
-  if (tileType === "water" || tileType === "river") {
-    detailGraphic.setStrokeStyle({ width: 1, color: 0x93c5fd, alpha: 0.35 });
-    const y0 = -tileHeight * 0.12;
-    const y1 = 0;
-    const y2 = tileHeight * 0.12;
-    detailGraphic.moveTo(-tileWidth * 0.25, y0);
-    detailGraphic.quadraticCurveTo(0, y0 + 2, tileWidth * 0.25, y0);
-    detailGraphic.moveTo(-tileWidth * 0.3, y1);
-    detailGraphic.quadraticCurveTo(0, y1 + 2, tileWidth * 0.3, y1);
-    detailGraphic.moveTo(-tileWidth * 0.2, y2);
-    detailGraphic.quadraticCurveTo(0, y2 + 2, tileWidth * 0.2, y2);
-    detailGraphic.stroke();
-  } else if (tileType === "forest") {
-    detailGraphic.fill({ color: 0x166534, alpha: 0.12 });
-    const s = Math.max(2, Math.floor(tileHeight * 0.08));
-    detailGraphic.drawPolygon([-s, 0, 0, -s, s, 0, -s, 0]);
-    detailGraphic.endFill();
-  } else if (tileType === "mountain") {
-    detailGraphic.setStrokeStyle({ width: 1, color: 0x64748b, alpha: 0.35 });
-    detailGraphic.moveTo(-tileWidth * 0.2, tileHeight * 0.05);
-    detailGraphic.lineTo(0, -tileHeight * 0.15);
-    detailGraphic.lineTo(tileWidth * 0.2, tileHeight * 0.05);
-    detailGraphic.stroke();
-  } else if (tileType === "grass") {
-    detailGraphic.setStrokeStyle({ width: 1, color: 0x16a34a, alpha: 0.15 });
-    detailGraphic.moveTo(-tileWidth * 0.1, tileHeight * 0.04);
-    detailGraphic.lineTo(-tileWidth * 0.02, tileHeight * 0.01);
-    detailGraphic.moveTo(tileWidth * 0.1, -tileHeight * 0.04);
-    detailGraphic.lineTo(tileWidth * 0.02, -tileHeight * 0.01);
-    detailGraphic.stroke();
+  if (!atlasDisabledForSession) {
+    const atlasTexture = getAtlasTexture(tileType, tileWidth, tileHeight, tileKey);
+    if (atlasTexture) {
+      return atlasTexture;
+    }
   }
 
-  if (!detailGraphic.destroyed) {
-    tempContainer.addChild(detailGraphic);
+  if (atlasDisabledForSession || process.env.NODE_ENV !== "production") {
+    return getFallbackTileTexture(tileType, tileWidth, tileHeight, renderer, tileKey);
   }
 
-  const renderTexture = PIXI.RenderTexture.create({ width: tileWidth, height: tileHeight });
-  renderer.render({ container: tempContainer, target: renderTexture, clear: true });
-
-  tempContainer.destroy({ children: true });
-
-  textureCache.set(cacheKey, { texture: renderTexture, refCount: 1 });
-  cleanupTextureCache();
-
-  const createTime = performance.now() - startTime;
-  logger.debug(
-    `[TILE_TEXTURE] Generated texture for ${tileKey} (type: ${tileType}) in ${createTime.toFixed(2)}ms`
+  throw new Error(
+    `[TILE_TEXTURE] Tile atlas not ready for ${tileKey} (${tileType}). ensureTileAtlas must be called before sprite creation.`,
   );
-
-  return renderTexture;
 }
 
 export function createTileSprite(
@@ -249,9 +256,8 @@ export function createTileSprite(
     throw new Error(`Renderer is required to create tile sprites. Missing for tile ${tileKey}`);
   }
 
-  const textureCacheKey = getTextureCacheKey(tileType, tileWidth, tileHeight);
-  const texture = getTileTexture(tileType, tileWidth, tileHeight, renderer, tileKey);
-  const sprite = new PIXI.Sprite(texture);
+  const textureLookup = getTileTexture(tileType, tileWidth, tileHeight, renderer, tileKey);
+  const sprite = new PIXI.Sprite(textureLookup.texture);
   sprite.anchor.set(0.5, 0.5);
   sprite.position.set(worldX, worldY);
   sprite.zIndex = 2;
@@ -259,9 +265,8 @@ export function createTileSprite(
   sprite.hitArea = getSharedDiamondHitArea(tileWidth, tileHeight);
   sprite.cursor = "pointer";
 
-  logger.debug(`[TILE_GRAPHICS] Created sprite for ${tileKey} using cached texture`);
+  logger.debug(`[TILE_GRAPHICS] Created sprite for ${tileKey} using ${textureLookup.source} texture`);
 
-  // Optional animated overlays per tile type
   let overlay: PIXI.Graphics | undefined;
   if (ANIMATED_TILE_TYPES.has(tileType)) {
     overlay = new PIXI.Graphics();
@@ -275,7 +280,9 @@ export function createTileSprite(
   }
 
   const createTime = performance.now() - startTime;
-  logger.info(`[TILE_CREATE] Created tile ${tileKey} (${tileType}) in ${createTime.toFixed(2)}ms. Sprite ID: ${sprite.uid}`);
+  logger.info(
+    `[TILE_CREATE] Created tile ${tileKey} (${tileType}) in ${createTime.toFixed(2)}ms. Sprite ID: ${sprite.uid}`,
+  );
 
   const gridTile: GridTile = {
     x: gridX,
@@ -286,11 +293,10 @@ export function createTileSprite(
     sprite,
     overlay,
     dispose: () => {},
-    textureCacheKey,
+    textureCacheKey: textureLookup.cacheKey,
   };
 
   let disposed = false;
-  // Dispose method to properly clean up all PIXI objects
   const dispose = () => {
     if (disposed) {
       logger.debug(`[TILE_DISPOSE] Tile ${tileKey} already disposed`);
@@ -316,13 +322,14 @@ export function createTileSprite(
       logger.error(`[TILE_DISPOSE] Error destroying overlay graphics for tile ${tileKey}:`, error);
     }
 
-    // Clean up main tile sprite
     try {
       if (sprite.parent) {
         const parent = sprite.parent;
         const parentChildrenBefore = parent.children.length;
         parent.removeChild(sprite);
-        logger.debug(`[TILE_DISPOSE] Removed tile ${tileKey} from parent. Parent children: ${parentChildrenBefore} -> ${parent.children.length}`);
+        logger.debug(
+          `[TILE_DISPOSE] Removed tile ${tileKey} from parent. Parent children: ${parentChildrenBefore} -> ${parent.children.length}`,
+        );
       }
 
       if (!sprite.destroyed) {
@@ -339,11 +346,12 @@ export function createTileSprite(
     gridTile.textureCacheKey = null;
 
     const disposeTime = performance.now() - disposeStartTime;
-    logger.info(`[TILE_DISPOSE] Disposed tile ${tileKey} in ${disposeTime.toFixed(2)}ms. Objects disposed: ${disposedObjects}`);
+    logger.info(
+      `[TILE_DISPOSE] Disposed tile ${tileKey} in ${disposeTime.toFixed(2)}ms. Objects disposed: ${disposedObjects}`,
+    );
   };
 
   gridTile.dispose = dispose;
 
   return gridTile;
 }
-
