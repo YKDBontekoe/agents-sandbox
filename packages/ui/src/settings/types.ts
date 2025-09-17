@@ -99,9 +99,9 @@ export const isNumberSetting = (
   setting: SettingItem,
 ): setting is NumberSettingItem => setting.type === 'number';
 
-export const isSelectSetting = <TValue extends SettingValue = SettingValue>(
+export const isSelectSetting = (
   setting: SettingItem,
-): setting is SelectSettingItem<TValue> => setting.type === 'select';
+): setting is SelectSettingItem => setting.type === 'select';
 
 export const isPresetSetting = (
   setting: SettingItem,

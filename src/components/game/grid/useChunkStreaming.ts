@@ -229,36 +229,62 @@ export function useChunkStreaming({
     const loadedChunks = loadedChunksRef.current;
     const currentTime = Date.now();
 
-    const loadPromises = visibleChunks.map(({ chunkX, chunkY }) => {
-      const chunkKey = `${chunkX},${chunkY}`;
-      if (loadedChunks.has(chunkKey)) {
-        loadedChunks.get(chunkKey)!.lastAccessed = currentTime;
-        return null;
-      }
-      return loadChunk(chunkX, chunkY);
-    });
+    const viewportCenter = viewport.center;
+    const centerGrid = worldToGrid(viewportCenter.x, viewportCenter.y, tileWidth, tileHeight);
 
-    await Promise.all(loadPromises.filter(Boolean));
+    const capacity = Math.max(0, maxLoadedChunks);
+    const sortedVisibleChunks = visibleChunks
+      .map(({ chunkX, chunkY }) => {
+        const chunkCenterGridX = chunkX * chunkSize + chunkSize / 2;
+        const chunkCenterGridY = chunkY * chunkSize + chunkSize / 2;
+        const dx = chunkCenterGridX - centerGrid.gridX;
+        const dy = chunkCenterGridY - centerGrid.gridY;
 
+        return {
+          chunkX,
+          chunkY,
+          chunkKey: `${chunkX},${chunkY}`,
+          distance: dx * dx + dy * dy,
+        };
+      })
+      .sort((a, b) => a.distance - b.distance);
+
+    const prioritizedChunks = capacity === 0 ? [] : sortedVisibleChunks.slice(0, capacity);
+
+    const prioritizedChunkKeys = new Set(prioritizedChunks.map((chunk) => chunk.chunkKey));
     const visibleChunkKeys = new Set(visibleChunks.map(({ chunkX, chunkY }) => `${chunkX},${chunkY}`));
-    const chunksToUnload: string[] = [];
 
+    const loadPromises: Array<Promise<void>> = [];
+    for (const { chunkX, chunkY, chunkKey } of prioritizedChunks) {
+      const loadedChunk = loadedChunks.get(chunkKey);
+      if (loadedChunk) {
+        loadedChunk.lastAccessed = currentTime;
+        continue;
+      }
+
+      loadPromises.push(loadChunk(chunkX, chunkY));
+    }
+
+    await Promise.all(loadPromises);
+
+    const chunksToUnload: string[] = [];
     loadedChunks.forEach((_, chunkKey) => {
-      if (!visibleChunkKeys.has(chunkKey)) {
+      if (!visibleChunkKeys.has(chunkKey) || !prioritizedChunkKeys.has(chunkKey)) {
         chunksToUnload.push(chunkKey);
       }
     });
 
-    if (loadedChunks.size > maxLoadedChunks) {
-      const sortedChunks = Array.from(loadedChunks.entries()).sort(([, a], [, b]) => a.lastAccessed - b.lastAccessed);
-      const excessCount = loadedChunks.size - maxLoadedChunks;
-      for (let i = 0; i < excessCount; i++) {
-        chunksToUnload.push(sortedChunks[i][0]);
-      }
-    }
-
     chunksToUnload.forEach((chunkKey) => unloadChunk(chunkKey));
-  }, [viewport, getVisibleChunks, loadChunk, unloadChunk, maxLoadedChunks]);
+  }, [
+    viewport,
+    getVisibleChunks,
+    loadChunk,
+    unloadChunk,
+    maxLoadedChunks,
+    tileWidth,
+    tileHeight,
+    chunkSize,
+  ]);
 
   useEffect(() => {
     if (!viewport || worldContainerRef.current) return;

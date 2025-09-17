@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { type SVGProps } from 'react';
 import { useHUDLayoutPresets, type HUDLayoutPresetIconData } from './HUDLayoutPresets';
 
 interface HUDSettingsPanelProps {
@@ -10,15 +10,13 @@ function HUDPresetIcon({ icon }: { icon: HUDLayoutPresetIconData }) {
   const { viewBox = '0 0 24 24', paths } = icon;
   return (
     <svg fill="none" stroke="currentColor" viewBox={viewBox} aria-hidden="true">
-      {paths.map(({ d, strokeLinecap = 'round', strokeLinejoin = 'round', strokeWidth = 2 }) => (
-        <path
-          key={d}
-          d={d}
-          strokeLinecap={strokeLinecap}
-          strokeLinejoin={strokeLinejoin}
-          strokeWidth={strokeWidth}
-        />
-      ))}
+      {paths.map(({ d, strokeLinecap = 'round', strokeLinejoin = 'round', strokeWidth = 2 }) => {
+        const lineCap: SVGProps<SVGPathElement>["strokeLinecap"] = strokeLinecap;
+        const lineJoin = strokeLinejoin as unknown as SVGProps<SVGPathElement>["strokeLinejoin"];
+        return (
+          <path key={d} d={d} strokeLinecap={lineCap} strokeLinejoin={lineJoin} strokeWidth={strokeWidth} />
+        );
+      })}
     </svg>
   );
 }
