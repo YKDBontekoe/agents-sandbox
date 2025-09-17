@@ -96,6 +96,7 @@ describe("chunkRenderer", () => {
       tileType: "grass",
       sprite: new PIXI.Sprite(),
       dispose: vi.fn(),
+      textureCacheKey: null,
     };
     const tileB: GridTile = {
       x: 1,
@@ -105,6 +106,7 @@ describe("chunkRenderer", () => {
       tileType: "water",
       sprite: new PIXI.Sprite(),
       dispose: vi.fn(),
+      textureCacheKey: null,
     };
 
     const loadedChunk: LoadedChunk = {

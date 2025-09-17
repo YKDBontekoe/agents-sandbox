@@ -3,6 +3,11 @@ import type { Renderer } from "pixi.js";
 import { gridToWorld, TILE_COLORS } from "@/lib/isometric";
 import logger from "@/lib/logger";
 
+interface TextureCacheEntry {
+  texture: PIXI.RenderTexture;
+  refCount: number;
+}
+
 export interface GridTile {
   x: number;
   y: number;
@@ -17,24 +22,39 @@ export interface GridTile {
   sprite: PIXI.Sprite;
   overlay?: PIXI.Graphics;
   dispose: () => void; // Add cleanup method
+  textureCacheKey: string | null;
 }
 
 // Texture cache to prevent memory leaks
-const textureCache = new Map<string, PIXI.RenderTexture>();
+const textureCache = new Map<string, TextureCacheEntry>();
 const MAX_CACHED_TEXTURES = 100;
 
 const ANIMATED_TILE_TYPES = new Set(["water", "forest", "river"]);
 
 // Clean up texture cache when it gets too large
 function cleanupTextureCache() {
-  if (textureCache.size > MAX_CACHED_TEXTURES) {
-    const entries = Array.from(textureCache.entries());
-    // Remove oldest half of cached textures
-    const toRemove = entries.slice(0, Math.floor(entries.length / 2));
-    toRemove.forEach(([key, texture]) => {
-      texture.destroy(true);
-      textureCache.delete(key);
-    });
+  if (textureCache.size <= MAX_CACHED_TEXTURES) {
+    return;
+  }
+
+  const zeroRefEntries = Array.from(textureCache.entries()).filter(([, entry]) => entry.refCount === 0);
+
+  if (zeroRefEntries.length === 0) {
+    logger.debug(
+      `[TILE_TEXTURE] Cleanup skipped - no zero-ref textures available. Cache size remains ${textureCache.size}.`,
+    );
+    return;
+  }
+
+  for (const [key, entry] of zeroRefEntries) {
+    entry.texture.destroy(true);
+    textureCache.delete(key);
+
+    logger.debug(`[TILE_TEXTURE] Cleaned up unused texture ${key}. Remaining cache size: ${textureCache.size}`);
+
+    if (textureCache.size <= MAX_CACHED_TEXTURES) {
+      break;
+    }
   }
 }
 
@@ -49,6 +69,25 @@ function getTextureCacheKey(tileType: string, tileWidth: number, tileHeight: num
   return `${tileType}-${tileWidth}x${tileHeight}`;
 }
 
+export function releaseTileTexture(cacheKey: string | null) {
+  if (!cacheKey) {
+    return;
+  }
+
+  const cacheEntry = textureCache.get(cacheKey);
+  if (!cacheEntry) {
+    return;
+  }
+
+  if (cacheEntry.refCount > 0) {
+    cacheEntry.refCount -= 1;
+  }
+
+  logger.debug(`[TILE_TEXTURE] Released texture ${cacheKey}. New refCount: ${cacheEntry.refCount}`);
+
+  cleanupTextureCache();
+}
+
 export function getTileTexture(
   tileType: string,
   tileWidth: number,
@@ -59,8 +98,11 @@ export function getTileTexture(
   const cacheKey = getTextureCacheKey(tileType, tileWidth, tileHeight);
   const cached = textureCache.get(cacheKey);
   if (cached) {
-    logger.debug(`[TILE_TEXTURE] Cache hit for ${tileKey} using key ${cacheKey}`);
-    return cached;
+    cached.refCount += 1;
+    logger.debug(
+      `[TILE_TEXTURE] Cache hit for ${tileKey} using key ${cacheKey}. RefCount now ${cached.refCount}`,
+    );
+    return cached.texture;
   }
 
   const startTime = performance.now();
@@ -153,7 +195,7 @@ export function getTileTexture(
 
   tempContainer.destroy({ children: true });
 
-  textureCache.set(cacheKey, renderTexture);
+  textureCache.set(cacheKey, { texture: renderTexture, refCount: 1 });
   cleanupTextureCache();
 
   const createTime = performance.now() - startTime;
@@ -187,6 +229,7 @@ export function createTileSprite(
     throw new Error(`Renderer is required to create tile sprites. Missing for tile ${tileKey}`);
   }
 
+  const textureCacheKey = getTextureCacheKey(tileType, tileWidth, tileHeight);
   const texture = getTileTexture(tileType, tileWidth, tileHeight, renderer, tileKey);
   const sprite = new PIXI.Sprite(texture);
   sprite.anchor.set(0.5, 0.5);
@@ -216,8 +259,27 @@ export function createTileSprite(
   const createTime = performance.now() - startTime;
   logger.info(`[TILE_CREATE] Created tile ${tileKey} (${tileType}) in ${createTime.toFixed(2)}ms. Sprite ID: ${sprite.uid}`);
 
+  const gridTile: GridTile = {
+    x: gridX,
+    y: gridY,
+    worldX,
+    worldY,
+    tileType,
+    sprite,
+    overlay,
+    dispose: () => {},
+    textureCacheKey,
+  };
+
+  let disposed = false;
   // Dispose method to properly clean up all PIXI objects
   const dispose = () => {
+    if (disposed) {
+      logger.debug(`[TILE_DISPOSE] Tile ${tileKey} already disposed`);
+      return;
+    }
+    disposed = true;
+
     const disposeStartTime = performance.now();
     logger.debug(`[TILE_DISPOSE] Starting disposal of tile ${tileKey}. Sprite destroyed: ${sprite.destroyed}`);
 
@@ -254,10 +316,15 @@ export function createTileSprite(
       logger.error(`[TILE_DISPOSE] Error destroying main sprite for tile ${tileKey}:`, error);
     }
 
+    releaseTileTexture(gridTile.textureCacheKey);
+    gridTile.textureCacheKey = null;
+
     const disposeTime = performance.now() - disposeStartTime;
     logger.info(`[TILE_DISPOSE] Disposed tile ${tileKey} in ${disposeTime.toFixed(2)}ms. Objects disposed: ${disposedObjects}`);
   };
 
-  return { x: gridX, y: gridY, worldX, worldY, tileType, sprite, overlay, dispose };
+  gridTile.dispose = dispose;
+
+  return gridTile;
 }
 

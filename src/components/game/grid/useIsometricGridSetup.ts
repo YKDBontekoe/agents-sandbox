@@ -8,7 +8,7 @@ import type { Viewport } from "pixi-viewport";
 import logger from "@/lib/logger";
 
 import { TileOverlay } from "./TileOverlay";
-import { createTileSprite, getTileTexture, type GridTile } from "./TileRenderer";
+import { createTileSprite, getTileTexture, releaseTileTexture, type GridTile } from "./TileRenderer";
 
 export type VisibilityUpdateOptions = {
   overlayUpdate?: boolean;
@@ -46,6 +46,8 @@ export function updateGridTileTexture({
 
   const tileKey = `${gridTile.x},${gridTile.y}`;
   const previousType = gridTile.tileType;
+  const previousTextureKey = gridTile.textureCacheKey;
+  const nextTextureKey = `${nextType}-${tileWidth}x${tileHeight}`;
 
   const nextTexture = getTileTexture(nextType, tileWidth, tileHeight, renderer, tileKey);
 
@@ -54,7 +56,12 @@ export function updateGridTileTexture({
     gridTile.sprite.texture.updateUvs();
   }
 
+  gridTile.textureCacheKey = nextTextureKey;
   gridTile.tileType = nextType;
+
+  if (previousTextureKey && previousTextureKey !== nextTextureKey) {
+    releaseTileTexture(previousTextureKey);
+  }
 
   if (gridTile.overlay && gridTile.overlay.destroyed) {
     logger.warn(
