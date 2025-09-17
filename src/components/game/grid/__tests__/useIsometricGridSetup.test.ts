@@ -4,12 +4,14 @@ import * as PIXI from "pixi.js";
 import { updateGridTileTexture } from "../useIsometricGridSetup";
 import type { GridTile } from "../TileRenderer";
 
-const { getTileTextureMock } = vi.hoisted(() => ({
+const { getTileTextureMock, releaseTileTextureMock } = vi.hoisted(() => ({
   getTileTextureMock: vi.fn(),
+  releaseTileTextureMock: vi.fn(),
 }));
 
 vi.mock("../TileRenderer", () => ({
   getTileTexture: getTileTextureMock,
+  releaseTileTexture: releaseTileTextureMock,
   createTileSprite: vi.fn(),
 }));
 
@@ -22,6 +24,7 @@ vi.mock("../TileOverlay", () => ({
 describe("useIsometricGridSetup", () => {
   beforeEach(() => {
     getTileTextureMock.mockReset();
+    releaseTileTextureMock.mockReset();
   });
 
   it("updates the sprite texture and tile type when the renderer is available", () => {
@@ -39,6 +42,7 @@ describe("useIsometricGridSetup", () => {
       tileType: "grass",
       sprite,
       dispose: vi.fn(),
+      textureCacheKey: "grass-64x32",
     };
 
     const nextTexture = { updateUvs: vi.fn() } as unknown as PIXI.RenderTexture;
@@ -64,6 +68,7 @@ describe("useIsometricGridSetup", () => {
     );
     expect(gridTile.sprite.texture).toBe(nextTexture);
     expect(gridTile.tileType).toBe("water");
+    expect(releaseTileTextureMock).toHaveBeenCalledWith("grass-64x32");
   });
 
   it("returns false when attempting to update a destroyed sprite", () => {
@@ -81,6 +86,7 @@ describe("useIsometricGridSetup", () => {
       tileType: "grass",
       sprite,
       dispose: vi.fn(),
+      textureCacheKey: "grass-64x32",
     };
 
     const updated = updateGridTileTexture({
@@ -93,5 +99,6 @@ describe("useIsometricGridSetup", () => {
 
     expect(updated).toBe(false);
     expect(gridTile.tileType).toBe("grass");
+    expect(releaseTileTextureMock).not.toHaveBeenCalled();
   });
 });
