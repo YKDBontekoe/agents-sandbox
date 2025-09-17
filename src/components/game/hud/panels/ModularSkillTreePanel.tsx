@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ResponsivePanel, ResponsiveButton } from '../ResponsiveHUDPanels';
+import { ResponsivePanel, ResponsiveButton } from '@arcane/ui/responsive';
 import { useHUDPanel } from '../HUDPanelRegistry';
+import { useHUDLayout } from '../HUDLayoutSystem';
 import { generateSkillTree } from '../../skills/generate';
 import type { SkillNode } from '../../skills/types';
 import { collectUnlockBlockers } from '../../skills/unlock';
@@ -34,6 +35,7 @@ export function ModularSkillTreePanel({ seed = 12345, onUnlock, variant = 'compa
     component: ModularSkillTreePanel,
     props: { seed: effectiveSeed, variant }
   });
+  const { screenSize } = useHUDLayout();
   const tree = useMemo(() => generateSkillTree(effectiveSeed), [effectiveSeed]);
   const [query, setQuery] = useState('');
   const [showAll, setShowAll] = useState(false);
@@ -127,6 +129,7 @@ export function ModularSkillTreePanel({ seed = 12345, onUnlock, variant = 'compa
 
   return (
     <ResponsivePanel
+      screenSize={screenSize}
       title={variant === 'minimal' ? 'Skills' : 'Skill Tree'}
       icon={(
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -261,9 +264,10 @@ export function ModularSkillTreePanel({ seed = 12345, onUnlock, variant = 'compa
                   </div>
                 </div>
                 <div className="flex-shrink-0">
-                  <ResponsiveButton 
-                    onClick={() => handleUnlock(n)} 
-                    variant='primary' 
+                  <ResponsiveButton
+                    screenSize={screenSize}
+                    onClick={() => handleUnlock(n)}
+                    variant='primary'
                     size={{ mobile: 'xs', tablet: 'xs', desktop: 'sm', wide: 'sm' }}
                     className="shadow-sm hover:shadow-md transition-shadow"
                   >

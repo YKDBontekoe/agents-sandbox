@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { ResponsivePanel } from '../ResponsiveHUDPanels';
+import { ResponsivePanel } from '@arcane/ui/responsive';
 import { useHUDPanel } from '../HUDPanelRegistry';
+import { useHUDLayout } from '../HUDLayoutSystem';
 
 interface ModularQuestPanelProps {
   completed: Record<string, boolean>;
@@ -20,6 +21,7 @@ const QUESTS: Array<{ id: string; text: string }> = [
 export default function ModularQuestPanel({ completed, variant = 'default', collapsible = true }: ModularQuestPanelProps) {
   // Default to collapsed; users can peek as needed
   const [isCollapsed, setIsCollapsed] = useState(true);
+  const { screenSize } = useHUDLayout();
 
   useHUDPanel({
     config: {
@@ -48,6 +50,7 @@ export default function ModularQuestPanel({ completed, variant = 'default', coll
 
   return (
     <ResponsivePanel
+      screenSize={screenSize}
       title={variant !== 'minimal' ? `Quests` : `Q`}
       icon={titleIcon}
       variant={variant}

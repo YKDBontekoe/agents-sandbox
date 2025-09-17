@@ -5,3 +5,4 @@ export { Tooltip } from './Tooltip';
 export * from './resources';
 export * from './categories';
 export * from './settings';
+export * from './responsive';

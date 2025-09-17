@@ -1,6 +1,13 @@
 import React, { useState } from 'react';
-import { ResponsivePanel, ResponsiveText, ResponsiveGrid, ResponsiveIcon } from '../ResponsiveHUDPanels';
+import {
+  ResponsivePanel,
+  ResponsiveText,
+  ResponsiveGrid,
+  ResponsiveIcon,
+  type ResponsiveScreenSize
+} from '@arcane/ui/responsive';
 import { useHUDPanel } from '../HUDPanelRegistry';
+import { useHUDLayout } from '../HUDLayoutSystem';
 import type { GameResources, WorkforceInfo } from '../types';
 
 interface ModularResourcePanelProps {
@@ -19,23 +26,26 @@ interface ResourceItemProps {
   danger?: boolean;
   icon?: React.ReactNode;
   variant?: 'default' | 'compact' | 'minimal';
+  screenSize: ResponsiveScreenSize;
 }
 
-function ResourceItem({ label, value, delta, danger, icon, variant = 'default' }: ResourceItemProps) {
+function ResourceItem({ label, value, delta, danger, icon, variant = 'default', screenSize }: ResourceItemProps) {
   const showDelta = typeof delta === 'number' && delta !== 0;
-  
+
   return (
     <div className="flex items-center justify-between gap-2 px-2 py-1 rounded hover:bg-white/5 transition-colors">
       <div className="flex items-center gap-2 min-w-0 flex-1">
         {icon && (
-          <ResponsiveIcon 
+          <ResponsiveIcon
+            screenSize={screenSize}
             size={{ mobile: 'xs', tablet: 'sm', desktop: 'sm', wide: 'md' }}
             className="text-gray-400 flex-shrink-0"
           >
             {icon}
           </ResponsiveIcon>
         )}
-        <ResponsiveText 
+        <ResponsiveText
+          screenSize={screenSize}
           size={{ mobile: 'xs', tablet: 'xs', desktop: 'sm', wide: 'sm' }}
           weight="medium"
           color={danger ? 'danger' : 'primary'}
@@ -46,7 +56,8 @@ function ResourceItem({ label, value, delta, danger, icon, variant = 'default' }
       </div>
       
       <div className="flex items-center gap-1 flex-shrink-0">
-        <ResponsiveText 
+        <ResponsiveText
+          screenSize={screenSize}
           size={{ mobile: 'xs', tablet: 'xs', desktop: 'sm', wide: 'sm' }}
           weight="semibold"
           color={danger ? 'danger' : 'primary'}
@@ -54,9 +65,10 @@ function ResourceItem({ label, value, delta, danger, icon, variant = 'default' }
         >
           {value.toLocaleString()}
         </ResponsiveText>
-        
+
         {showDelta && (
-          <ResponsiveText 
+          <ResponsiveText
+            screenSize={screenSize}
             size={{ mobile: 'xs', tablet: 'xs', desktop: 'xs', wide: 'sm' }}
             color={delta! > 0 ? 'success' : 'danger'}
             className="tabular-nums"
@@ -69,24 +81,35 @@ function ResourceItem({ label, value, delta, danger, icon, variant = 'default' }
   );
 }
 
-function WorkforceSection({ workforce, variant }: { workforce: WorkforceInfo; variant: 'default' | 'compact' | 'minimal' }) {
+function WorkforceSection({
+  workforce,
+  variant,
+  screenSize
+}: {
+  workforce: WorkforceInfo;
+  variant: 'default' | 'compact' | 'minimal';
+  screenSize: ResponsiveScreenSize;
+}) {
   if (variant === 'minimal') return null;
-  
+
   return (
     <div className="mt-3 pt-2 border-t border-gray-700">
-      <ResponsiveGrid 
+      <ResponsiveGrid
+        screenSize={screenSize}
         columns={{ mobile: 1, tablet: 2, desktop: 2, wide: 2 }}
         gap="sm"
       >
         <div className="text-center">
-          <ResponsiveText 
+          <ResponsiveText
+            screenSize={screenSize}
             size={{ mobile: 'xs', tablet: 'xs', desktop: 'xs', wide: 'sm' }}
             color="muted"
             className="block mb-1"
           >
             Workforce
           </ResponsiveText>
-          <ResponsiveText 
+          <ResponsiveText
+            screenSize={screenSize}
             size={{ mobile: 'xs', tablet: 'sm', desktop: 'sm', wide: 'sm' }}
             weight="medium"
             className="tabular-nums"
@@ -94,16 +117,18 @@ function WorkforceSection({ workforce, variant }: { workforce: WorkforceInfo; va
             {workforce.idle}/{workforce.total}
           </ResponsiveText>
         </div>
-        
+
         <div className="text-center">
-          <ResponsiveText 
+          <ResponsiveText
+            screenSize={screenSize}
             size={{ mobile: 'xs', tablet: 'xs', desktop: 'xs', wide: 'sm' }}
             color="muted"
             className="block mb-1"
           >
             Needed
           </ResponsiveText>
-          <ResponsiveText 
+          <ResponsiveText
+            screenSize={screenSize}
             size={{ mobile: 'xs', tablet: 'sm', desktop: 'sm', wide: 'sm' }}
             weight="medium"
             className="tabular-nums"
@@ -160,15 +185,16 @@ const resourceIcons = {
   )
 };
 
-export function ModularResourcePanel({ 
-  resources, 
-  workforce, 
-  changes, 
-  shortages, 
+export function ModularResourcePanel({
+  resources,
+  workforce,
+  changes,
+  shortages,
   variant = 'default',
-  collapsible = true 
+  collapsible = true
 }: ModularResourcePanelProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const { screenSize } = useHUDLayout();
   
   // Register this panel with the HUD system
   useHUDPanel({
@@ -201,6 +227,7 @@ export function ModularResourcePanel({
 
   return (
     <ResponsivePanel
+      screenSize={screenSize}
       title={variant !== 'minimal' ? 'Resources' : 'Res'}
       icon={titleIcon}
       variant={variant}
@@ -211,73 +238,81 @@ export function ModularResourcePanel({
       className="min-w-0"
     >
       <div className="space-y-1">
-        <ResourceItem 
-          label="Grain" 
-          value={resources.grain} 
-          delta={changes.grain} 
+        <ResourceItem
+          screenSize={screenSize}
+          label="Grain"
+          value={resources.grain}
+          delta={changes.grain}
           danger={!!shortages?.grain}
           icon={resourceIcons.grain}
           variant={variant}
         />
-        <ResourceItem 
-          label="Wood" 
-          value={resources.wood} 
-          delta={changes.wood} 
+        <ResourceItem
+          screenSize={screenSize}
+          label="Wood"
+          value={resources.wood}
+          delta={changes.wood}
           danger={!!shortages?.wood}
           icon={resourceIcons.wood}
           variant={variant}
         />
-        <ResourceItem 
-          label="Planks" 
-          value={resources.planks} 
-          delta={changes.planks} 
+        <ResourceItem
+          screenSize={screenSize}
+          label="Planks"
+          value={resources.planks}
+          delta={changes.planks}
           danger={!!shortages?.planks}
           icon={resourceIcons.planks}
           variant={variant}
         />
-        <ResourceItem 
-          label="Coin" 
-          value={resources.coin} 
-          delta={changes.coin} 
+        <ResourceItem
+          screenSize={screenSize}
+          label="Coin"
+          value={resources.coin}
+          delta={changes.coin}
           danger={!!shortages?.coin}
           icon={resourceIcons.coin}
           variant={variant}
         />
-        <ResourceItem 
-          label="Mana" 
-          value={resources.mana} 
-          delta={changes.mana} 
+        <ResourceItem
+          screenSize={screenSize}
+          label="Mana"
+          value={resources.mana}
+          delta={changes.mana}
           danger={!!shortages?.mana}
           icon={resourceIcons.mana}
           variant={variant}
         />
-        <ResourceItem 
-          label="Favor" 
-          value={resources.favor} 
-          delta={changes.favor} 
+        <ResourceItem
+          screenSize={screenSize}
+          label="Favor"
+          value={resources.favor}
+          delta={changes.favor}
           danger={!!shortages?.favor}
           icon={resourceIcons.favor}
           variant={variant}
         />
-        <ResourceItem 
-          label="Unrest" 
-          value={resources.unrest} 
-          delta={changes.unrest} 
+        <ResourceItem
+          screenSize={screenSize}
+          label="Unrest"
+          value={resources.unrest}
+          delta={changes.unrest}
           danger={resources.unrest >= 80}
           icon={resourceIcons.unrest}
           variant={variant}
         />
-        <ResourceItem 
-          label="Threat" 
-          value={resources.threat} 
-          delta={changes.threat} 
+        <ResourceItem
+          screenSize={screenSize}
+          label="Threat"
+          value={resources.threat}
+          delta={changes.threat}
           danger={resources.threat >= 70}
           icon={resourceIcons.threat}
           variant={variant}
         />
       </div>
-      
-      <WorkforceSection workforce={workforce} variant={variant} />
+
+      <WorkforceSection workforce={workforce} variant={variant} screenSize={screenSize} />
     </ResponsivePanel>
   );
 }
