@@ -1,14 +1,16 @@
 import { describe, it, expect } from 'vitest';
 import { WorkerProgressionService } from '../workerProgressionService';
-import { createDefaultJobCatalog } from '../jobCatalog';
+import { JobCatalogService } from '../jobCatalogService';
 import { LaborMarketService } from '../laborMarketService';
 import type { WorkerProfile, Workplace } from '../types';
 import type { Citizen } from '@engine/simulation/citizenBehavior';
 import { createGameTime } from '@engine/types/gameTime';
 
-function createWorkerProfile(roleId: string): { worker: WorkerProfile; coworker: WorkerProfile } {
-  const catalog = createDefaultJobCatalog();
-  const role = catalog.get(roleId);
+function createWorkerProfile(
+  roleId: string,
+  jobCatalog: JobCatalogService
+): { worker: WorkerProfile; coworker: WorkerProfile } {
+  const role = jobCatalog.getRole(roleId);
   if (!role) {
     throw new Error(`Missing role ${roleId}`);
   }
@@ -62,7 +64,8 @@ function createWorkerProfile(roleId: string): { worker: WorkerProfile; coworker:
 
 describe('WorkerProgressionService', () => {
   it('updates worker progression metrics and workplace relationships', () => {
-    const { worker, coworker } = createWorkerProfile('farmer');
+    const jobCatalog = new JobCatalogService();
+    const { worker, coworker } = createWorkerProfile('farmer', jobCatalog);
 
     const workers = new Map<string, WorkerProfile>([
       [worker.citizenId, worker],
@@ -112,7 +115,7 @@ describe('WorkerProgressionService', () => {
 
     progression.updateWorkerProgression(worker, {
       gameTime: createGameTime(0),
-      jobRoles: createDefaultJobCatalog(),
+      jobCatalog,
       laborMarket,
       citizen,
       workers,
