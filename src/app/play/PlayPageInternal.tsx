@@ -969,7 +969,6 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
       ],
     },
   ]), [edicts]);
-  const totalEdictCost = useMemo(() => Object.keys(pendingEdictChanges).length * 1, [pendingEdictChanges]);
   const [upcomingEvents, _setUpcomingEvents] = useState<SeasonalEvent[]>([]);
   const [omenReadings, _setOmenReadings] = useState<OmenReading[]>([]);
 
@@ -2525,20 +2524,26 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
         edicts={edictDefs}
         pendingChanges={pendingEdictChanges}
         onEdictChange={(id, value) => setPendingEdictChanges(prev => ({ ...prev, [id]: value }))}
-        onApplyChanges={async () => {
+        onApplyChanges={async ({ changes, totalCost }) => {
+          if (Object.keys(changes).length === 0) {
+            return;
+          }
+
           const applied: Record<string, number> = { ...edicts };
-          for (const [k, v] of Object.entries(pendingEdictChanges)) applied[k] = v;
+          for (const [k, v] of Object.entries(changes)) {
+            applied[k] = v;
+          }
+
           setEdicts(applied);
           setPendingEdictChanges({});
-          // Deduct favor cost
+
           const newRes = { ...state!.resources } as Record<string, number>;
-          newRes.favor = Math.max(0, (newRes.favor || 0) - totalEdictCost);
-          setState(prev => prev ? { ...prev, resources: newRes, edicts: applied } : prev);
+          newRes.favor = Math.max(0, (newRes.favor || 0) - totalCost);
+          setState(prev => (prev ? { ...prev, resources: newRes, edicts: applied } : prev));
           await saveState({ resources: newRes, edicts: applied });
         }}
         onResetChanges={() => setPendingEdictChanges({})}
         currentFavor={resources.favor}
-        totalCost={totalEdictCost}
       />
 
       {/* Council Panel */}

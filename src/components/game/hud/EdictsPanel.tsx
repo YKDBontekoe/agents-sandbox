@@ -1,27 +1,17 @@
 import React from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
-import * as Slider from '@radix-ui/react-slider';
-import * as Toggle from '@radix-ui/react-toggle';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faCrown, faScroll, faXmark, faLock } from '@/lib/icons';
-import { CategoryIcon, CATEGORY_TYPES, type CategoryType } from '@arcane/ui';
+import { faCrown, faScroll, faXmark } from '@/lib/icons';
 
-export interface EdictSetting {
-  id: string;
-  name: string;
-  description: string;
-  type: 'slider' | 'toggle';
-  category: CategoryType;
-  currentValue: number; // 0-100 for sliders, 0/1 for toggles
-  defaultValue: number;
-  cost?: number; // Favor cost to change
-  effects: {
-    resource: string;
-    impact: string; // e.g., "+10% grain production", "-5 unrest per cycle"
-  }[];
-  requirements?: string[];
-  isLocked?: boolean;
+import { CategorySection } from './panels/edicts/CategorySection';
+import { useEdictsPanel } from './panels/edicts/useEdictsPanel';
+import type { EdictSetting } from './panels/edicts/types';
+
+export interface ApplyEdictChangesPayload {
+  changes: Record<string, number>;
+  totalCost: number;
+  selection: Record<string, number>;
 }
 
 export interface EdictsPanelProps {
@@ -30,165 +20,10 @@ export interface EdictsPanelProps {
   edicts: EdictSetting[];
   pendingChanges: Record<string, number>;
   onEdictChange: (edictId: string, value: number) => void;
-  onApplyChanges: () => void;
+  onApplyChanges: (payload: ApplyEdictChangesPayload) => void;
   onResetChanges: () => void;
   currentFavor: number;
-  totalCost: number;
 }
-
-const EdictControl: React.FC<{
-  edict: EdictSetting;
-  currentValue: number;
-  pendingValue: number;
-  onChange: (value: number) => void;
-  isLocked: boolean;
-}> = ({ edict, currentValue, pendingValue, onChange, isLocked }) => {
-  const hasChanged = currentValue !== pendingValue;
-  const cost = hasChanged ? (edict.cost || 0) : 0;
-
-  return (
-    <div className={`bg-gray-900/50 rounded-lg p-4 border ${
-      hasChanged ? 'border-yellow-500/60' : 'border-gray-700'
-    } shadow-sm text-gray-200 ${isLocked ? 'opacity-50' : ''}`}>
-      {/* Header */}
-      <div className="flex items-start justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <CategoryIcon category={edict.category} />
-          <div>
-            <h3 className="text-gray-100 font-medium">{edict.name}</h3>
-            <p className="text-gray-400 text-sm">{edict.description}</p>
-          </div>
-        </div>
-        {cost > 0 && (
-          <div className="text-xs bg-yellow-900/30 text-yellow-300 border border-yellow-700/60 px-2 py-1 rounded flex items-center gap-1">
-            <FontAwesomeIcon icon={faCrown} /> {cost}
-          </div>
-        )}
-      </div>
-
-      {/* Control */}
-      <div className="mb-3">
-        {edict.type === 'slider' ? (
-          <div className="space-y-2">
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-400">Value:</span>
-              <span className={`font-mono ${
-                hasChanged ? 'text-amber-300' : 'text-gray-200'
-              }`}>
-                {pendingValue}%
-              </span>
-            </div>
-            <Slider.Root
-              value={[pendingValue]}
-              onValueChange={([value]) => !isLocked && onChange(value)}
-              max={100}
-              step={5}
-              className="relative flex items-center select-none touch-none w-full h-5"
-              disabled={isLocked}
-            >
-              <Slider.Track className="bg-gray-700 relative grow rounded-full h-2">
-                <Slider.Range className="absolute bg-blue-500 rounded-full h-full" />
-              </Slider.Track>
-              <Slider.Thumb
-                className="block w-4 h-4 bg-gray-200 rounded-full shadow-lg hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-                aria-label="Value"
-              />
-            </Slider.Root>
-          </div>
-        ) : (
-          <div className="flex items-center justify-between">
-            <span className="text-gray-400 text-sm">Status:</span>
-            <Toggle.Root
-              pressed={pendingValue === 1}
-              onPressedChange={(pressed) => !isLocked && onChange(pressed ? 1 : 0)}
-              className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
-                pendingValue === 1
-                  ? 'bg-green-600 text-white'
-                  : 'bg-gray-700 text-gray-200'
-              } ${isLocked ? 'cursor-not-allowed' : 'hover:opacity-80'}`}
-              disabled={isLocked}
-            >
-              {pendingValue === 1 ? 'Enabled' : 'Disabled'}
-            </Toggle.Root>
-          </div>
-        )}
-      </div>
-
-      {/* Effects */}
-      <div className="space-y-1">
-        <div className="text-xs text-gray-400">Effects:</div>
-        {edict.effects.map((effect, index) => (
-          <div key={index} className="text-xs text-gray-300 flex items-center gap-2">
-            <span className="text-blue-400">{effect.resource}:</span>
-            <span>{effect.impact}</span>
-          </div>
-        ))}
-      </div>
-
-      {/* Requirements */}
-      {edict.requirements && edict.requirements.length > 0 && (
-        <div className="mt-2 pt-2 border-t border-gray-700">
-          <div className="text-xs text-gray-400 mb-1">Requirements:</div>
-          {edict.requirements.map((req, index) => (
-            <div key={index} className="text-xs text-gray-300">
-              • {req}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Lock Status */}
-      {isLocked && (
-        <div className="mt-2 pt-2 border-t border-gray-700">
-          <div className="text-xs text-red-400 flex items-center gap-1">
-            <FontAwesomeIcon icon={faLock} /> Locked - Requirements not met
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-const CategorySection: React.FC<{
-  category: EdictSetting['category'];
-  edicts: EdictSetting[];
-  pendingChanges: Record<string, number>;
-  onChange: (edictId: string, value: number) => void;
-}> = ({ category, edicts, pendingChanges, onChange }) => {
-  const categoryEdicts = edicts.filter(e => e.category === category);
-  
-  if (categoryEdicts.length === 0) return null;
-
-  const categoryNames: Record<CategoryType, string> = {
-    economic: 'Economic Policy',
-    military: 'Military Doctrine',
-    social: 'Social Order',
-    mystical: 'Mystical Arts',
-    diplomatic: 'Diplomacy',
-    infrastructure: 'Infrastructure',
-  };
-
-  return (
-    <div className="space-y-4">
-      <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-        <CategoryIcon category={category} />
-        {categoryNames[category]}
-      </h2>
-      <div className="grid gap-4">
-        {categoryEdicts.map(edict => (
-          <EdictControl
-            key={edict.id}
-            edict={edict}
-            currentValue={edict.currentValue}
-            pendingValue={pendingChanges[edict.id] ?? edict.currentValue}
-            onChange={(value) => onChange(edict.id, value)}
-            isLocked={edict.isLocked || false}
-          />
-        ))}
-      </div>
-    </div>
-  );
-};
 
 export const EdictsPanel: React.FC<EdictsPanelProps> = ({
   isOpen,
@@ -199,10 +34,24 @@ export const EdictsPanel: React.FC<EdictsPanelProps> = ({
   onApplyChanges,
   onResetChanges,
   currentFavor,
-  totalCost
 }) => {
-  const hasChanges = Object.keys(pendingChanges).length > 0;
-  const canAfford = currentFavor >= totalCost;
+  const {
+    categoryGroups,
+    hasChanges,
+    totalCost,
+    canAfford,
+    changesToApply,
+    pendingSelection,
+  } = useEdictsPanel({ edicts, pendingChanges, currentFavor });
+
+  const handleApplyChanges = React.useCallback(() => {
+    if (!hasChanges) return;
+    onApplyChanges({
+      changes: changesToApply,
+      totalCost,
+      selection: pendingSelection,
+    });
+  }, [hasChanges, onApplyChanges, changesToApply, totalCost, pendingSelection]);
 
   return (
     <Dialog.Root open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
@@ -214,101 +63,101 @@ export const EdictsPanel: React.FC<EdictsPanelProps> = ({
           className="fixed inset-0 z-[110] flex items-center justify-center p-4 data-[state=open]:opacity-100 data-[state=closed]:opacity-0 data-[state=closed]:scale-95 motion-safe:transition-[opacity,transform] motion-safe:duration-200 motion-safe:data-[state=open]:animate-scale-in"
         >
           <div className="bg-gray-800 text-gray-200 rounded-lg shadow-xl w-full max-w-6xl max-h-[90vh] overflow-hidden border border-gray-700">
-          {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b border-gray-700">
-            <div className="flex items-center gap-3">
-              <FontAwesomeIcon icon={faScroll} className="text-2xl" />
-              <div>
-                <Dialog.Title className="text-xl font-bold text-gray-100">
-                  Royal Edicts
-                </Dialog.Title>
-                <Dialog.Description className="text-gray-400 text-sm">
-                  Adjust policies and doctrines that will take effect next cycle
-                </Dialog.Description>
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-700">
+              <div className="flex items-center gap-3">
+                <FontAwesomeIcon icon={faScroll} className="text-2xl" />
+                <div>
+                  <Dialog.Title className="text-xl font-bold text-gray-100">
+                    Royal Edicts
+                  </Dialog.Title>
+                  <Dialog.Description className="text-gray-400 text-sm">
+                    Adjust policies and doctrines that will take effect next cycle
+                  </Dialog.Description>
+                </div>
+              </div>
+              <div className="flex items-center gap-4">
+                {/* Cost Display */}
+                {hasChanges && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-gray-400">Cost:</span>
+                    <span
+                      className={`font-mono text-sm flex items-center gap-1 ${
+                        canAfford ? 'text-amber-300' : 'text-rose-400'
+                      }`}
+                    >
+                      <FontAwesomeIcon icon={faCrown} /> {totalCost} / {currentFavor}
+                    </span>
+                  </div>
+                )}
+                <Dialog.Close asChild>
+                  <button className="p-2 hover:bg-gray-700 rounded text-gray-400 hover:text-gray-100 transition-colors">
+                    <FontAwesomeIcon icon={faXmark} />
+                  </button>
+                </Dialog.Close>
               </div>
             </div>
-            <div className="flex items-center gap-4">
-              {/* Cost Display */}
+
+            {/* Content */}
+            <div className="flex flex-col h-[calc(90vh-120px)]">
+              <div className="flex-1 p-6 overflow-y-auto">
+                <div className="space-y-8">
+                  {categoryGroups.map(group => (
+                    <CategorySection
+                      key={group.category}
+                      category={group.category}
+                      title={group.title}
+                      edicts={group.edicts}
+                      onChange={onEdictChange}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {/* Footer */}
               {hasChanges && (
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-400">Cost:</span>
-                  <span
-                    className={`font-mono text-sm flex items-center gap-1 ${
-                      canAfford ? 'text-amber-300' : 'text-rose-400'
-                    }`}
-                  >
-                    <FontAwesomeIcon icon={faCrown} /> {totalCost} / {currentFavor}
-                  </span>
+                <div className="border-t border-gray-700 p-4 bg-gray-900/40">
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm text-gray-400">
+                      Changes will take effect at the start of the next cycle
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={onResetChanges}
+                        className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-100 text-sm rounded transition-colors"
+                      >
+                        Reset
+                      </button>
+                      <Tooltip.Provider>
+                        <Tooltip.Root>
+                          <Tooltip.Trigger asChild>
+                            <button
+                              onClick={handleApplyChanges}
+                              disabled={!canAfford}
+                              className={`px-4 py-2 text-sm rounded font-medium transition-colors ${
+                                canAfford
+                                  ? 'bg-green-600 hover:bg-green-700 text-white'
+                                  : 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                              }`}
+                            >
+                              Apply Changes
+                            </button>
+                          </Tooltip.Trigger>
+                          {!canAfford && (
+                            <Tooltip.Portal>
+                              <Tooltip.Content className="bg-gray-800 border border-gray-700 text-gray-200 px-2 py-1 rounded text-xs shadow-sm" sideOffset={5}>
+                                Insufficient favor to apply changes
+                                <Tooltip.Arrow className="fill-gray-800" />
+                              </Tooltip.Content>
+                            </Tooltip.Portal>
+                          )}
+                        </Tooltip.Root>
+                      </Tooltip.Provider>
+                    </div>
+                  </div>
                 </div>
               )}
-              <Dialog.Close asChild>
-                <button className="p-2 hover:bg-gray-700 rounded text-gray-400 hover:text-gray-100 transition-colors">
-                  <FontAwesomeIcon icon={faXmark} />
-                </button>
-              </Dialog.Close>
             </div>
-          </div>
-
-          {/* Content */}
-          <div className="flex flex-col h-[calc(90vh-120px)]">
-            <div className="flex-1 p-6 overflow-y-auto">
-              <div className="space-y-8">
-                {CATEGORY_TYPES.filter(category => edicts.some(e => e.category === category)).map(category => (
-                  <CategorySection
-                    key={category}
-                    category={category}
-                    edicts={edicts}
-                    pendingChanges={pendingChanges}
-                    onChange={onEdictChange}
-                  />
-                ))}
-              </div>
-            </div>
-
-            {/* Footer */}
-            {hasChanges && (
-              <div className="border-t border-gray-700 p-4 bg-gray-900/40">
-                <div className="flex items-center justify-between">
-                  <div className="text-sm text-gray-400">
-                    Changes will take effect at the start of the next cycle
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={onResetChanges}
-                      className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-100 text-sm rounded transition-colors"
-                    >
-                      Reset
-                    </button>
-                    <Tooltip.Provider>
-                      <Tooltip.Root>
-                        <Tooltip.Trigger asChild>
-                          <button
-                            onClick={onApplyChanges}
-                            disabled={!canAfford}
-                            className={`px-4 py-2 text-sm rounded font-medium transition-colors ${
-                              canAfford
-                                ? 'bg-green-600 hover:bg-green-700 text-white'
-                                : 'bg-gray-700 text-gray-400 cursor-not-allowed'
-                            }`}
-                          >
-                            Apply Changes
-                          </button>
-                        </Tooltip.Trigger>
-                        {!canAfford && (
-                          <Tooltip.Portal>
-                            <Tooltip.Content className="bg-gray-800 border border-gray-700 text-gray-200 px-2 py-1 rounded text-xs shadow-sm" sideOffset={5}>
-                              Insufficient favor to apply changes
-                              <Tooltip.Arrow className="fill-gray-800" />
-                            </Tooltip.Content>
-                          </Tooltip.Portal>
-                        )}
-                      </Tooltip.Root>
-                    </Tooltip.Provider>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
           </div>
         </Dialog.Content>
       </Dialog.Portal>
@@ -317,3 +166,4 @@ export const EdictsPanel: React.FC<EdictsPanelProps> = ({
 };
 
 export default EdictsPanel;
+export type { EdictSetting } from './panels/edicts/types';
