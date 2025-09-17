@@ -1,18 +1,21 @@
 import type { SimResources } from '../index';
-import {
-  SimulatedBuilding,
-  calculateDeterioration,
-  calculateUtilityEfficiency,
-  performMaintenance,
-  createSimulatedBuilding
-} from './buildingSimulation';
+import type { GameTime } from '../types/gameTime';
+import { performMaintenance, type SimulatedBuilding } from './buildingSimulation';
 import { CitizenBehaviorSystem } from './citizenBehavior';
 import type { Citizen } from './citizens/citizen';
-import { WorkerSimulationSystem } from './workerSimulation';
-import type { WorkerProfile } from './workers/types';
 import type { ActiveEvent, VisualIndicator } from './events/types';
 import { EventManager } from './events/EventManager';
-import type { GameTime } from '../types/gameTime';
+import { WorkerSimulationSystem, type LaborMarket } from './workerSimulation';
+import type { WorkerProfile } from './workers/types';
+import {
+  runBuildingPipeline,
+  type MaintenanceAction
+} from './buildingPipeline';
+import { runCitizenPipeline } from './citizenPipeline';
+import { runWorkerPipeline } from './workerPipeline';
+import { runEventPipeline } from './eventPipeline';
+
+type SystemHealthSnapshot = ReturnType<EventManager['getSystemHealth']>;
 
 // Enhanced game state interface
 export interface EnhancedGameState {
@@ -28,19 +31,18 @@ export interface EnhancedGameState {
   }>;
   resources: SimResources;
   gameTime: GameTime;
-  
+
   // Enhanced simulation data
   simulatedBuildings: SimulatedBuilding[];
+  maintenanceActions: MaintenanceAction[];
   citizens: Citizen[];
+  communityMood: { happiness: number; stress: number; satisfaction: number };
   workers: WorkerProfile[];
+  laborMarket: LaborMarket;
   activeEvents: ActiveEvent[];
-  
+
   // System metrics
-  systemHealth: {
-    economicHealth: number;
-    publicSafety: number;
-    socialCohesion: number;
-  };
+  systemHealth: SystemHealthSnapshot;
 }
 
 // Visual feedback configuration
@@ -66,7 +68,12 @@ export class SimulationIntegrationSystem {
   private citizenSystem = new CitizenBehaviorSystem();
   private workerSystem = new WorkerSimulationSystem();
   private eventManager = new EventManager();
-  
+  private previousSimulatedBuildings: SimulatedBuilding[] = [];
+  private latestMaintenanceActions: MaintenanceAction[] = [];
+  private latestCommunityMood = { happiness: 50, stress: 50, satisfaction: 50 };
+  private latestLaborMarket: LaborMarket | null = null;
+  private latestSystemHealth: SystemHealthSnapshot = this.eventManager.getSystemHealth();
+
   private visualConfig: VisualFeedbackConfig;
   private performanceMetrics: PerformanceMetrics;
   
@@ -106,88 +113,75 @@ export class SimulationIntegrationSystem {
     const startTime = performance.now();
     
     try {
-      // Convert buildings to simulated buildings
-      const simulatedBuildings = gameState.buildings.map(building => 
-        createSimulatedBuilding(building, gameState.gameTime)
-      );
-      
-      // Update building simulation
-      const updatedBuildings = simulatedBuildings.map(building => {
-        const newCondition = calculateDeterioration(building, gameState.gameTime);
-        const efficiency = calculateUtilityEfficiency(building, gameState.resources);
-        return {
-          ...building,
-          condition: newCondition,
-          utilityEfficiency: efficiency
-        };
-      });
-      
-      // Update citizens
-      const citizens = this.citizenSystem.getAllCitizens();
-      citizens.forEach(citizen => {
-        this.citizenSystem.updateCitizen(citizen.id, gameState.gameTime, {
-          buildings: updatedBuildings,
-          resources: gameState.resources,
-          threatLevel: this.calculateThreatLevel(gameState),
-            cityEvents: this.eventManager.getActiveEvents().map(e => e.type)
-        });
-      });
-      
-      // Update workers using enhanced system
-      this.workerSystem.updateSystem({
-        buildings: updatedBuildings,
+      const buildingResult = runBuildingPipeline({
+        buildings: gameState.buildings,
         resources: gameState.resources,
-        citizens: citizens
-      }, gameState.gameTime);
-      
-      const workers = this.workerSystem.getAllWorkers();
-      
-      // Update events system
-      this.eventManager.updateEvents(gameState.gameTime, {
-        buildings: updatedBuildings,
-        citizens: citizens,
-        workers: workers,
+        gameTime: gameState.gameTime,
+        previousSimulatedBuildings: this.previousSimulatedBuildings
+      });
+
+      const citizenResult = runCitizenPipeline(this.citizenSystem, {
+        gameTime: gameState.gameTime,
+        buildings: buildingResult.simulatedBuildings,
+        resources: gameState.resources,
+        activeEvents: this.eventManager.getActiveEvents(),
+        threatLevel: this.calculateThreatLevel({ resources: gameState.resources })
+      });
+
+      const workerResult = runWorkerPipeline(this.workerSystem, {
+        gameTime: gameState.gameTime,
+        buildings: buildingResult.simulatedBuildings,
+        resources: gameState.resources,
+        citizens: citizenResult.citizens
+      });
+
+      const eventResult = runEventPipeline(this.eventManager, {
+        gameTime: gameState.gameTime,
+        buildings: buildingResult.simulatedBuildings,
+        citizens: citizenResult.citizens,
+        workers: workerResult.workers,
         resources: gameState.resources
       });
-      
-      // Calculate system health
-      const systemHealth = this.calculateSystemHealth({
-        buildings: updatedBuildings,
-        citizens: citizens,
-        workers: workers,
-        resources: gameState.resources
-      });
-      
-      // Update performance metrics
+
+      this.previousSimulatedBuildings = buildingResult.simulatedBuildings.map(building => ({
+        ...building
+      }));
+      this.latestMaintenanceActions = buildingResult.maintenanceActions;
+      this.latestCommunityMood = citizenResult.communityMood;
+      this.latestLaborMarket = workerResult.laborMarket;
+      this.latestSystemHealth = eventResult.systemHealth;
+
       this.updatePerformanceMetrics(startTime);
-      
+
       return {
         buildings: gameState.buildings,
         resources: gameState.resources,
         gameTime: gameState.gameTime,
-        simulatedBuildings: updatedBuildings,
-        citizens: citizens,
-        workers: workers,
-        activeEvents: this.eventManager.getActiveEvents(),
-        systemHealth
+        simulatedBuildings: buildingResult.simulatedBuildings,
+        maintenanceActions: buildingResult.maintenanceActions,
+        citizens: citizenResult.citizens,
+        communityMood: citizenResult.communityMood,
+        workers: workerResult.workers,
+        laborMarket: workerResult.laborMarket,
+        activeEvents: eventResult.activeEvents,
+        systemHealth: eventResult.systemHealth
       };
       
     } catch (error) {
       console.error('Simulation update error:', error);
-      // Return safe fallback state
+      // Return safe fallback state using the last known good data
       return {
         buildings: gameState.buildings,
         resources: gameState.resources,
         gameTime: gameState.gameTime,
-        simulatedBuildings: [],
-        citizens: [],
-        workers: [],
-        activeEvents: [],
-        systemHealth: {
-          economicHealth: 50,
-          publicSafety: 50,
-          socialCohesion: 50
-        }
+        simulatedBuildings: [...this.previousSimulatedBuildings],
+        maintenanceActions: [...this.latestMaintenanceActions],
+        citizens: this.citizenSystem.getAllCitizens(),
+        communityMood: this.latestCommunityMood,
+        workers: this.workerSystem.getAllWorkers(),
+        laborMarket: this.latestLaborMarket ?? this.workerSystem.getLaborMarket(),
+        activeEvents: this.eventManager.getActiveEvents(),
+        systemHealth: this.latestSystemHealth
       };
     }
   }
@@ -218,7 +212,7 @@ export class SimulationIntegrationSystem {
     
     // Add citizen mood indicators
     if (this.visualConfig.showCitizenMood) {
-      const communityMood = this.citizenSystem.getCommunityMood();
+      const communityMood = gameState.communityMood;
       if (communityMood.happiness < 30 || communityMood.stress > 70) {
         indicators.push({
           id: 'community_mood',
@@ -322,36 +316,11 @@ export class SimulationIntegrationSystem {
   
   // Helper methods
   private calculateThreatLevel(gameState: { resources: SimResources }): number {
-      const resourceScore = Object.values(gameState.resources).reduce(
-        (sum: number, val: number) => sum + (val || 0),
-        0
-      ) / 100;
+    const resourceScore = Object.values(gameState.resources).reduce(
+      (sum: number, val: number) => sum + (val || 0),
+      0
+    ) / 100;
     return Math.max(0, Math.min(100, 50 - resourceScore));
-  }
-  
-  private calculateSystemHealth(gameState: {
-    buildings: SimulatedBuilding[];
-    citizens: Citizen[];
-    workers: WorkerProfile[];
-    resources: SimResources;
-  }) {
-    const buildingHealth = gameState.buildings.length > 0 
-      ? gameState.buildings.reduce((sum, b) => sum + this.getConditionValue(b.condition), 0) / gameState.buildings.length
-      : 50;
-    
-    const communityMood = this.citizenSystem.getCommunityMood();
-    const socialCohesion = communityMood.happiness;
-    
-      const resourceHealth = Object.values(gameState.resources).reduce(
-        (sum: number, val: number) => sum + (val || 0),
-        0
-      ) / 4;
-    
-    return {
-      economicHealth: Math.min(100, resourceHealth),
-      publicSafety: Math.min(100, buildingHealth),
-      socialCohesion: Math.min(100, socialCohesion)
-    };
   }
   
   private getConditionValue(condition: string): number {
