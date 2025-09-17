@@ -1,82 +1,13 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 
-// Define types locally since they're not exported from @engine
-export interface CityStats {
-  population: number;
-  happiness: number;
-  traffic: number;
-  pollution: number;
-  crime: number;
-  education: number;
-  healthcare: number;
-  employment: number;
-  budget: number;
-  income: number;
-  expenses: number;
-}
-
-export interface ManagementAction {
-  type: 'zone' | 'build_road' | 'build_service' | 'demolish' | 'upgrade';
-  position: { x: number; y: number };
-  data: Record<string, unknown>;
-  cost: number;
-}
-
-// Mock CityManagementInterface for now since it's not exported from @engine
-interface CityManagementConfig {
-  gridWidth: number;
-  gridHeight: number;
-  initialBudget?: number;
-  difficulty: 'easy' | 'normal' | 'hard';
-}
-
-class CityManagementInterface {
-  private config: CityManagementConfig;
-  private stats: CityStats;
-
-  constructor(config: CityManagementConfig) {
-    this.config = config;
-    this.stats = {
-      population: 0,
-      happiness: 50,
-      traffic: 0,
-      pollution: 0,
-      crime: 0,
-      education: 0,
-      healthcare: 0,
-      employment: 0,
-      budget: config.initialBudget || 10000,
-      income: 0,
-      expenses: 0
-    };
-  }
-  
-  async initialize(): Promise<void> {
-    // Mock initialization
-  }
-  
-  update(): void {
-    // Mock update logic
-    this.stats.population += Math.random() * 0.1;
-    this.stats.happiness = Math.max(0, Math.min(100, this.stats.happiness + (Math.random() - 0.5) * 2));
-  }
-  
-  getStats(): CityStats {
-    return { ...this.stats };
-  }
-  
-  async executeAction(action: ManagementAction): Promise<boolean> {
-    if (this.stats.budget >= action.cost) {
-      this.stats.budget -= action.cost;
-      return true;
-    }
-    return false;
-  }
-  
-  dispose?(): void {
-    // Mock cleanup
-  }
-}
+import {
+  CityManagementInterface,
+  type CityManagementConfig,
+  type CityStats,
+  type ManagementAction,
+  type GameTime,
+  createGameTime
+} from '@engine';
 
 export interface CityManagementState {
   stats: CityStats;
@@ -92,73 +23,129 @@ export interface UseCityManagementOptions {
   difficulty?: 'easy' | 'normal' | 'hard';
   autoUpdate?: boolean;
   updateInterval?: number;
+  createInterface?: (config: CityManagementConfig) => CityManagementInterface;
 }
 
 export interface UseCityManagementReturn {
-  // State
   state: CityManagementState;
-  
-  // Core operations
   initialize: (options?: UseCityManagementOptions) => Promise<void>;
   executeAction: (action: ManagementAction) => Promise<boolean>;
-  updateSimulation: (deltaTime: number) => void;
-  
-  // Specific actions
-  buildRoad: (x: number, y: number) => Promise<boolean>;
-  setZone: (x: number, y: number, zoneType: string) => Promise<boolean>;
+  updateSimulation: (deltaTime: number, gameTime: GameTime) => void;
+  buildRoad: (
+    startX: number,
+    startY: number,
+    endX?: number,
+    endY?: number,
+    roadType?: string
+  ) => Promise<boolean>;
+  setZone: (
+    startX: number,
+    startY: number,
+    zoneType: string,
+    endX?: number,
+    endY?: number
+  ) => Promise<boolean>;
   buildService: (x: number, y: number, serviceType: string) => Promise<boolean>;
   demolish: (x: number, y: number) => Promise<boolean>;
-  
-  // Utilities
   getStats: () => CityStats;
   canAffordAction: (action: ManagementAction) => boolean;
   reset: () => void;
 }
 
-const DEFAULT_OPTIONS: Required<UseCityManagementOptions> = {
+type ResolvedOptions = Required<Omit<UseCityManagementOptions, 'createInterface'>> &
+  Pick<UseCityManagementOptions, 'createInterface'>;
+
+const DEFAULT_OPTIONS: ResolvedOptions = {
   gridWidth: 50,
   gridHeight: 50,
   initialBudget: 10000,
   difficulty: 'normal',
   autoUpdate: true,
-  updateInterval: 1000
+  updateInterval: 1000,
+  createInterface: undefined
+};
+
+const createDefaultStats = (budget: number): CityStats => ({
+  population: 0,
+  happiness: 50,
+  traffic: 0,
+  pollution: 0,
+  crime: 0,
+  education: 0,
+  healthcare: 0,
+  employment: 0,
+  budget,
+  income: 0,
+  expenses: 0
+});
+
+const calculateZoneCost = (
+  startX: number,
+  startY: number,
+  endX: number,
+  endY: number
+): number => {
+  const area = Math.abs(endX - startX + 1) * Math.abs(endY - startY + 1);
+  return area * 100;
+};
+
+const calculateRoadCost = (
+  startX: number,
+  startY: number,
+  endX: number,
+  endY: number,
+  roadType: string
+): number => {
+  const distance = Math.abs(endX - startX) + Math.abs(endY - startY);
+  const baseCost = roadType === 'highway' ? 500 : roadType === 'commercial' ? 300 : 200;
+  return distance * baseCost;
+};
+
+const calculateServiceCost = (serviceType: string): number => {
+  switch (serviceType) {
+    case 'police':
+      return 5000;
+    case 'fire':
+      return 7000;
+    case 'healthcare':
+    case 'hospital':
+      return 10000;
+    case 'education':
+    case 'school':
+      return 8000;
+    case 'power':
+      return 15000;
+    case 'water':
+      return 12000;
+    case 'waste':
+      return 6000;
+    default:
+      return 5000;
+  }
 };
 
 export function useCityManagement(options: UseCityManagementOptions = {}): UseCityManagementReturn {
-  const opts = useMemo(() => ({ ...DEFAULT_OPTIONS, ...options }), [options]);
+  const opts = useMemo<ResolvedOptions>(() => ({ ...DEFAULT_OPTIONS, ...options }), [options]);
   const cityManagementRef = useRef<CityManagementInterface | null>(null);
   const updateIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  
+  const isInitializedRef = useRef(false);
+  const lastUpdateTimestampRef = useRef<number | null>(null);
+  const accumulatedMinutesRef = useRef(0);
+
   const [state, setState] = useState<CityManagementState>({
-    stats: {
-      population: 0,
-      happiness: 50,
-      traffic: 0,
-      pollution: 0,
-      crime: 0,
-      education: 0,
-      healthcare: 0,
-      employment: 0,
-      budget: opts.initialBudget,
-      income: 0,
-      expenses: 0
-    },
+    stats: createDefaultStats(opts.initialBudget),
     isInitialized: false,
     isSimulating: false,
     lastUpdate: Date.now()
   });
 
-  // Update simulation
-  const updateSimulation = useCallback(() => {
-    if (!cityManagementRef.current || !state.isInitialized) return;
+  const updateSimulation = useCallback((deltaTime: number, gameTime: GameTime) => {
+    if (!cityManagementRef.current || !isInitializedRef.current) return;
 
     setState(prev => ({ ...prev, isSimulating: true }));
 
     try {
-      // Update the simulation
-      cityManagementRef.current.update();
-
-      // Get updated stats
+      cityManagementRef.current.update(deltaTime, gameTime);
       const updatedStats = cityManagementRef.current.getStats();
 
       setState(prev => ({
@@ -167,45 +154,62 @@ export function useCityManagement(options: UseCityManagementOptions = {}): UseCi
         isSimulating: false,
         lastUpdate: Date.now()
       }));
-
     } catch (error) {
       console.error('Simulation update failed:', error);
       setState(prev => ({ ...prev, isSimulating: false }));
     }
-  }, [state.isInitialized]);
+  }, []);
 
-  // Start automatic simulation updates
   const startAutoUpdate = useCallback((interval: number) => {
     if (updateIntervalRef.current) {
       clearInterval(updateIntervalRef.current);
     }
 
-    updateIntervalRef.current = setInterval(() => {
-      if (cityManagementRef.current && state.isInitialized) {
-        updateSimulation();
-      }
-    }, interval);
-  }, [state.isInitialized, updateSimulation]);
+    lastUpdateTimestampRef.current = null;
 
-  // Initialize city management system
+    updateIntervalRef.current = setInterval(() => {
+      if (!cityManagementRef.current || !isInitializedRef.current) {
+        return;
+      }
+
+      const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+      const last = lastUpdateTimestampRef.current ?? now;
+      const deltaSeconds = Math.max(0, (now - last) / 1000);
+      lastUpdateTimestampRef.current = now;
+
+      accumulatedMinutesRef.current += deltaSeconds / 60;
+      const totalMinutes = Math.max(0, Math.floor(accumulatedMinutesRef.current));
+      const gameTime = createGameTime(totalMinutes);
+
+      updateSimulation(deltaSeconds, gameTime);
+    }, interval);
+  }, [updateSimulation]);
+
   const initialize = useCallback(async (initOptions?: UseCityManagementOptions) => {
-    const finalOptions = { ...opts, ...initOptions };
+    const finalOptions: ResolvedOptions = { ...opts, ...initOptions };
 
     try {
-      // Create city management interface
-      cityManagementRef.current = new CityManagementInterface({
+      const createInstance = finalOptions.createInterface ??
+        ((config: CityManagementConfig) => new CityManagementInterface(config));
+
+      const instance = createInstance({
         gridWidth: finalOptions.gridWidth,
         gridHeight: finalOptions.gridHeight,
         initialBudget: finalOptions.initialBudget,
         difficulty: finalOptions.difficulty
       });
 
-      // Initialize the system
-      await cityManagementRef.current.initialize();
+      cityManagementRef.current = instance;
 
-      // Get initial stats
-      const initialStats = cityManagementRef.current.getStats();
+      if (typeof instance.initialize === 'function') {
+        await instance.initialize();
+      }
 
+      instance.startSimulation?.();
+
+      const initialStats = instance.getStats();
+
+      isInitializedRef.current = true;
       setState(prev => ({
         ...prev,
         stats: initialStats,
@@ -213,29 +217,25 @@ export function useCityManagement(options: UseCityManagementOptions = {}): UseCi
         lastUpdate: Date.now()
       }));
 
-      // Start auto-update if enabled
       if (finalOptions.autoUpdate) {
         startAutoUpdate(finalOptions.updateInterval);
       }
-
     } catch (error) {
       console.error('Failed to initialize city management:', error);
       throw error;
     }
   }, [opts, startAutoUpdate]);
 
-  // Execute a management action
   const executeAction = useCallback(async (action: ManagementAction): Promise<boolean> => {
-    if (!cityManagementRef.current || !state.isInitialized) {
+    if (!cityManagementRef.current || !isInitializedRef.current) {
       console.warn('City management not initialized');
       return false;
     }
-    
+
     try {
       const success = await cityManagementRef.current.executeAction(action);
-      
+
       if (success) {
-        // Update stats after successful action
         const updatedStats = cityManagementRef.current.getStats();
         setState(prev => ({
           ...prev,
@@ -243,47 +243,63 @@ export function useCityManagement(options: UseCityManagementOptions = {}): UseCi
           lastUpdate: Date.now()
         }));
       }
-      
+
       return success;
     } catch (error) {
       console.error('Action execution failed:', error);
       return false;
     }
-  }, [state.isInitialized]);
+  }, []);
 
-  // Specific action helpers
-  const buildRoad = useCallback(async (x: number, y: number): Promise<boolean> => {
+  const buildRoad = useCallback(async (
+    startX: number,
+    startY: number,
+    endX: number = startX,
+    endY: number = startY,
+    roadType: string = 'residential'
+  ): Promise<boolean> => {
+    const cost = calculateRoadCost(startX, startY, endX, endY, roadType);
+
     return executeAction({
       type: 'build_road',
-      position: { x, y },
-      data: {},
-      cost: 100 // Default road cost
+      position: { x: startX, y: startY },
+      data: {
+        endPosition: { x: endX, y: endY },
+        roadType
+      },
+      cost
     });
   }, [executeAction]);
 
-  const setZone = useCallback(async (x: number, y: number, zoneType: string): Promise<boolean> => {
+  const setZone = useCallback(async (
+    startX: number,
+    startY: number,
+    zoneType: string,
+    endX: number = startX,
+    endY: number = startY
+  ): Promise<boolean> => {
+    const cost = calculateZoneCost(startX, startY, endX, endY);
+
     return executeAction({
       type: 'zone',
-      position: { x, y },
-      data: { zoneType },
-      cost: 50 // Default zoning cost
+      position: { x: startX, y: startY },
+      data: {
+        zoneType,
+        endX,
+        endY
+      },
+      cost
     });
   }, [executeAction]);
 
   const buildService = useCallback(async (x: number, y: number, serviceType: string): Promise<boolean> => {
-    const serviceCosts: Record<string, number> = {
-      police: 500,
-      fire: 600,
-      hospital: 1000,
-      school: 800,
-      park: 200
-    };
-    
+    const cost = calculateServiceCost(serviceType);
+
     return executeAction({
       type: 'build_service',
       position: { x, y },
       data: { serviceType },
-      cost: serviceCosts[serviceType] || 500
+      cost
     });
   }, [executeAction]);
 
@@ -292,11 +308,10 @@ export function useCityManagement(options: UseCityManagementOptions = {}): UseCi
       type: 'demolish',
       position: { x, y },
       data: {},
-      cost: 0 // Demolition is free but may have other costs
+      cost: 0
     });
   }, [executeAction]);
 
-  // Utility functions
   const getStats = useCallback((): CityStats => {
     return state.stats;
   }, [state.stats]);
@@ -306,40 +321,28 @@ export function useCityManagement(options: UseCityManagementOptions = {}): UseCi
   }, [state.stats.budget]);
 
   const reset = useCallback(() => {
-    // Stop auto-update
     if (updateIntervalRef.current) {
       clearInterval(updateIntervalRef.current);
       updateIntervalRef.current = null;
     }
-    
-    // Reset city management interface
+
     if (cityManagementRef.current) {
       cityManagementRef.current.dispose?.();
       cityManagementRef.current = null;
     }
-    
-    // Reset state
+
+    isInitializedRef.current = false;
+    lastUpdateTimestampRef.current = null;
+    accumulatedMinutesRef.current = 0;
+
     setState({
-      stats: {
-        population: 0,
-        happiness: 50,
-        traffic: 0,
-        pollution: 0,
-        crime: 0,
-        education: 0,
-        healthcare: 0,
-        employment: 0,
-        budget: opts.initialBudget,
-        income: 0,
-        expenses: 0
-      },
+      stats: createDefaultStats(opts.initialBudget),
       isInitialized: false,
       isSimulating: false,
       lastUpdate: Date.now()
     });
   }, [opts.initialBudget]);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (updateIntervalRef.current) {
