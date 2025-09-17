@@ -21,9 +21,3 @@ export interface GameRendererProps {
   enableEdgeScroll?: boolean;
   onReset?: () => void;
 }
-
-export interface EdgeScrollState {
-  vx: number;
-  vy: number;
-  raf: number | null;
-}
