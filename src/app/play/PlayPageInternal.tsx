@@ -59,8 +59,7 @@ import type { CityStats, ManagementTool, ZoneType, ServiceType } from '@/compone
 // layout preferences not used on this page
 import type { GameResources, GameTime } from '@/components/game/hud/types';
 import type { CategoryType } from '@arcane/ui';
-import { simulationSystem, EnhancedGameState } from '@engine'
-import { VisualIndicator } from '@engine';
+import { simulationSystem, EnhancedGameState, VisualIndicator, FOUNDING_CHARTERS, deriveCharterEffects, type FoundingCharter } from '@engine';
 import { pauseSimulation, resumeSimulation } from './simulationControls';
 import { TimeSystem, timeSystem, TIME_SPEEDS, GameTime as SystemGameTime, type TimeSpeed } from '@engine';
 import { intervalMsToTimeSpeed, sanitizeIntervalMs } from './timeSpeedUtils';
@@ -82,6 +81,95 @@ const nowMs = () => (typeof performance !== 'undefined' ? performance.now() : Da
 
 const arraysEqual = (a: string[], b: string[]) =>
   a.length === b.length && a.every((value, index) => value === b[index]);
+
+
+const computeCharterSeed = (id: string): number => {
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) {
+    hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
+  }
+  return hash % 1_000_000_000;
+};
+
+const formatResourceSummary = (resources: Partial<Record<string, number>>): string =>
+  Object.entries(resources)
+    .filter((entry): entry is [string, number] => {
+      const value = entry[1];
+      return typeof value === 'number' && Number.isFinite(value);
+    })
+    .map(([key, value]) => `${key} ${value >= 0 ? '+' : ''}${value}`)
+    .join(', ');
+
+const describeMultiplier = (value: number, label: string): string | null => {
+  if (!Number.isFinite(value) || value === 1) return null;
+  const delta = Math.round((value - 1) * 100);
+  if (delta === 0) return null;
+  return `${label} ${delta > 0 ? '+' : ''}${delta}%`;
+};
+
+const getCharterPerkSummary = (charter: FoundingCharter): string[] => {
+  const lines: string[] = [];
+  const perks = charter.perks;
+  if (perks.startingResources && Object.keys(perks.startingResources).length > 0) {
+    lines.push(`Start with ${formatResourceSummary(perks.startingResources)}`);
+  }
+  if (perks.startingBuildings && perks.startingBuildings.length > 0) {
+    const buildings = perks.startingBuildings
+      .map(b => SIM_BUILDINGS[b.typeId as keyof typeof SIM_BUILDINGS]?.name || b.typeId)
+      .join(', ');
+    lines.push(`Free structures: ${buildings}`);
+  }
+  if (perks.resourceOutputMultipliers) {
+    for (const [resource, multiplier] of Object.entries(perks.resourceOutputMultipliers)) {
+      const summary = describeMultiplier(multiplier, `${resource} yields`);
+      if (summary) lines.push(summary);
+    }
+  }
+  if (perks.buildingOutputMultipliers) {
+    for (const [typeId, multiplier] of Object.entries(perks.buildingOutputMultipliers)) {
+      const name = SIM_BUILDINGS[typeId as keyof typeof SIM_BUILDINGS]?.name || typeId;
+      const summary = describeMultiplier(multiplier, `${name} output`);
+      if (summary) lines.push(summary);
+    }
+  }
+  const globalBuildingSummary = describeMultiplier(perks.globalBuildingOutputMultiplier ?? 1, 'All buildings output');
+  if (globalBuildingSummary) lines.push(globalBuildingSummary);
+  const globalResourceSummary = describeMultiplier(perks.globalResourceOutputMultiplier ?? 1, 'All resource yields');
+  if (globalResourceSummary) lines.push(globalResourceSummary);
+  if (typeof perks.buildingInputMultiplier === 'number' && Number.isFinite(perks.buildingInputMultiplier) && perks.buildingInputMultiplier !== 1) {
+    const delta = Math.round((1 - perks.buildingInputMultiplier) * 100);
+    if (delta > 0) {
+      lines.push(`Input costs reduced ${delta}%`);
+    } else {
+      lines.push(`Input costs increased ${Math.abs(delta)}%`);
+    }
+  }
+  if (typeof perks.routeCoinOutputMultiplier === 'number' && perks.routeCoinOutputMultiplier !== 1) {
+    const summary = describeMultiplier(perks.routeCoinOutputMultiplier, 'Trade route coin');
+    if (summary) lines.push(summary);
+  }
+  if (typeof perks.patrolCoinUpkeepMultiplier === 'number' && perks.patrolCoinUpkeepMultiplier !== 1) {
+    const delta = Math.round((1 - perks.patrolCoinUpkeepMultiplier) * 100);
+    if (delta !== 0) {
+      lines.push(`Patrol upkeep ${delta > 0 ? 'reduced' : 'increased'} ${Math.abs(delta)}%`);
+    }
+  }
+  if (perks.tickResourceAdjustments) {
+    const summary = formatResourceSummary(perks.tickResourceAdjustments);
+    if (summary) lines.push(`Per cycle: ${summary}`);
+  }
+  if (typeof perks.upkeepGrainPerWorkerDelta === 'number' && perks.upkeepGrainPerWorkerDelta !== 0) {
+    const delta = Math.round(perks.upkeepGrainPerWorkerDelta * 100) / 100;
+    lines.push(`Worker upkeep ${delta > 0 ? '+' : ''}${delta} grain`);
+  }
+  if (perks.mapReveal) {
+    lines.push(`Reveals nearby terrain (radius ${perks.mapReveal.radius})`);
+  }
+  if (lines.length === 0) {
+    lines.push('No additional perks');
+  }
+  return lines;
+};
 
 
 
@@ -107,6 +195,9 @@ interface GameState {
   skills?: string[];
   skill_tree_seed?: number;
   pinned_skill_targets?: string[];
+  founding_charter?: FoundingCharter | null;
+  citizens_seed?: number;
+  citizens_count?: number;
 }
 
 interface TradeRoute {
@@ -307,6 +398,9 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   const generateId = useIdGenerator();
   const [state, setState] = useState<GameState | null>(initialState);
   const [proposals, setProposals] = useState<Proposal[]>(initialProposals ?? []);
+  const [charterModalOpen, setCharterModalOpen] = useState<boolean>(false);
+  const [selectedCharterId, setSelectedCharterId] = useState<string | null>(initialState?.founding_charter?.id ?? null);
+  const [isApplyingCharter, setIsApplyingCharter] = useState<boolean>(false);
   const [loading, setLoading] = useState(false);
   const [guild, _setGuild] = useState("Wardens");
   const [error, setError] = useState<string | null>(null);
@@ -846,10 +940,10 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     return () => clearInterval(cleanup);
   }, []);
 
-  const saveState = useCallback(async (partial: { resources?: Record<string, number>; workers?: number; buildings?: StoredBuilding[]; routes?: TradeRoute[]; roads?: Array<{x:number;y:number}>; edicts?: Record<string, number>; map_size?: number; skills?: string[] }) => {
+  const saveState = useCallback(async (partial: { resources?: Record<string, number>; workers?: number; buildings?: StoredBuilding[]; routes?: TradeRoute[]; roads?: Array<{x:number;y:number}>; edicts?: Record<string, number>; map_size?: number; skills?: string[]; citizens_seed?: number; citizens_count?: number; founding_charter?: FoundingCharter | null }) => {
     if (!state) return;
     try {
-      const body: { id: string; resources?: Record<string, number>; workers?: number; buildings?: StoredBuilding[]; routes?: TradeRoute[]; roads?: Array<{x:number;y:number}>; edicts?: Record<string, number>; map_size?: number; skills?: string[] } = { id: state.id };
+      const body: { id: string; resources?: Record<string, number>; workers?: number; buildings?: StoredBuilding[]; routes?: TradeRoute[]; roads?: Array<{x:number;y:number}>; edicts?: Record<string, number>; map_size?: number; skills?: string[]; citizens_seed?: number; citizens_count?: number; founding_charter?: FoundingCharter | null } = { id: state.id };
       if (partial.resources) body.resources = partial.resources;
       if (typeof partial.workers === 'number') body.workers = partial.workers;
       if (partial.buildings) body.buildings = partial.buildings;
@@ -858,6 +952,9 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
       if (partial.edicts) body.edicts = partial.edicts;
       if (typeof partial.map_size === 'number') body.map_size = partial.map_size;
       if (partial.skills !== undefined) body.skills = partial.skills;
+      if (typeof partial.citizens_seed === 'number') body.citizens_seed = partial.citizens_seed;
+      if (typeof partial.citizens_count === 'number') body.citizens_count = partial.citizens_count;
+      if (partial.founding_charter !== undefined) body.founding_charter = partial.founding_charter;
       const res = await fetch('/api/state', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -868,6 +965,97 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
       logger.error('Failed to save state:', err);
     }
   }, [state]);
+
+  const applyCharter = useCallback(async (charter: FoundingCharter) => {
+    if (!state) return;
+    setIsApplyingCharter(true);
+    try {
+      const resourceBoosts = charter.perks.startingResources || {};
+      const updatedResources: Record<string, number> = { ...state.resources };
+      for (const [key, value] of Object.entries(resourceBoosts)) {
+        const numeric = Number(value ?? 0);
+        if (!Number.isFinite(numeric) || numeric === 0) continue;
+        const current = Number(updatedResources[key] ?? 0);
+        updatedResources[key] = Math.max(0, Math.round(current + numeric));
+      }
+      const newBuildings: StoredBuilding[] = Array.isArray(state.buildings) ? [...state.buildings] : [];
+      const seen = new Set(newBuildings.map(b => `${b.typeId}:${b.x}:${b.y}`));
+      if (Array.isArray(charter.perks.startingBuildings)) {
+        for (const template of charter.perks.startingBuildings) {
+          if (!template?.typeId) continue;
+          const key = `${template.typeId}:${template.x ?? 0}:${template.y ?? 0}`;
+          if (seen.has(key)) continue;
+          const building: StoredBuilding = {
+            id: template.id ? String(template.id) : generateId(),
+            typeId: template.typeId as BuildTypeId,
+            x: template.x ?? 0,
+            y: template.y ?? 0,
+            level: template.level ?? 1,
+            workers: template.workers ?? 0,
+            traits: template.traits as StoredBuilding['traits'],
+          };
+          newBuildings.push(building);
+          seen.add(key);
+        }
+      }
+
+      const updatedState: GameState = {
+        ...state,
+        resources: updatedResources,
+        buildings: newBuildings,
+        founding_charter: charter,
+      };
+
+      if ((config.nextPublicOfflineMode || state.id === 'local-fallback')) {
+        const seed = computeCharterSeed(charter.id);
+        updatedState.skill_tree_seed = updatedState.skill_tree_seed ?? seed;
+        updatedState.citizens_seed = seed;
+        setCitizensSeed(seed);
+      }
+
+      setState(updatedState);
+      setSelectedCharterId(charter.id);
+      setPlacedBuildings(newBuildings);
+      const assignedWorkers = newBuildings.reduce((sum, b) => sum + (b.workers || 0), 0);
+      const availableWorkers = Math.max(0, (updatedState.workers ?? 0) - assignedWorkers);
+      setSimResources({
+        grain: Number(updatedResources.grain ?? 0),
+        coin: Number(updatedResources.coin ?? 0),
+        mana: Number(updatedResources.mana ?? 0),
+        favor: Number(updatedResources.favor ?? 0),
+        workers: availableWorkers,
+        wood: Number((updatedResources as any).wood ?? 0),
+        planks: Number((updatedResources as any).planks ?? 0),
+      });
+
+      if (charter.perks.mapReveal) {
+        const { center, radius } = charter.perks.mapReveal;
+        ensureCapacityAround(center.x, center.y, radius + 4);
+        revealUnknownTiles(center.x, center.y, radius).catch(() => {});
+      }
+
+      const payload: Parameters<typeof saveState>[0] = {
+        resources: updatedResources,
+        buildings: newBuildings,
+        founding_charter: charter,
+      };
+      if (typeof updatedState.citizens_seed === 'number') payload.citizens_seed = updatedState.citizens_seed;
+      if (typeof updatedState.citizens_count === 'number') payload.citizens_count = updatedState.citizens_count;
+
+      if (!config.nextPublicOfflineMode && state.id !== 'local-fallback') {
+        await saveState(payload);
+      }
+
+      setCharterModalOpen(false);
+      notify({ type: 'success', title: 'Founding Charter sworn', message: charter.name });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      logger.error('Failed to apply charter', err);
+      notify({ type: 'error', title: 'Failed to swear charter', message });
+    } finally {
+      setIsApplyingCharter(false);
+    }
+  }, [state, config.nextPublicOfflineMode, notify, generateId, ensureCapacityAround, revealUnknownTiles, saveState, setCitizensSeed]);
 
   const getMilestones = useCallback(() => {
     if (typeof window === 'undefined') return {} as Record<string, boolean>;
@@ -1666,6 +1854,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
           resources: { grain: 1000, coin: 500, mana: 200, favor: 10, unrest: 0, threat: 0 },
           workers: 0,
           buildings: [],
+          founding_charter: null,
         });
         return;
       }
@@ -1673,6 +1862,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     }
     const rawSkills = (json as any).skills;
     const sanitizedSkills = Array.isArray(rawSkills) ? sanitizeSkillList(rawSkills) : undefined;
+    const charter = (json as any).founding_charter ?? null;
 
     setState({
       ...json,
@@ -1683,6 +1873,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
       citizens_seed: (json as any).citizens_seed,
       citizens_count: (json as any).citizens_count,
       ...(sanitizedSkills !== undefined ? { skills: sanitizedSkills } : {}),
+      founding_charter: charter,
     });
     if (sanitizedSkills !== undefined) {
       syncSkillsFromServer(sanitizedSkills);
@@ -1720,6 +1911,23 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
       });
     }
   }, [initialState, state, fetchState]);
+
+  useEffect(() => {
+    if (!state) return;
+    if (state.founding_charter) {
+      setCharterModalOpen(false);
+      setSelectedCharterId(state.founding_charter.id);
+    } else {
+      setCharterModalOpen(true);
+    }
+  }, [state]);
+
+  useEffect(() => {
+    if (!state || state.founding_charter || !charterModalOpen) return;
+    if (!selectedCharterId && FOUNDING_CHARTERS.length > 0) {
+      setSelectedCharterId(FOUNDING_CHARTERS[0].id);
+    }
+  }, [state, charterModalOpen, selectedCharterId]);
 
   const tick = useCallback(async () => {
     setLoading(true);
@@ -2031,31 +2239,53 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     const tree = generateSkillTree(skillTreeSeed);
     const unlocked = tree.nodes.filter(n => unlockedSkillIds.includes(n.id));
     const acc = accumulateEffects(unlocked);
+    const charterEffects = deriveCharterEffects(state?.founding_charter);
+    const combinedResMul: Record<string, number> = { ...acc.resMul };
+    for (const [key, value] of Object.entries(charterEffects.resMul)) {
+      combinedResMul[key] = (combinedResMul[key] ?? 1) * value;
+    }
+    const combinedBldMul: Record<string, number> = { ...acc.bldMul };
+    for (const [key, value] of Object.entries(charterEffects.bldMul)) {
+      combinedBldMul[key] = (combinedBldMul[key] ?? 1) * value;
+    }
+    const modifiers = {
+      resourceOutputMultiplier: combinedResMul as any,
+      buildingOutputMultiplier: combinedBldMul,
+      upkeepGrainPerWorkerDelta: acc.upkeepDelta + charterEffects.upkeepDelta,
+      globalBuildingOutputMultiplier: acc.globalBuildingMultiplier * charterEffects.globalBuildingMultiplier,
+      globalResourceOutputMultiplier: acc.globalResourceMultiplier * charterEffects.globalResourceMultiplier,
+      routeCoinOutputMultiplier: acc.routeCoinMultiplier * charterEffects.routeCoinMultiplier,
+      patrolCoinUpkeepMultiplier: acc.patrolCoinUpkeepMultiplier * charterEffects.patrolCoinUpkeepMultiplier,
+      buildingInputMultiplier: acc.buildingInputMultiplier * charterEffects.buildingInputMultiplier,
+    } as const;
     const { updated } = projectCycleDeltas(simResources, placedBuildings, routes, SIM_BUILDINGS, {
       totalWorkers: totalWorkers,
       edicts,
-      modifiers: {
-        resourceOutputMultiplier: acc.resMul as any,
-        buildingOutputMultiplier: acc.bldMul,
-        upkeepGrainPerWorkerDelta: acc.upkeepDelta,
-        globalBuildingOutputMultiplier: acc.globalBuildingMultiplier,
-        globalResourceOutputMultiplier: acc.globalResourceMultiplier,
-        routeCoinOutputMultiplier: acc.routeCoinMultiplier,
-        patrolCoinUpkeepMultiplier: acc.patrolCoinUpkeepMultiplier,
-        buildingInputMultiplier: acc.buildingInputMultiplier,
-      }
+      modifiers,
     });
+    const adjustedUpdated: SimResources = { ...updated };
+    for (const [key, delta] of Object.entries(charterEffects.tickAdjustments)) {
+      if (key in adjustedUpdated) {
+        const current = Number(adjustedUpdated[key as keyof SimResources] ?? 0);
+        adjustedUpdated[key as keyof SimResources] = Math.max(0, Math.round(current + Number(delta ?? 0)));
+      }
+    }
     return {
-      grain: updated.grain - simResources.grain,
-      wood: updated.wood - simResources.wood,
-      planks: updated.planks - simResources.planks,
-      coin: updated.coin - simResources.coin,
-      mana: updated.mana - simResources.mana,
-      favor: updated.favor - simResources.favor,
+      grain: adjustedUpdated.grain - simResources.grain,
+      wood: adjustedUpdated.wood - simResources.wood,
+      planks: adjustedUpdated.planks - simResources.planks,
+      coin: adjustedUpdated.coin - simResources.coin,
+      mana: adjustedUpdated.mana - simResources.mana,
+      favor: adjustedUpdated.favor - simResources.favor,
       unrest: 0,
       threat: 0,
     } as any;
-  }, [simResources, placedBuildings, routes, totalWorkers, edicts, unlockedSkillIds, skillTreeSeed]);
+  }, [simResources, placedBuildings, routes, totalWorkers, edicts, unlockedSkillIds, skillTreeSeed, state?.founding_charter]);
+
+  const charterOptions = FOUNDING_CHARTERS;
+  const pendingCharter = selectedCharterId
+    ? charterOptions.find(c => c.id === selectedCharterId) ?? null
+    : null;
 
   // Shared PIXI context for Game + HUD (so HUD panels can access viewport)
   const [pixiApp, setPixiApp] = useState<PIXI.Application | null>(null);
@@ -2133,6 +2363,66 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
               <div className="mt-5 flex items-center justify-between">
                 <div className="text-xs text-gray-500">Infinite expansion is enabled during play.</div>
                 <button onClick={confirmMapSize} className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-500">Start</button>
+              </div>
+            </div>
+          </div>
+        )}
+        {charterModalOpen && !state.founding_charter && (
+          <div className="absolute inset-0 z-[19500] bg-slate-950/85 backdrop-blur-sm flex items-center justify-center px-4">
+            <div className="w-full max-w-5xl space-y-6 rounded-2xl border border-blue-500/40 bg-slate-900/95 p-6 md:p-8 shadow-2xl">
+              <div className="space-y-2">
+                <h2 className="text-2xl font-semibold text-blue-200">Swear a Founding Charter</h2>
+                <p className="text-sm text-blue-100/80">
+                  Choose the origin covenant that will shape your city&apos;s first seasons. This choice cannot be changed later.
+                </p>
+              </div>
+              <div className="grid gap-4 md:grid-cols-3">
+                {charterOptions.map(charter => {
+                  const perks = getCharterPerkSummary(charter);
+                  const isSelected = selectedCharterId === charter.id;
+                  return (
+                    <button
+                      key={charter.id}
+                      type="button"
+                      onClick={() => setSelectedCharterId(charter.id)}
+                      className={`text-left h-full rounded-xl border p-4 transition focus:outline-none focus:ring-2 focus:ring-blue-400 ${
+                        isSelected
+                          ? 'border-blue-400 bg-blue-500/10 shadow-lg'
+                          : 'border-slate-700 bg-slate-900 hover:border-blue-500/60 hover:bg-blue-500/5'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-lg font-semibold text-slate-100">{charter.name}</span>
+                        {isSelected && <span className="text-xs font-medium text-blue-300">Selected</span>}
+                      </div>
+                      <p className="mt-2 text-sm text-slate-300/80">{charter.description}</p>
+                      <ul className="mt-3 space-y-1 text-sm text-slate-200/90 list-disc list-inside">
+                        {perks.map((perk, idx) => (
+                          <li key={idx}>{perk}</li>
+                        ))}
+                      </ul>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="text-xs text-slate-400">
+                  Charter perks apply immediately and influence proposals, production, and exploration bonuses.
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => pendingCharter && applyCharter(pendingCharter)}
+                    disabled={!pendingCharter || isApplyingCharter}
+                    className={`px-5 py-2 rounded-md font-semibold transition ${
+                      pendingCharter && !isApplyingCharter
+                        ? 'bg-blue-600 hover:bg-blue-500 text-white'
+                        : 'bg-slate-700 text-slate-400 cursor-not-allowed'
+                    }`}
+                  >
+                    {isApplyingCharter ? 'Binding Oath…' : 'Swear Charter'}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
