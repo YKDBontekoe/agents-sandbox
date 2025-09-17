@@ -1,9 +1,26 @@
 import React from 'react';
-import { useHUDLayoutPresets } from './HUDLayoutPresets';
+import { useHUDLayoutPresets, type HUDLayoutPresetIconData } from './HUDLayoutPresets';
 
 interface HUDSettingsPanelProps {
   isOpen: boolean;
   onClose: () => void;
+}
+
+function HUDPresetIcon({ icon }: { icon: HUDLayoutPresetIconData }) {
+  const { viewBox = '0 0 24 24', paths } = icon;
+  return (
+    <svg fill="none" stroke="currentColor" viewBox={viewBox} aria-hidden="true">
+      {paths.map(({ d, strokeLinecap = 'round', strokeLinejoin = 'round', strokeWidth = 2 }) => (
+        <path
+          key={d}
+          d={d}
+          strokeLinecap={strokeLinecap}
+          strokeLinejoin={strokeLinejoin}
+          strokeWidth={strokeWidth}
+        />
+      ))}
+    </svg>
+  );
 }
 
 export function HUDSettingsPanel({ isOpen, onClose }: HUDSettingsPanelProps) {
@@ -46,7 +63,7 @@ export function HUDSettingsPanel({ isOpen, onClose }: HUDSettingsPanelProps) {
                   <div className="flex items-center space-x-2">
                     {preset.icon && (
                       <div className="w-4 h-4 text-gray-300">
-                        {preset.icon}
+                        <HUDPresetIcon icon={preset.icon} />
                       </div>
                     )}
                     <div>
