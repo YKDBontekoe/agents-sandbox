@@ -1,3 +1,4 @@
+import { easeOutCubic } from '@engine/visuals/constellation/particleSystem';
 import { useCallback, useState } from 'react';
 
 export type NodeTransitionTarget = Partial<Pick<NodeTransitionState, 'scale' | 'opacity' | 'glowIntensity'>>;
@@ -12,7 +13,6 @@ export interface NodeTransitionState {
   lastUpdate: number;
 }
 
-const easeOutCubic = (t: number): number => 1 - Math.pow(1 - t, 3);
 const TRANSITION_DURATION = 300;
 
 export const DEFAULT_NODE_TRANSITION: NodeTransitionState = {

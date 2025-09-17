@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react';
 import type { RefObject } from 'react';
+import { ParticleSystem } from '@engine/visuals/constellation/particleSystem';
 import type {
   ConstellationNode,
   SkillNode,
@@ -8,7 +9,6 @@ import type {
   Vec2,
   ParticleEffect,
 } from '../types';
-import { ParticleSystem } from '../effects';
 import { useAnimationFrame } from '../hooks';
 import type { ConstellationLayout } from '../layout/constellation';
 import {
