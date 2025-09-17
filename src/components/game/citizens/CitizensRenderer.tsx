@@ -24,6 +24,7 @@ export default function CitizensRenderer({ citizens, toWorld }: CitizensRenderer
     containerRef.current = container;
 
     const tick = () => {
+      const frameTime = app.ticker?.lastTime ?? performance.now();
       citizens.forEach((c) => {
         if (!c.sprite) {
           const s = new PIXI.Graphics();
@@ -59,14 +60,18 @@ export default function CitizensRenderer({ citizens, toWorld }: CitizensRenderer
             tint = 0x94a3b8;
             break;
         }
-        if (c.carrying === "grain") g.tint = 0x22c55e;
-        else if (c.carrying === "wood") g.tint = 0xb45309;
-        else if (c.carrying === "planks") g.tint = 0xf59e0b;
-        else g.tint = tint;
+        let desiredTint = tint;
+        if (c.carrying === "grain") desiredTint = 0x22c55e;
+        else if (c.carrying === "wood") desiredTint = 0xb45309;
+        else if (c.carrying === "planks") desiredTint = 0xf59e0b;
+
+        if (g.tint !== desiredTint) {
+          g.tint = desiredTint;
+        }
 
         const { worldX } = toWorld(c.x, c.y);
         c.sprite.position.set(worldX, c.baseWorldY);
-        const off = Math.sin(performance.now() / 240 + c.x * 7 + c.y * 11) * 0.2;
+        const off = Math.sin(frameTime / 240 + c.x * 7 + c.y * 11) * 0.2;
         c.sprite.y = c.baseWorldY + off;
       });
     };
