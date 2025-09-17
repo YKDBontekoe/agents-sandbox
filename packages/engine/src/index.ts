@@ -1,3 +1,5 @@
+import { deriveSkillEffects, type AccumulatedSkillEffects } from './skills/modifiers';
+
 export interface SimResources {
   grain: number;
   coin: number;
@@ -92,7 +94,10 @@ export function applyProposals(state: GameState, proposals: Proposal[]): GameSta
   return next;
 }
 
-export function produceBuildings(state: GameState, catalog: Record<string, SimBuildingType>): { resources: Record<string, number>; workers: number } {
+export function produceBuildings(
+  state: GameState,
+  catalog: Record<string, SimBuildingType>,
+): { resources: Record<string, number>; workers: number; skillEffects: AccumulatedSkillEffects } {
   const resources: Record<string, number> = { ...state.resources };
   let workers = Number(state.workers ?? 0);
   const buildings: BuildingData[] = Array.isArray(state.buildings) ? state.buildings : [];
@@ -101,6 +106,18 @@ export function produceBuildings(state: GameState, catalog: Record<string, SimBu
   const tariffValue = Math.max(0, Math.min(100, Number(edicts['tariffs'] ?? 50)));
   const routeCoinMultiplier = 0.8 + (tariffValue * 0.006);
   const patrolsEnabled = Number(edicts['patrols'] ?? 0) === 1;
+  const skillEffects = deriveSkillEffects(state.skills, {
+    seed: typeof state.skill_tree_seed === 'number' ? state.skill_tree_seed : undefined,
+  });
+  const {
+    resMul,
+    bldMul,
+    globalBuildingMultiplier,
+    globalResourceMultiplier,
+    routeCoinMultiplier: skillRouteCoinMultiplier,
+    patrolCoinUpkeepMultiplier,
+    buildingInputMultiplier,
+  } = skillEffects;
   const byId = new Map<string, BuildingData>(buildings.map(b => [String(b.id), b]));
   const connectedToStorehouse = new Set<string>();
   if (routes.length > 0) {
@@ -123,28 +140,40 @@ export function produceBuildings(state: GameState, catalog: Record<string, SimBu
     const assigned = Math.min(typeof b.workers === 'number' ? b.workers : 0, capacity);
     const ratio = capacity > 0 ? assigned / capacity : 1;
     const traits = b.traits || {};
+    const resourceNeeds: Array<{ key: keyof typeof resources; amount: number }> = [];
+    let workerNeed = 0;
     let canProduce = true;
     for (const [k, v] of Object.entries(def.inputs)) {
-      if (k === 'workers') continue;
-      const need = (Number(v ?? 0)) * ratio;
-      const cur = Number(resources[k as keyof typeof resources] ?? 0);
-      if (cur < need) { canProduce = false; break; }
-    }
-    if (!canProduce) continue;
-    for (const [k, v] of Object.entries(def.inputs)) {
-      let mult = 1;
-      if (typeId === 'sawmill' && k === 'wood' && b.recipe === 'fine') mult = (4/3);
-      if (typeId === 'trade_post' && k === 'grain' && b.recipe === 'premium') mult = (3/2);
-      const need = Math.max(0, Math.round((Number(v ?? 0)) * ratio * mult));
+      let recipeMult = 1;
+      if (typeId === 'sawmill' && k === 'wood' && b.recipe === 'fine') recipeMult = (4 / 3);
+      if (typeId === 'trade_post' && k === 'grain' && b.recipe === 'premium') recipeMult = (3 / 2);
+      const baseNeed = Number(v ?? 0) * ratio * recipeMult;
       if (k === 'workers') {
-        workers = Math.max(0, workers - need);
-      } else {
+        workerNeed = Math.max(0, Math.round(baseNeed));
+        continue;
+      }
+      const adjustedNeed = baseNeed * buildingInputMultiplier;
+      const finalNeed = Math.max(0, Math.round(adjustedNeed));
+      if (finalNeed > 0) {
         const key = k as keyof typeof resources;
-        resources[key] = Math.max(0, Number(resources[key] ?? 0) - need);
+        const current = Number(resources[key] ?? 0);
+        if (current < finalNeed) {
+          canProduce = false;
+          break;
+        }
+        resourceNeeds.push({ key, amount: finalNeed });
       }
     }
+    if (!canProduce) continue;
+    for (const req of resourceNeeds) {
+      resources[req.key] = Math.max(0, Number(resources[req.key] ?? 0) - req.amount);
+    }
+    if (workerNeed > 0) {
+      workers = Math.max(0, workers - workerNeed);
+    }
+    const buildingOutputMultiplier = globalBuildingMultiplier * (bldMul[typeId] ?? 1);
     for (const [k, v] of Object.entries(def.outputs)) {
-      let out = (Number(v ?? 0)) * ratio * levelOutScale;
+      let out = Number(v ?? 0) * ratio * levelOutScale;
       if (typeId === 'trade_post' && k === 'coin') {
         const waterAdj = Math.min(2, Number((traits as any).waterAdj ?? 0));
         out += 2 * waterAdj;
@@ -167,6 +196,11 @@ export function produceBuildings(state: GameState, catalog: Record<string, SimBu
         const mountainAdj = Math.min(2, Number((traits as any).mountainAdj ?? 0));
         out += 1 * mountainAdj;
       }
+      out *= buildingOutputMultiplier;
+      if (k !== 'workers') {
+        out *= globalResourceMultiplier;
+        out *= resMul[k] ?? 1;
+      }
       out = Math.max(0, Math.round(out));
       if (k === 'workers') {
         workers = Math.max(0, workers + out);
@@ -184,30 +218,33 @@ export function produceBuildings(state: GameState, catalog: Record<string, SimBu
       if (!a || !b) continue;
       const dist = Math.abs(Number(a.x ?? 0) - Number(b.x ?? 0)) + Math.abs(Number(a.y ?? 0) - Number(b.y ?? 0));
       const length = Math.min(MAX_ROUTE_LEN, Number(r.length ?? dist));
-      const coinGain = Math.max(1, Math.round(length * 0.5 * routeCoinMultiplier));
-      resources.coin = Math.max(0, Number(resources.coin ?? 0) + coinGain);
+      let coinGain = length * 0.5 * routeCoinMultiplier * skillRouteCoinMultiplier;
+      coinGain *= globalResourceMultiplier;
+      coinGain *= resMul.coin ?? 1;
+      const finalGain = Math.max(1, Math.round(coinGain));
+      resources.coin = Math.max(0, Number(resources.coin ?? 0) + finalGain);
     }
     let unrestBump = Math.floor(routes.length / 2);
     if (tariffValue >= 60) unrestBump += 1;
     if (patrolsEnabled) unrestBump = Math.max(0, unrestBump - 1);
     resources.unrest = Math.max(0, Number(resources.unrest ?? 0) + unrestBump);
     if (patrolsEnabled) {
-      resources.coin = Math.max(0, Number(resources.coin ?? 0) - 2);
+      const patrolCost = Math.max(0, Math.round(2 * patrolCoinUpkeepMultiplier));
+      resources.coin = Math.max(0, Number(resources.coin ?? 0) - patrolCost);
     }
   }
-  return { resources, workers };
+  return { resources, workers, skillEffects };
 }
 
 export function processTick(state: GameState, proposals: Proposal[], catalog: Record<string, SimBuildingType>): TickResult {
   const afterProps = applyProposals(state, proposals);
-  const prod = produceBuildings(afterProps, catalog);
-  const resources = prod.resources;
-  const workers = prod.workers;
+  const { resources, workers, skillEffects } = produceBuildings(afterProps, catalog);
   const unrestThreatDecay = 1 + Math.floor(afterProps.cycle / 10);
   resources.mana = Math.max(0, Number(resources.mana ?? 0) - 5);
   resources.unrest = Math.max(0, Number(resources.unrest ?? 0) + unrestThreatDecay);
   resources.threat = Math.max(0, Number(resources.threat ?? 0) + unrestThreatDecay);
-  const upkeep = Math.max(0, Math.round(workers * 0.2));
+  const upkeepRate = Math.max(0, 0.2 + skillEffects.upkeepDelta);
+  const upkeep = Math.max(0, Math.round(workers * upkeepRate));
   if (upkeep > 0) {
     resources.grain = Math.max(0, Number(resources.grain ?? 0) - upkeep);
   }

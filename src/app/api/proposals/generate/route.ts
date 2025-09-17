@@ -5,8 +5,6 @@ import { config } from '@/infrastructure/config'
 import { generateText } from 'ai'
 import { createOpenAI } from '@ai-sdk/openai'
 import { z } from 'zod'
-import { generateSkillTree } from '@/components/game/skills/generate'
-import { accumulateEffects } from '@/components/game/skills/progression'
 import { rateLimit } from '@/middleware/rateLimit'
 import { buildGameContext } from '@/lib/gameContext'
 

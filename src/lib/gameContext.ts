@@ -1,5 +1,4 @@
-import { generateSkillTree } from '../components/game/skills/generate'
-import { accumulateEffects } from '../components/game/skills/progression'
+import { deriveSkillEffects } from '@engine/skills/modifiers'
 
 interface RawBuilding {
   typeId?: string
@@ -67,9 +66,7 @@ export function buildGameContext(state: unknown): GameContext {
   const skills: string[] = Array.isArray(stateObj.skills) ? stateObj.skills : []
   if (skills.length > 0) {
     try {
-      const tree = generateSkillTree(stateObj.skill_tree_seed ?? 12345)
-      const unlocked = tree.nodes.filter(n => skills.includes(n.id))
-      const acc = accumulateEffects(unlocked)
+      const acc = deriveSkillEffects(skills, { seed: stateObj.skill_tree_seed ?? 12345 })
       skillModifiers = {
         resource_multipliers: acc.resMul,
         building_multipliers: acc.bldMul,
