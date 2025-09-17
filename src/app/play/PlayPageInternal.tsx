@@ -1978,9 +1978,17 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   const skillTreeSeed = typeof state?.skill_tree_seed === 'number' ? state.skill_tree_seed : 12345;
 
   const currentTime = timeSystem.getCurrentTime();
+  const hudCycleFromState = typeof state?.cycle === 'number' && Number.isFinite(state.cycle)
+    ? state.cycle
+    : undefined;
+  const fallbackCycle = Number.isFinite(currentTime.totalMinutes)
+    ? Math.floor(currentTime.totalMinutes / 60)
+    : 0;
   const gameTime: GameTime = {
-    cycle: Math.floor(currentTime.totalMinutes / 60), // Convert to legacy cycle for HUD compatibility
-    season: 'spring', // TODO: Implement seasons based on currentTime.month
+    cycle: hudCycleFromState ?? fallbackCycle,
+    season: typeof currentTime.season === 'string' && currentTime.season.length > 0
+      ? currentTime.season
+      : 'spring',
     timeRemaining,
   };
   const totalAssigned = placedBuildings.reduce((sum, b) => sum + b.workers, 0);

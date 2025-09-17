@@ -1,4 +1,5 @@
 import type { SettingCategory } from './types';
+export type { SettingCategory } from './types';
 export type {
   CategoryBuilderContext,
   LayoutPreset,
