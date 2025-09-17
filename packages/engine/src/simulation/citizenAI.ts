@@ -82,6 +82,10 @@ export class CitizenAI {
     return profile;
   }
 
+  getCitizenState(citizenId: string): CitizenProfile | undefined {
+    return this.profiles.get(citizenId);
+  }
+
   getProfile(citizenId: string): CitizenProfile | undefined {
     return this.profiles.get(citizenId);
   }
