@@ -81,6 +81,10 @@ export class CityManagementInterface {
     this.cityServices = new CityServicesSystem(config.gridWidth, config.gridHeight);
     this.publicTransport = new PublicTransportSystem(config.gridWidth, config.gridHeight);
   }
+
+  async initialize(): Promise<void> {
+    this.updateStats();
+  }
   
   // Simulation control
   startSimulation(): void {
@@ -106,7 +110,7 @@ export class CityManagementInterface {
     // Process pending actions
     this.processActions();
   }
-  
+
   private updateStats(): void {
     // Update population from zoning
     const residentialZones = this.zoningSystem.getZonesByType('residential');
@@ -154,14 +158,14 @@ export class CityManagementInterface {
   private processActions(): void {
     for (const action of this.actions) {
       if (this.budget >= action.cost) {
-        this.executeAction(action);
+        this.applyAction(action);
         this.budget -= action.cost;
       }
     }
     this.actions = [];
   }
-  
-  private executeAction(action: ManagementAction): void {
+
+  private applyAction(action: ManagementAction): void {
     switch (action.type) {
       case 'zone':
         this.zoningSystem.zoneArea(
@@ -197,6 +201,23 @@ export class CityManagementInterface {
         });
         break;
     }
+  }
+
+  async executeAction(action: ManagementAction): Promise<boolean> {
+    if (this.budget < action.cost) {
+      return false;
+    }
+
+    this.applyAction(action);
+    this.budget -= action.cost;
+    this.stats = { ...this.stats, budget: this.budget };
+
+    return true;
+  }
+
+  dispose(): void {
+    this.pauseSimulation();
+    this.actions = [];
   }
   
   // Public interface methods
