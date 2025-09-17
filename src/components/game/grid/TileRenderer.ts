@@ -25,6 +25,11 @@ const MAX_CACHED_TEXTURES = 100;
 
 const ANIMATED_TILE_TYPES = new Set(["water", "forest", "river"]);
 
+export interface CreateTileSpriteOptions {
+  tileTypeOverride?: string;
+  interactive?: boolean;
+}
+
 // Clean up texture cache when it gets too large
 function cleanupTextureCache() {
   if (textureCache.size > MAX_CACHED_TEXTURES) {
@@ -172,7 +177,7 @@ export function createTileSprite(
   tileHeight: number,
   tileTypes: string[][],
   renderer: Renderer,
-  options?: { tileTypeOverride?: string },
+  options?: CreateTileSpriteOptions,
 ): GridTile {
   const startTime = performance.now();
   const tileKey = `${gridX},${gridY}`;
@@ -192,11 +197,13 @@ export function createTileSprite(
   sprite.anchor.set(0.5, 0.5);
   sprite.position.set(worldX, worldY);
   sprite.zIndex = 2;
-  (sprite as unknown as { eventMode: string }).eventMode = "static";
-  const hx = (tileWidth / 2) * 0.95;
-  const hy = (tileHeight / 2) * 0.95;
-  sprite.hitArea = new PIXI.Polygon([0, -hy, hx, 0, 0, hy, -hx, 0]);
-  sprite.cursor = "pointer";
+  if (options?.interactive) {
+    (sprite as unknown as { eventMode: string }).eventMode = "static";
+    const hx = (tileWidth / 2) * 0.95;
+    const hy = (tileHeight / 2) * 0.95;
+    sprite.hitArea = new PIXI.Polygon([0, -hy, hx, 0, 0, hy, -hx, 0]);
+    sprite.cursor = "pointer";
+  }
 
   logger.debug(`[TILE_GRAPHICS] Created sprite for ${tileKey} using cached texture`);
 

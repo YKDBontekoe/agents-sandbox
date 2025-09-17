@@ -77,6 +77,7 @@ interface UseIsometricGridSetupParams {
   onTileHover?: (x: number, y: number, tileType?: string) => void;
   onTileClick?: (x: number, y: number, tileType?: string) => void;
   requestOverlayUpdate: (options?: VisibilityUpdateOptions) => void;
+  enableTileInteraction?: boolean;
 }
 
 interface UseIsometricGridSetupResult {
@@ -95,6 +96,7 @@ export function useIsometricGridSetup({
   onTileHover,
   onTileClick,
   requestOverlayUpdate,
+  enableTileInteraction = false,
 }: UseIsometricGridSetupParams): UseIsometricGridSetupResult {
   const gridContainerRef = useRef<PIXI.Container | null>(null);
   const tilesRef = useRef<Map<string, GridTile>>(new Map());
@@ -174,6 +176,7 @@ export function useIsometricGridSetup({
           tileHeight,
           initialTileTypes,
           app.renderer,
+          { interactive: enableTileInteraction },
         );
         const key = `${x},${y}`;
         tiles.set(key, tile);
@@ -208,7 +211,7 @@ export function useIsometricGridSetup({
       gridContainerRef.current = null;
       initializedRef.current = false;
     };
-  }, [viewport, app, gridSize, tileWidth, tileHeight]);
+  }, [viewport, app, gridSize, tileWidth, tileHeight, enableTileInteraction]);
 
   useEffect(() => {
     const gridContainer = gridContainerRef.current;
@@ -229,6 +232,7 @@ export function useIsometricGridSetup({
             tileHeight,
             tileTypes,
             app.renderer,
+            { interactive: enableTileInteraction },
           );
           tiles.set(key, tile);
           gridContainer.addChild(tile.sprite);
@@ -241,7 +245,7 @@ export function useIsometricGridSetup({
       logger.debug(`useIsometricGridSetup: added ${added} tiles after gridSize changed to ${gridSize}`);
       requestOverlayUpdateRef.current({ overlayUpdate: true });
     }
-  }, [app, gridSize, tileHeight, tileTypes, tileWidth]);
+  }, [app, gridSize, tileHeight, tileTypes, tileWidth, enableTileInteraction]);
 
   useEffect(() => {
     const gridContainer = gridContainerRef.current;

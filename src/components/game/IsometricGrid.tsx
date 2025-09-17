@@ -18,6 +18,7 @@ interface IsometricGridProps {
   tileTypes?: string[][];
   onTileHover?: (x: number, y: number, tileType?: string) => void;
   onTileClick?: (x: number, y: number, tileType?: string) => void;
+  enableTileInteraction?: boolean;
 }
 
 export default function IsometricGrid({
@@ -27,6 +28,7 @@ export default function IsometricGrid({
   tileTypes = [],
   onTileHover,
   onTileClick,
+  enableTileInteraction = false,
 }: IsometricGridProps) {
   const { viewport, app } = useGameContext();
   const updateVisibilityRef = useRef<((options?: VisibilityUpdateOptions) => void) | null>(null);
@@ -43,6 +45,7 @@ export default function IsometricGrid({
     requestOverlayUpdate: (options) => {
       updateVisibilityRef.current?.(options);
     },
+    enableTileInteraction,
   });
 
   useIsometricViewportBounds({ viewport, gridSize, tileWidth, tileHeight });
