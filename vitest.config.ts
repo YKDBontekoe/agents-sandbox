@@ -22,6 +22,7 @@ export default defineConfig({
       ],
       [
         'src/components/**/*.test.{ts,tsx}',
+        'src/hooks/**/*.test.{ts,tsx}',
         'jsdom',
       ],
     ],

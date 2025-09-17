@@ -251,6 +251,12 @@ export type { Citizen } from './simulation/citizens/citizen';
 export * from './simulation/workerSimulation';
 export * from './simulation/simulationIntegration';
 export * from './simulation/events';
+export { CityManagementInterface } from './simulation/cityManagementInterface';
+export type {
+  CityManagementConfig,
+  CityStats,
+  ManagementAction
+} from './simulation/cityManagementInterface';
 
 // Export time system
 export * from './systems/time';
