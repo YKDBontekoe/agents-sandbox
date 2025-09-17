@@ -44,7 +44,7 @@ interface UseConstellationControllerOptions {
   ) => void;
 }
 
-interface ControllerHandlers {
+export interface ControllerHandlers {
   onMouseMove: (event: ReactMouseEvent<HTMLCanvasElement>) => void;
   onMouseDown: (event: ReactMouseEvent<HTMLCanvasElement>) => void;
   onMouseUp: () => void;
