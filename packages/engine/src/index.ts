@@ -266,3 +266,4 @@ export * from './world/noise';
 export * from './world/biome';
 export * from './world/features';
 export * from './world/generator';
+export * from './visuals/constellation/particleSystem';

@@ -1,3 +1,5 @@
+import type { ParticleEffect as EngineParticleEffect } from '@engine/visuals/constellation/particleSystem';
+
 export type SkillEffect =
   | { kind: 'resource_multiplier'; resource: 'grain' | 'coin' | 'mana' | 'favor' | 'wood' | 'planks'; factor: number }
   | { kind: 'building_multiplier'; typeId: string; factor: number }
@@ -131,18 +133,7 @@ export interface TooltipState {
   offset: { x: number; y: number };
 }
 
-export interface ParticleEffect {
-  id: string;
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  life: number;
-  maxLife: number;
-  size: number;
-  color: string;
-  type: 'unlock' | 'hover' | 'connection' | 'ambient';
-}
+export type ParticleEffect = EngineParticleEffect;
 
 export interface AnimatedConnection {
   from: ConstellationNode;
