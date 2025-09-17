@@ -62,7 +62,19 @@ export function createChunkContainer(
 ): { container: PIXI.Container; tiles: Map<string, GridTile> } {
   const container = new PIXI.Container();
   container.name = `chunk-${chunkData.chunkX}-${chunkData.chunkY}`;
-  container.sortableChildren = true;
+  container.sortableChildren = false;
+
+  const tileLayer = new PIXI.Container();
+  tileLayer.name = `${container.name}-tiles`;
+
+  const overlayLayer = new PIXI.Container();
+  overlayLayer.name = `${container.name}-overlays`;
+  overlayLayer.sortableChildren = true;
+  overlayLayer.zIndex = 1;
+
+  container.addChild(tileLayer);
+  container.addChild(overlayLayer);
+  container.sortableChildren = false;
 
   const tiles = new Map<string, GridTile>();
 
@@ -85,7 +97,7 @@ export function createChunkContainer(
       const tile = createTileSprite(
         globalX,
         globalY,
-        container,
+        overlayLayer,
         tileWidth,
         tileHeight,
         chunkData.tiles,
@@ -113,7 +125,7 @@ export function createChunkContainer(
 
       const key = `${globalX},${globalY}`;
       tiles.set(key, tile);
-      container.addChild(tile.sprite);
+      tileLayer.addChild(tile.sprite);
     }
   }
 

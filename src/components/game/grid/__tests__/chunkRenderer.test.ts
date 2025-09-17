@@ -78,8 +78,14 @@ describe("chunkRenderer", () => {
     });
 
     expect(container.name).toBe("chunk-0-1");
+    expect(container.sortableChildren).toBe(false);
     expect(tiles.size).toBe(4);
     expect(createTileSpriteMock).toHaveBeenCalledTimes(4);
+
+    expect(container.children).toHaveLength(2);
+    const [tileLayer, overlayLayer] = container.children as PIXI.Container[];
+    expect(tileLayer.children).toHaveLength(4);
+    expect(overlayLayer.sortableChildren).toBe(true);
 
     expect(tiles.get("0,2")?.tileType).toBe("grass");
     expect(tiles.get("1,2")?.tileType).toBe("water");
