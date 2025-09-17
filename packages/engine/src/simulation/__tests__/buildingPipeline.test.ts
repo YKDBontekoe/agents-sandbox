@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createGameTime } from '../../types/gameTime';
 import type { SimResources } from '../../index';
-import type { SimulatedBuilding } from '../buildingSimulation';
+import type { SimulatedBuilding } from '../buildings';
 import { runBuildingPipeline } from '../buildingPipeline';
 
 const baseResources: SimResources = {

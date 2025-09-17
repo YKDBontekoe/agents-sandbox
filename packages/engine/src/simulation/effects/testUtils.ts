@@ -1,5 +1,5 @@
 import type { SimResources } from '../../index';
-import type { SimulatedBuilding } from '../buildingSimulation';
+import type { SimulatedBuilding } from '../buildings';
 import type { Citizen } from '../citizens/citizen';
 import type { VisualEffectsGameState } from './types';
 import type { WorkerProfile, JobRole } from '../workers/types';

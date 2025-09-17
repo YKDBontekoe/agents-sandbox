@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createGameTime } from '../../types/gameTime';
 import type { SimResources } from '../../index';
-import type { SimulatedBuilding } from '../buildingSimulation';
+import type { SimulatedBuilding } from '../buildings';
 import { CitizenBehaviorSystem } from '../citizenBehavior';
 import { EventManager } from '../events/EventManager';
 import { runEventPipeline } from '../eventPipeline';

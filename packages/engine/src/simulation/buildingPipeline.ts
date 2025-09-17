@@ -7,7 +7,7 @@ import {
   createSimulatedBuilding,
   getBuildingsNeedingMaintenance,
   type SimulatedBuilding
-} from './buildingSimulation';
+} from './buildings';
 
 export interface RawBuilding {
   id: string;
