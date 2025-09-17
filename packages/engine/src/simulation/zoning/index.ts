@@ -3,6 +3,7 @@ import type { SimulatedBuilding } from '../buildings';
 import { ZoneGrid } from './grid';
 import type { ZoneCell, ZoneDemand, ZoneStats, ZoneType } from './types';
 import { initializeDemand, updateDemand, type GlobalFactors } from './demand';
+import { inferZoneTypeFromBuilding } from './zoneRules';
 
 export class ZoningSystem {
   private grid: ZoneGrid;
@@ -44,11 +45,11 @@ export class ZoningSystem {
   private updateGlobalFactors(buildings: SimulatedBuilding[]): void {
     const zones = this.grid.getAllZones();
     this.globalFactors.population = buildings
-      .filter(b => this.getBuildingZoneType(b.typeId) === 'residential')
+      .filter(b => inferZoneTypeFromBuilding(b.typeId) === 'residential')
       .reduce((sum, b) => sum + (b.workers || 0) * 2, 0);
 
     this.globalFactors.employment = buildings
-      .filter(b => ['commercial', 'industrial', 'office'].includes(this.getBuildingZoneType(b.typeId)))
+      .filter(b => ['commercial', 'industrial', 'office'].includes(inferZoneTypeFromBuilding(b.typeId)))
       .reduce((sum, b) => sum + (b.workers || 0), 0);
 
     this.globalFactors.pollution = zones.reduce((sum, z) => sum + z.pollution, 0) / (zones.length || 1);
@@ -57,22 +58,6 @@ export class ZoningSystem {
     const employmentRate = this.globalFactors.population > 0
       ? this.globalFactors.employment / this.globalFactors.population : 0;
     this.globalFactors.economy = Math.max(0, Math.min(100, employmentRate * 100 + 20));
-  }
-
-  private getBuildingZoneType(buildingTypeId: string): ZoneType {
-    if (buildingTypeId.includes('house') || buildingTypeId.includes('apartment')) {
-      return 'residential';
-    }
-    if (buildingTypeId.includes('shop') || buildingTypeId.includes('store') || buildingTypeId.includes('mall')) {
-      return 'commercial';
-    }
-    if (buildingTypeId.includes('factory') || buildingTypeId.includes('warehouse') || buildingTypeId.includes('plant')) {
-      return 'industrial';
-    }
-    if (buildingTypeId.includes('office') || buildingTypeId.includes('tower')) {
-      return 'office';
-    }
-    return 'unzoned';
   }
 
   getZoneAt(x: number, y: number): ZoneCell | null {
