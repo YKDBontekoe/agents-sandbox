@@ -10,46 +10,45 @@ import type {
   Workplace,
 } from './workers/types';
 import type { GameTime } from '../types/gameTime';
-import { createDefaultJobCatalog } from './workers/jobCatalog';
+import { JobCatalogService } from './workers/jobCatalogService';
+import { WorkerRepository } from './workers/workerRepository';
 import { LaborMarketService, type LaborMarket } from './workers/laborMarketService';
 import { WorkerProgressionService } from './workers/workerProgressionService';
 export type { LaborMarket } from './workers/laborMarketService';
 
 export interface WorkerSimulationOptions {
-  jobCatalog?: Map<string, JobRole>;
+  jobCatalogService?: JobCatalogService;
+  jobCatalog?: Iterable<JobRole> | Map<string, JobRole>;
   laborMarketService?: LaborMarketService;
   workerProgressionService?: WorkerProgressionService;
+  workerRepository?: WorkerRepository;
 }
 
 // Worker simulation system
 export class WorkerSimulationSystem {
-  private workers: Map<string, WorkerProfile> = new Map();
-  private jobRoles: Map<string, JobRole>;
-  private workplaces: Map<string, Workplace> = new Map();
-  private laborMarketService: LaborMarketService;
-  private workerProgressionService: WorkerProgressionService;
+  private readonly repository: WorkerRepository;
+  private readonly jobCatalog: JobCatalogService;
+  private readonly laborMarketService: LaborMarketService;
+  private readonly workerProgressionService: WorkerProgressionService;
   private currentCycle: number = 0;
 
   constructor(options: WorkerSimulationOptions = {}) {
-    this.jobRoles = options.jobCatalog ? new Map(options.jobCatalog) : createDefaultJobCatalog();
+    this.repository = options.workerRepository ?? new WorkerRepository();
+    this.jobCatalog =
+      options.jobCatalogService ??
+      new JobCatalogService(options.jobCatalog ?? undefined);
     this.laborMarketService = options.laborMarketService ?? new LaborMarketService();
     this.workerProgressionService = options.workerProgressionService ?? new WorkerProgressionService();
   }
 
   // Create worker profile for a citizen
   createWorker(citizen: Citizen, roleId: string): WorkerProfile | null {
-    const role = this.jobRoles.get(roleId);
-    if (!role) return null;
+    const qualification = this.jobCatalog.evaluateCitizenForRole(citizen, roleId);
+    const role = qualification.role;
+    if (!role || !qualification.qualified) return null;
 
     // Initialize enhanced worker profile
     workerSystem.initializeWorker(citizen);
-
-    // Check if citizen meets minimum requirements
-    for (const [skill, minLevel] of Object.entries(role.requiredSkills)) {
-      if ((citizen.skills[skill] || 0) < minLevel) {
-        return null; // Not qualified
-      }
-    }
 
     const worker: WorkerProfile = {
       citizenId: citizen.id,
@@ -96,7 +95,7 @@ export class WorkerSimulationSystem {
       stressLevel: 30
     };
 
-    this.workers.set(citizen.id, worker);
+    this.repository.upsertWorker(worker);
     return worker;
   }
 
@@ -106,7 +105,7 @@ export class WorkerSimulationSystem {
     resources: SimResources;
     citizens: Citizen[];
   }): void {
-    const worker = this.workers.get(workerId);
+    const worker = this.repository.getWorker(workerId);
     if (!worker) return;
 
     // Convert GameTime to cycle for backward compatibility
@@ -119,11 +118,11 @@ export class WorkerSimulationSystem {
     const citizen = gameState.citizens.find(c => c.id === worker.citizenId);
     this.workerProgressionService.updateWorkerProgression(worker, {
       gameTime,
-      jobRoles: this.jobRoles,
+      jobCatalog: this.jobCatalog,
       laborMarket: this.laborMarketService.getLaborMarket(),
       citizen,
-      workers: this.workers,
-      workplaces: this.workplaces,
+      workers: this.repository.getWorkerMap(),
+      workplaces: this.repository.getWorkplaceMap(),
     });
   }
 
@@ -146,19 +145,21 @@ export class WorkerSimulationSystem {
       cultureType: 'collaborative',
       teamEvents: []
     };
-    
-    this.workplaces.set(buildingId, workplace);
+
+    this.repository.upsertWorkplace(workplace);
     return workplace;
   }
 
   // Assign worker to workplace
   assignWorkerToWorkplace(workerId: string, buildingId: string): boolean {
-    const worker = this.workers.get(workerId);
-    const workplace = this.workplaces.get(buildingId);
-    
+    const worker = this.repository.getWorker(workerId);
+    const workplace = this.repository.getWorkplace(buildingId);
+
     if (!worker || !workplace) return false;
-    
-    workplace.workers.push(workerId);
+
+    if (!workplace.workers.includes(workerId)) {
+      workplace.workers.push(workerId);
+    }
     return true;
   }
 
@@ -169,7 +170,7 @@ export class WorkerSimulationSystem {
     potential: number;
     issues: string[];
   } | null {
-    const worker = this.workers.get(workerId);
+    const worker = this.repository.getWorker(workerId);
     if (!worker) return null;
     
     const issues: string[] = [];
@@ -198,19 +199,19 @@ export class WorkerSimulationSystem {
 
   // Public getters
   getWorker(id: string): WorkerProfile | undefined {
-    return this.workers.get(id);
+    return this.repository.getWorker(id);
   }
 
   getAllWorkers(): WorkerProfile[] {
-    return Array.from(this.workers.values());
+    return this.repository.getAllWorkers();
   }
 
   getJobRoles(): JobRole[] {
-    return Array.from(this.jobRoles.values());
+    return this.jobCatalog.listRoles();
   }
 
   getWorkplace(buildingId: string): Workplace | undefined {
-    return this.workplaces.get(buildingId);
+    return this.repository.getWorkplace(buildingId);
   }
 
   getLaborMarket(): LaborMarket {
@@ -348,7 +349,7 @@ export class WorkerSimulationSystem {
     this.updateWorkerTraining(gameTime);
     
     // Update individual workers
-    for (const worker of this.workers.values()) {
+    for (const worker of this.repository.getAllWorkers()) {
       this.updateWorker(worker.citizenId, gameTime, gameState);
     }
     
