@@ -16,15 +16,9 @@ export default defineConfig({
   test: {
     environment: 'node',
     environmentMatchGlobs: [
-      [
-        'src/state/**/*.test.{ts,tsx}',
-        'jsdom',
-      ],
-      [
-        'src/components/**/*.test.{ts,tsx}',
-        'src/hooks/**/*.test.{ts,tsx}',
-        'jsdom',
-      ],
+      ['src/state/**/*.test.{ts,tsx}', 'jsdom'],
+      ['src/components/**/*.test.{ts,tsx}', 'jsdom'],
+      ['src/hooks/**/*.test.{ts,tsx}', 'jsdom'],
     ],
   },
 });
