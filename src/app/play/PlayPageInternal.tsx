@@ -12,7 +12,6 @@ import MemoryManager from '@/components/game/MemoryManager';
 import * as PIXI from 'pixi.js';
 import { Viewport } from 'pixi-viewport';
 import logger from '@/lib/logger';
-import { publicConfig as config } from '@/infrastructure/config';
 
 import dynamic from 'next/dynamic';
 const IntegratedHUDSystem = dynamic(
@@ -26,7 +25,6 @@ import { CouncilPanel, CouncilProposal } from '@/components/game/hud/CouncilPane
 import { EdictsPanel, EdictSetting } from '@/components/game/hud/EdictsPanel';
 import type { District } from '@/components/game/districts';
 import type { Leyline } from '../../../apps/web/features/leylines';
-import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
 import { generateSkillTree } from '@/components/game/skills/generate';
 import { accumulateEffects } from '@/components/game/skills/progression';
 import type { SkillNode } from '@/components/game/skills/types';
@@ -58,6 +56,8 @@ import { VisualIndicator } from '@engine';
 import { pauseSimulation, resumeSimulation } from './simulationControls';
 import { TimeSystem, timeSystem, TIME_SPEEDS, GameTime as SystemGameTime, type TimeSpeed } from '@engine';
 import { intervalMsToTimeSpeed, sanitizeIntervalMs } from './timeSpeedUtils';
+import { usePlayGameState, type GuideProgress } from './hooks/usePlayGameState';
+import type { GameState, Proposal, StoredBuilding, TradeRoute } from './types';
 
 type BuildTypeId = keyof typeof SIM_BUILDINGS;
 
@@ -76,48 +76,6 @@ const nowMs = () => (typeof performance !== 'undefined' ? performance.now() : Da
 
 const arraysEqual = (a: string[], b: string[]) =>
   a.length === b.length && a.every((value, index) => value === b[index]);
-
-
-
-interface StoredBuilding {
-  id: string;
-  typeId: keyof typeof SIM_BUILDINGS;
-  x: number;
-  y: number;
-  level: number;
-  workers: number;
-  traits?: { waterAdj?: number; mountainAdj?: number; forestAdj?: number };
-}
-
-interface GameState {
-  id: string;
-  cycle: number; // Keep for backward compatibility with server
-  resources: Record<string, number>;
-  workers: number;
-  buildings: StoredBuilding[];
-  routes?: TradeRoute[];
-  edicts?: Record<string, number>;
-  map_size?: number;
-  skills?: string[];
-  skill_tree_seed?: number;
-  pinned_skill_targets?: string[];
-}
-
-interface TradeRoute {
-  id: string;
-  fromId: string;
-  toId: string;
-  length: number;
-}
-
-interface Proposal {
-  id: string;
-  guild: string;
-  title: string;
-  description: string;
-  status: "pending" | "accepted" | "rejected" | "applied";
-  predicted_delta: Record<string, number>;
-}
 
 interface SeasonalEvent {
   id: string;
@@ -170,11 +128,7 @@ export function ensureStateForSkillUnlock(
 export default function PlayPage({ initialState = null, initialProposals = [] }: PlayPageProps) {
   logger.debug('🚀 PlayPage component mounting/rendering');
   const generateId = useIdGenerator();
-  const [state, setState] = useState<GameState | null>(initialState);
-  const [proposals, setProposals] = useState<Proposal[]>(initialProposals ?? []);
-  const [loading, setLoading] = useState(false);
-  const [guild, _setGuild] = useState("Wardens");
-  const [error, setError] = useState<string | null>(null);
+  const [guild] = useState('Wardens');
   
   // Initialize tileTypes and gridSize early - MUST be before conditional returns
   const [tileTypes, setTileTypes] = useState<string[][]>([]);
@@ -278,8 +232,6 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     }
   }, [tileTypes]);
   
-  const [isPaused, setIsPaused] = useState(true);
-  const [timeRemaining, setTimeRemaining] = useState(60);
   const [edgeScrollEnabled, setEdgeScrollEnabled] = useState(true);
   const [, setCrisis] = useState<CrisisData | null>(null);
   const [isCouncilOpen, setIsCouncilOpen] = useState(false);
@@ -310,13 +262,26 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   // building hover details disabled in stable mode
   const [gameMode, setGameMode] = useState<'casual' | 'advanced'>('casual');
   const [, setShowOnboarding] = useState(false);
-  const [, setGuideProgress] = useState({ selectedTile: false, openedCouncil: false, generated: false, accepted: false, advanced: false });
+  const [, setGuideProgress] = useState<GuideProgress>({ selectedTile: false, openedCouncil: false, generated: false, accepted: false, advanced: false });
   const [, setGuideHint] = useState<string | null>(null);
   const [isSimMode, setIsSimMode] = useState(false);
   const [simResources, setSimResources] = useState<SimResources | null>(null);
   const [placedBuildings, setPlacedBuildings] = useState<StoredBuilding[]>([]);
   const [routes, setRoutes] = useState<TradeRoute[]>([]);
   const [roads, setRoads] = useState<Array<{x:number;y:number}>>([]);
+  const [selectedTile, setSelectedTile] = useState<{ x: number; y: number; tileType?: string } | null>(null);
+  const [hoverTile, setHoverTile] = useState<{ x: number; y: number; tileType?: string } | null>(null);
+  const [previewTypeId, setPreviewTypeId] = useState<BuildTypeId | null>(null);
+  const [tooltipLocked, setTooltipLocked] = useState(false);
+  const [clickEffectKey, setClickEffectKey] = useState<string | null>(null);
+  const [selectedLeyline, setSelectedLeyline] = useState<Leyline | null>(null);
+  const [isLeylineDrawing, setIsLeylineDrawing] = useState(false);
+  const hasAutoOpenedCouncilRef = useRef(false);
+  const [routeHoverToId, setRouteHoverToId] = useState<string | null>(null);
+  const [assignLines, setAssignLines] = useState<AssignLine[]>([]);
+  const [pathHints, setPathHints] = useState<PathHint[]>([]);
+  const [pulses, setPulses] = useState<Pulse[]>([]);
+  const [ctxMenu, setCtxMenu] = useState<{ open: boolean; buildingId: string | null; x: number; y: number }>({ open: false, buildingId: null, x: 0, y: 0 });
 
   useEffect(() => {
     const expiryMap = indicatorExpiryRef.current;
@@ -384,6 +349,46 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     timeSystemRef.current.start();
   }
   const timeSystem = timeSystemRef.current;
+
+  const {
+    state,
+    setState,
+    proposals,
+    loading,
+    error,
+    setError,
+    isPaused,
+    setIsPaused,
+    timeRemaining,
+    fetchState,
+    tick,
+    generate,
+    scry,
+    decide,
+  } = usePlayGameState({
+    initialState,
+    initialProposals,
+    timeSystem: timeSystem!,
+    syncSkillsFromServer,
+    setPlacedBuildings,
+    setSimResources,
+    setRoads,
+    setCitizensCount,
+    setCitizensSeed,
+    setGridSize,
+    setPendingMapSize,
+    setMapSizeModalOpen,
+    setDismissedGuide,
+    setGuideProgress,
+    setAcceptedNotice,
+    selectedTile,
+    generateMarkerId: generateId,
+    setMarkers,
+    notify,
+    setCrisis,
+    setEnhancedGameState,
+    setVisualIndicators,
+  });
 
   const stateId = state?.id ?? null;
 
@@ -713,19 +718,6 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     setUnlockedSkillIds(prev => (arraysEqual(prev, normalized) ? prev : normalized));
   }, [setUnlockedSkillIds]);
 
-  const [selectedTile, setSelectedTile] = useState<{ x: number; y: number; tileType?: string } | null>(null);
-  const [hoverTile, setHoverTile] = useState<{ x: number; y: number; tileType?: string } | null>(null);
-  const [previewTypeId, setPreviewTypeId] = useState<BuildTypeId | null>(null);
-  const [tooltipLocked, setTooltipLocked] = useState(false);
-  const [clickEffectKey, setClickEffectKey] = useState<string | null>(null);
-  const [selectedLeyline, setSelectedLeyline] = useState<Leyline | null>(null);
-  const [isLeylineDrawing, setIsLeylineDrawing] = useState(false);
-  const hasAutoOpenedCouncilRef = useRef(false);
-  const [routeHoverToId, setRouteHoverToId] = useState<string | null>(null);
-  const [assignLines, setAssignLines] = useState<AssignLine[]>([]);
-  const [pathHints, setPathHints] = useState<PathHint[]>([]);
-  const [pulses, setPulses] = useState<Pulse[]>([]);
-  const [ctxMenu, setCtxMenu] = useState<{ open: boolean; buildingId: string | null; x: number; y: number }>({ open: false, buildingId: null, x: 0, y: 0 });
   const [constructionEvents, setConstructionEvents] = useState<Array<{
     id: string;
     buildingId: string;
@@ -1255,299 +1247,6 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     try { localStorage.setItem('ad_onboarding_step', String(onboardingStep)); } catch {}
   }, [onboardingStep]);
 
-  const fetchState = useCallback(async () => {
-    logger.debug('Fetching state from /api/state');
-    const res = await fetch("/api/state");
-    logger.debug('Response status:', res.status, res.ok);
-    const json = await res.json();
-    logger.debug('Response JSON:', json);
-    if (!res.ok) {
-      const msg = json?.error || `Failed to fetch state (${res.status})`;
-      if (config.nextPublicOfflineMode) {
-        logger.warn('Offline mode enabled: using local fallback state:', msg);
-        setState({
-          id: 'local-fallback',
-          cycle: 1,
-          resources: { grain: 1000, coin: 500, mana: 200, favor: 10, unrest: 0, threat: 0 },
-          workers: 0,
-          buildings: [],
-        });
-        return;
-      }
-      throw new Error(msg);
-    }
-    const rawSkills = (json as any).skills;
-    const sanitizedSkills = Array.isArray(rawSkills) ? sanitizeSkillList(rawSkills) : undefined;
-
-    setState({
-      ...json,
-      workers: json.workers ?? 0,
-      buildings: json.buildings ?? [],
-      routes: (json as any).routes ?? [],
-      roads: (json as any).roads ?? [],
-      citizens_seed: (json as any).citizens_seed,
-      citizens_count: (json as any).citizens_count,
-      ...(sanitizedSkills !== undefined ? { skills: sanitizedSkills } : {}),
-    });
-    if (sanitizedSkills !== undefined) {
-      syncSkillsFromServer(sanitizedSkills);
-    }
-    try { setIsPaused(!(json as any).auto_ticking); } catch {}
-    try { setRoads(((json as any).roads as Array<{x:number;y:number}>) ?? []); } catch {}
-    try { if ((json as any).citizens_count) setCitizensCount((json as any).citizens_count); } catch {}
-    try { if ((json as any).citizens_seed) setCitizensSeed((json as any).citizens_seed); } catch {}
-    // Load saved map size from game state with performance-focused validation
-    try { 
-      if ((json as any).map_size) {
-        // Limit map size to prevent performance issues - max 48 for stability
-        const savedSize = Math.max(8, Math.min(48, Number((json as any).map_size) || 24));
-        setGridSize(savedSize);
-        setPendingMapSize(savedSize);
-        setMapSizeModalOpen(false);
-      }
-    } catch {}
-  }, [syncSkillsFromServer]);
-
-  const fetchProposals = useCallback(async () => {
-    const res = await fetch("/api/proposals");
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.error || "Failed to fetch proposals");
-    setProposals(json.proposals || []);
-  }, []);
-  
-  // Fetch initial state if not provided
-  useEffect(() => {
-    if (!initialState && !state) {
-      logger.debug('🔄 No initial state provided, fetching from API...');
-      fetchState().catch((err) => {
-        logger.error('❌ Failed to fetch initial state:', err);
-        setError(err.message || 'Failed to load game state');
-      });
-    }
-  }, [initialState, state, fetchState]);
-
-  const tick = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/state/tick`, { method: "POST" });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Failed to tick");
-      const serverState: GameState = { ...json.state, workers: json.state.workers ?? 0, buildings: json.state.buildings ?? [] };
-      const tickSkills = Array.isArray((json.state as any)?.skills) ? sanitizeSkillList((json.state as any).skills) : undefined;
-      if (tickSkills !== undefined) {
-        serverState.skills = tickSkills;
-        syncSkillsFromServer(tickSkills);
-      }
-      setState(serverState);
-      const assigned = serverState.buildings.reduce((sum, b) => sum + (b.workers || 0), 0);
-      const simRes: SimResources = {
-        grain: serverState.resources.grain || 0,
-        coin: serverState.resources.coin || 0,
-        mana: serverState.resources.mana || 0,
-        favor: serverState.resources.favor || 0,
-        workers: (serverState.workers || 0) - assigned,
-        wood: (serverState.resources as any).wood || 0,
-        planks: (serverState.resources as any).planks || 0,
-      };
-      setSimResources(simRes);
-      setPlacedBuildings(serverState.buildings);
-      // Reset local countdown based on server interval if present
-      const ms = Number((json.state as any)?.tick_interval_ms ?? 60000)
-      setTimeRemaining(Math.max(1, Math.round(ms / 1000)));
-      if (json.crisis) {
-        setIsPaused(true);
-        setCrisis(json.crisis);
-      }
-      await fetchProposals();
-      
-      // Update simulation systems
-      try {
-        const simulationInput = {
-          buildings: serverState.buildings,
-          resources: simRes,
-          gameTime: timeSystem.getCurrentTime()
-        };
-        const enhancedState = simulationSystem.updateSimulation(simulationInput, 1.0);
-        setEnhancedGameState(enhancedState);
-        const indicators = simulationSystem.generateVisualIndicators(enhancedState);
-        setVisualIndicators(indicators);
-      } catch (simError) {
-        logger.warn('Simulation system update failed:', simError);
-      }
-      
-      // Flavor events disabled for stability
-      return { simRes, state: serverState };
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e));
-      return null;
-    } finally {
-      setLoading(false);
-    }
-  }, [fetchProposals, syncSkillsFromServer]);
-
-  // Council actions
-  const generate = useCallback(async () => {
-    try {
-      setLoading(true);
-      const res = await fetch('/api/proposals/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ guild }) });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed to generate proposals');
-      await fetchProposals();
-      notify({ type: 'success', title: 'Proposals Summoned', message: 'New counsel ideas await review.' })
-      setDismissedGuide(true);
-      setGuideProgress(prev => ({ ...prev, generated: true }));
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setLoading(false);
-    }
-  }, [guild, fetchProposals]);
-
-  const scry = useCallback(async (id: string) => {
-    try {
-      setLoading(true);
-      const res = await fetch(`/api/proposals/${id}/scry`, { method: 'POST' });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed to scry');
-      await fetchProposals();
-      // Show a brief summary toast of scry (best-effort)
-      const p = proposals.find(p => p.id === id);
-      if (p?.predicted_delta) {
-        const parts = Object.entries(p.predicted_delta).slice(0, 3).map(([k,v]) => `${k} ${v>=0?'+':''}${v}`).join('  ');
-        notify({ type: 'info', title: 'Scry Result', message: parts || 'Forecast updated.' })
-      } else {
-        notify({ type: 'info', title: 'Scry Result', message: 'Forecast updated.' })
-      }
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setLoading(false);
-    }
-  }, [fetchProposals]);
-
-  const decide = useCallback(async (id: string, decision: 'accept' | 'reject') => {
-    try {
-      setLoading(true);
-      const selected = proposals.find(p => p.id === id) || null;
-      setProposals(prev => prev.map(p => p.id === id ? { ...p, status: decision === 'accept' ? 'accepted' : 'rejected' } : p));
-      const res = await fetch(`/api/proposals/${id}/decide`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ decision }) });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed to decide');
-      if (decision === 'accept' && selected) {
-        setAcceptedNotice({ title: selected.title, delta: selected.predicted_delta || {} });
-        notify({ type: 'success', title: 'Decree Accepted', message: selected.title });
-        setDismissedGuide(true);
-        setGuideProgress(prev => ({ ...prev, accepted: true }));
-        if (selectedTile) {
-          setMarkers(prev => [{ id: `m-${generateId()}`, x: selectedTile.x, y: selectedTile.y, label: 'Accepted' }, ...prev]);
-        }
-        setTimeout(() => setAcceptedNotice(null), 4000);
-      } else if (decision === 'reject' && selected) {
-        notify({ type: 'warning', title: 'Proposal Rejected', message: selected.title });
-      }
-      await fetchProposals();
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setLoading(false);
-    }
-  }, [proposals, selectedTile, fetchProposals, generateId]);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        if (!state) await fetchState();
-        await fetchProposals();
-      } catch (e: unknown) {
-        const message = e instanceof Error ? e.message : String(e);
-        logger.error('Failed to connect to database:', message);
-        setError(message);
-      }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Real-time heartbeat: drive countdown and server ticks
-  useEffect(() => {
-    let interval: NodeJS.Timeout | null = null;
-    const updateCountdown = () => {
-      if (!state) return;
-      const lastStr = (state as any).last_tick_at as string | undefined;
-      const ms = Number((state as any).tick_interval_ms ?? 60000);
-      const last = lastStr ? Date.parse(lastStr) : Date.now();
-      const diff = (last + ms) - Date.now();
-      const secs = Math.max(0, Math.ceil(diff / 1000));
-      setTimeRemaining(secs);
-    };
-    updateCountdown();
-    interval = setInterval(updateCountdown, 1000);
-    return () => { if (interval) clearInterval(interval); };
-  }, [state]);
-
-  useEffect(() => {
-    let hb: NodeJS.Timeout | null = null;
-    const ping = async () => {
-      try {
-        if (!isPaused) {
-          await fetch('/api/state/heartbeat', { method: 'POST' });
-        }
-      } catch {}
-    };
-    // Kick once immediately to avoid drift, then every second
-    ping();
-    hb = setInterval(ping, 1000);
-    return () => { if (hb) clearInterval(hb); };
-  }, [isPaused]);
-
-  useEffect(() => {
-    if (config.nextPublicDisableRealtime || config.nodeEnv === 'development') {
-      logger.debug('Realtime disabled by environment flag');
-      return;
-    }
-    let client: ReturnType<typeof createSupabaseBrowserClient> | null = null;
-    try {
-      client = createSupabaseBrowserClient(config);
-    } catch (e: unknown) {
-      logger.debug('Realtime disabled:', e instanceof Error ? e.message : String(e));
-      return;
-    }
-
-    const channel = client
-      .channel('game_changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'game_state' }, (payload: { new?: unknown }) => {
-        const next = payload?.new as GameState | undefined;
-        if (next && typeof next === 'object') {
-          const realtimeSkills = Array.isArray((next as any).skills) ? sanitizeSkillList((next as any).skills) : undefined;
-          const patchedNext = realtimeSkills !== undefined ? { ...next, skills: realtimeSkills } : next;
-          setState(patchedNext as GameState);
-          if (realtimeSkills !== undefined) {
-            syncSkillsFromServer(realtimeSkills);
-          }
-          try { setIsPaused(!(next as any).auto_ticking); } catch {}
-          const assigned = (next.buildings || []).reduce((sum, b) => sum + (b.workers || 0), 0);
-          setPlacedBuildings(next.buildings || []);
-          setSimResources({
-            grain: next.resources.grain || 0,
-            coin: next.resources.coin || 0,
-            mana: next.resources.mana || 0,
-            favor: next.resources.favor || 0,
-            wood: next.resources.wood || 0,
-            planks: next.resources.planks || 0,
-            workers: (next.workers || 0) - assigned,
-          });
-          try { setRoads(((next as any).roads as Array<{x:number;y:number}>) ?? []); } catch {}
-          try { if ((next as any).citizens_count) setCitizensCount((next as any).citizens_count as any); } catch {}
-          try { if ((next as any).citizens_seed) setCitizensSeed((next as any).citizens_seed as any); } catch {}
-        }
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'proposals' }, () => {
-        fetchProposals();
-      })
-      .subscribe();
-
-    return () => { if (client && channel) client.removeChannel(channel); };
-  }, [fetchState, fetchProposals, syncSkillsFromServer]);
 
   useEffect(() => {
     if (acceptedNotice) {
@@ -2550,7 +2249,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
         onAcceptProposal={(id) => decide(id, 'accept')}
         onRejectProposal={(id) => decide(id, 'reject')}
         onScryProposal={scry}
-        onGenerateProposals={async () => { await generate(); if (onboardingStep === 5) setOnboardingStep(6); }}
+        onGenerateProposals={async () => { await generate(guild); if (onboardingStep === 5) setOnboardingStep(6); }}
         canGenerateProposals={true}
       />
       <SettingsPanel
