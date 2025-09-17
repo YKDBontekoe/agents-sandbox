@@ -86,7 +86,8 @@ export class CitizenBehaviorSystem {
     const currentCycle = Math.floor(gameTime.totalMinutes / 60);
     const hour = gameTime.hour; // Use actual game hour
 
-    if (!citizenAI.getCitizenState(citizen.id)) {
+    const existingProfile = citizenAI.getProfile?.(citizen.id);
+    if (!existingProfile) {
       citizenAI.initializeCitizen(citizen);
     }
 
