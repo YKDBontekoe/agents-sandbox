@@ -75,7 +75,7 @@ export class CitizenBehaviorSystem {
     const hour = gameTime.hour; // Use actual game hour
     
     // Initialize citizen in enhanced AI if not already done
-    if (!citizenAI.getCitizenState(citizen.id)) {
+    if (!citizenAI.getProfile(citizen.id)) {
       citizenAI.initializeCitizen(citizen);
     }
     

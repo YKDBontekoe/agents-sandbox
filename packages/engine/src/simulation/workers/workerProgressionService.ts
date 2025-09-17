@@ -1,5 +1,5 @@
 import type { GameTime } from '../../types/gameTime';
-import type { Citizen } from '../citizenBehavior';
+import type { Citizen } from '../citizens/citizen';
 import type { JobRole, WorkerProfile, Workplace } from './types';
 import type { LaborMarket } from './laborMarketService';
 import { calculateWageAdjustment, checkCareerProgression } from './career';
