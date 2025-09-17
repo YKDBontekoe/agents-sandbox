@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { ResponsivePanel, ResponsiveText } from '../ResponsiveHUDPanels';
+import { ResponsivePanel, ResponsiveText } from '@arcane/ui/responsive';
 import { useHUDPanel } from '../HUDPanelRegistry';
+import { useHUDLayout } from '../HUDLayoutSystem';
 import { SIM_BUILDINGS } from '@/components/game/simCatalog';
 import type { SimResources } from '@/components/game/resourceUtils';
 
@@ -29,6 +30,7 @@ export default function ModularWorkerPanel({ buildings, idleWorkers, onAssign, o
   const prevIdleRef = useRef(idleWorkers);
   const collapseTimerRef = useRef<number | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
+  const { screenSize } = useHUDLayout();
 
   // Auto-expand when new idle workers become available
   useEffect(() => {
@@ -113,6 +115,7 @@ export default function ModularWorkerPanel({ buildings, idleWorkers, onAssign, o
 
   return (
     <ResponsivePanel
+      screenSize={screenSize}
       title={variant !== 'minimal' ? 'Workforce' : 'W'}
       icon={titleIcon}
       variant={variant}
@@ -150,7 +153,13 @@ export default function ModularWorkerPanel({ buildings, idleWorkers, onAssign, o
       <div className="text-[10px] text-gray-400 mb-2">Upkeep ~{Math.round((totalWorkers || 0) * 0.2)} grain / cycle</div>
       <div className="space-y-2">
         {buildings.length === 0 && (
-          <ResponsiveText size={{ mobile: 'xs', tablet: 'xs', desktop: 'sm', wide: 'sm' }} color="muted">No buildings</ResponsiveText>
+          <ResponsiveText
+            screenSize={screenSize}
+            size={{ mobile: 'xs', tablet: 'xs', desktop: 'sm', wide: 'sm' }}
+            color="muted"
+          >
+            No buildings
+          </ResponsiveText>
         )}
         {buildings.map(b => {
           const def = SIM_BUILDINGS[b.typeId];

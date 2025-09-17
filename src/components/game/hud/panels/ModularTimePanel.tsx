@@ -1,6 +1,14 @@
 import React, { useState } from 'react';
-import { ResponsivePanel, ResponsiveText, ResponsiveGrid, ResponsiveButton, ResponsiveIcon } from '../ResponsiveHUDPanels';
+import {
+  ResponsivePanel,
+  ResponsiveText,
+  ResponsiveGrid,
+  ResponsiveButton,
+  ResponsiveIcon,
+  type ResponsiveScreenSize
+} from '@arcane/ui/responsive';
 import { useHUDPanel } from '../HUDPanelRegistry';
+import { useHUDLayout } from '../HUDLayoutSystem';
 import type { GameTime } from '../types';
 
 interface ModularTimePanelProps {
@@ -20,29 +28,33 @@ interface TimeDisplayProps {
   value: string | number;
   variant?: 'default' | 'compact' | 'minimal';
   icon?: React.ReactNode;
+  screenSize: ResponsiveScreenSize;
 }
 
-function TimeDisplay({ label, value, variant = 'default', icon }: TimeDisplayProps) {
+function TimeDisplay({ label, value, variant = 'default', icon, screenSize }: TimeDisplayProps) {
   return (
     <div className="text-center">
       {icon && variant !== 'minimal' && (
-        <ResponsiveIcon 
+        <ResponsiveIcon
+          screenSize={screenSize}
           size={{ mobile: 'xs', tablet: 'sm', desktop: 'sm', wide: 'md' }}
           className="text-gray-400 mx-auto mb-1"
         >
           {icon}
         </ResponsiveIcon>
       )}
-      
-      <ResponsiveText 
+
+      <ResponsiveText
+        screenSize={screenSize}
         size={{ mobile: 'xs', tablet: 'xs', desktop: 'xs', wide: 'sm' }}
         color="muted"
         className="block mb-1"
       >
         {variant === 'minimal' ? label.slice(0, 3) : label}
       </ResponsiveText>
-      
-      <ResponsiveText 
+
+      <ResponsiveText
+        screenSize={screenSize}
         size={{ mobile: 'xs', tablet: 'sm', desktop: 'sm', wide: 'sm' }}
         weight="semibold"
         className="tabular-nums"
@@ -59,13 +71,15 @@ interface TimeControlsProps {
   onResume?: () => void;
   onAdvanceCycle?: () => void;
   variant?: 'default' | 'compact' | 'minimal';
+  screenSize: ResponsiveScreenSize;
 }
 
-function TimeControls({ isPaused, onPause, onResume, onAdvanceCycle, variant = 'default' }: TimeControlsProps) {
+function TimeControls({ isPaused, onPause, onResume, onAdvanceCycle, variant = 'default', screenSize }: TimeControlsProps) {
   if (variant === 'minimal') {
     return (
       <div className="flex items-center gap-1 justify-center">
         <ResponsiveButton
+          screenSize={screenSize}
           onClick={isPaused ? onResume : onPause}
           variant={isPaused ? 'success' : 'secondary'}
           size={{ mobile: 'xs', tablet: 'xs', desktop: 'sm', wide: 'sm' }}
@@ -73,6 +87,7 @@ function TimeControls({ isPaused, onPause, onResume, onAdvanceCycle, variant = '
           {isPaused ? '▶' : '⏸'}
         </ResponsiveButton>
         <ResponsiveButton
+          screenSize={screenSize}
           onClick={onAdvanceCycle}
           variant="primary"
           size={{ mobile: 'xs', tablet: 'xs', desktop: 'sm', wide: 'sm' }}
@@ -86,6 +101,7 @@ function TimeControls({ isPaused, onPause, onResume, onAdvanceCycle, variant = '
   return (
     <div className="flex items-center gap-2 justify-center">
       <ResponsiveButton
+        screenSize={screenSize}
         onClick={isPaused ? onResume : onPause}
         variant={isPaused ? 'success' : 'secondary'}
         size={{ mobile: 'xs', tablet: 'sm', desktop: 'sm', wide: 'md' }}
@@ -93,6 +109,7 @@ function TimeControls({ isPaused, onPause, onResume, onAdvanceCycle, variant = '
         {isPaused ? 'Resume' : 'Pause'}
       </ResponsiveButton>
       <ResponsiveButton
+        screenSize={screenSize}
         onClick={onAdvanceCycle}
         variant="primary"
         size={{ mobile: 'xs', tablet: 'sm', desktop: 'sm', wide: 'md' }}
@@ -122,18 +139,19 @@ const timeIcons = {
   )
 };
 
-export function ModularTimePanel({ 
-  time, 
-  isPaused, 
-  onPause, 
-  onResume, 
-  onAdvanceCycle, 
+export function ModularTimePanel({
+  time,
+  isPaused,
+  onPause,
+  onResume,
+  onAdvanceCycle,
   intervalMs,
   onChangeIntervalMs,
   variant = 'default',
-  collapsible = true 
+  collapsible = true
 }: ModularTimePanelProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const { screenSize } = useHUDLayout();
   
   // Register this panel with the HUD system
   useHUDPanel({
@@ -174,6 +192,7 @@ export function ModularTimePanel({
 
   return (
     <ResponsivePanel
+      screenSize={screenSize}
       title={variant === 'minimal' ? 'Time' : 'Time Controls'}
       icon={titleIcon}
       variant={variant}
@@ -183,43 +202,48 @@ export function ModularTimePanel({
       priority="high"
       className="min-w-0"
     >
-      <ResponsiveGrid 
-        columns={{ 
-          mobile: variant === 'minimal' ? 3 : 2, 
-          tablet: 3, 
-          desktop: 3, 
-          wide: 3 
+      <ResponsiveGrid
+        screenSize={screenSize}
+        columns={{
+          mobile: variant === 'minimal' ? 3 : 2,
+          tablet: 3,
+          desktop: 3,
+          wide: 3
         }}
         gap={variant === 'minimal' ? 'sm' : 'md'}
         className="mb-3"
       >
-        <TimeDisplay 
-          label="Cycle" 
-          value={time.cycle} 
+        <TimeDisplay
+          label="Cycle"
+          value={time.cycle}
           variant={variant}
           icon={timeIcons.cycle}
+          screenSize={screenSize}
         />
-        <TimeDisplay 
-          label="Season" 
-          value={time.season} 
+        <TimeDisplay
+          label="Season"
+          value={time.season}
           variant={variant}
           icon={timeIcons.season}
+          screenSize={screenSize}
         />
-        <TimeDisplay 
-          label={variant === 'minimal' ? 'Next' : 'Next in'} 
-          value={formatTimeRemaining(time.timeRemaining)} 
+        <TimeDisplay
+          label={variant === 'minimal' ? 'Next' : 'Next in'}
+          value={formatTimeRemaining(time.timeRemaining)}
           variant={variant}
           icon={timeIcons.timer}
+          screenSize={screenSize}
         />
       </ResponsiveGrid>
       
       <div className="pt-2 border-t border-gray-700">
-        <TimeControls 
+        <TimeControls
           isPaused={isPaused}
           onPause={onPause}
           onResume={onResume}
           onAdvanceCycle={onAdvanceCycle}
           variant={variant}
+          screenSize={screenSize}
         />
       </div>
 

@@ -1,6 +1,13 @@
 import React, { useState } from 'react';
-import { ResponsivePanel, ResponsiveButton, ResponsiveStack, ResponsiveIcon } from '../ResponsiveHUDPanels';
+import {
+  ResponsivePanel,
+  ResponsiveButton,
+  ResponsiveStack,
+  ResponsiveIcon,
+  type ResponsiveScreenSize
+} from '@arcane/ui/responsive';
 import { useHUDPanel } from '../HUDPanelRegistry';
+import { useHUDLayout } from '../HUDLayoutSystem';
 
 interface ModularActionPanelProps {
   onOpenCouncil?: () => void;
@@ -23,9 +30,10 @@ interface ActionItemProps {
   disabled?: boolean;
   badge?: string | number;
   active?: boolean;
+  screenSize: ResponsiveScreenSize;
 }
 
-function ActionItem({ label, onClick, icon, variant = 'default', disabled = false, badge, active = false }: ActionItemProps) {
+function ActionItem({ label, onClick, icon, variant = 'default', disabled = false, badge, active = false, screenSize }: ActionItemProps) {
   const getButtonVariant = () => {
     if (disabled) return 'secondary';
     if (active) return 'success';
@@ -37,7 +45,7 @@ function ActionItem({ label, onClick, icon, variant = 'default', disabled = fals
       return (
         <div className="flex items-center justify-center gap-1">
           {icon && (
-            <ResponsiveIcon size={{ mobile: 'sm', tablet: 'sm', desktop: 'md', wide: 'md' }}>
+            <ResponsiveIcon screenSize={screenSize} size={{ mobile: 'sm', tablet: 'sm', desktop: 'md', wide: 'md' }}>
               {icon}
             </ResponsiveIcon>
           )}
@@ -54,7 +62,7 @@ function ActionItem({ label, onClick, icon, variant = 'default', disabled = fals
       <div className="flex items-center justify-between w-full">
         <div className="flex items-center gap-2">
           {icon && (
-            <ResponsiveIcon size={{ mobile: 'xs', tablet: 'sm', desktop: 'sm', wide: 'md' }}>
+            <ResponsiveIcon screenSize={screenSize} size={{ mobile: 'xs', tablet: 'sm', desktop: 'sm', wide: 'md' }}>
               {icon}
             </ResponsiveIcon>
           )}
@@ -71,6 +79,7 @@ function ActionItem({ label, onClick, icon, variant = 'default', disabled = fals
 
   return (
     <ResponsiveButton
+      screenSize={screenSize}
       onClick={onClick}
       variant={getButtonVariant()}
       size={{ mobile: 'xs', tablet: 'sm', desktop: 'sm', wide: 'md' }}
@@ -128,6 +137,7 @@ export function ModularActionPanel({
   isLeylineDrawing = false
 }: ModularActionPanelProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const { screenSize } = useHUDLayout();
   
   // Register this panel with the HUD system
   useHUDPanel({
@@ -183,6 +193,7 @@ export function ModularActionPanel({
 
   return (
     <ResponsivePanel
+      screenSize={screenSize}
       title={variant === 'minimal' ? 'Act' : 'Actions'}
       icon={titleIcon}
       variant={variant}
@@ -217,7 +228,8 @@ export function ModularActionPanel({
           </button>
         </div>
       )}
-      <ResponsiveStack 
+      <ResponsiveStack
+        screenSize={screenSize}
         direction={{
           mobile: variant === 'minimal' ? 'horizontal' : 'vertical',
           tablet: variant === 'minimal' ? 'horizontal' : 'vertical',
@@ -237,6 +249,7 @@ export function ModularActionPanel({
             disabled={!action.onClick}
             badge={getActionBadge(action.key)}
             active={Boolean(action.active)}
+            screenSize={screenSize}
           />
         ))}
       </ResponsiveStack>

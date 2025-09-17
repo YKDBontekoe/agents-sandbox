@@ -1,8 +1,9 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { ResponsivePanel, ResponsiveButton } from '../ResponsiveHUDPanels';
+import { ResponsivePanel, ResponsiveButton } from '@arcane/ui/responsive';
 import { useHUDPanel } from '../HUDPanelRegistry';
 import MiniMap from '../../MiniMap';
 import { useGameContext } from '../../GameContext';
+import { useHUDLayout } from '../HUDLayoutSystem';
 
 export interface MiniMapDescriptor {
   gridSize: number;
@@ -69,6 +70,7 @@ export function ModularMiniMapPanel({
 
   const { viewport } = useGameContext();
   const [followSelection, setFollowSelection] = useState(false);
+  const { screenSize } = useHUDLayout();
 
   const handleRecenter = () => {
     if (!viewport) return;
@@ -104,6 +106,7 @@ export function ModularMiniMapPanel({
 
   return (
     <ResponsivePanel
+      screenSize={screenSize}
       title={variant === 'minimal' ? 'Map' : 'Mini Map'}
       icon={(
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -122,6 +125,7 @@ export function ModularMiniMapPanel({
         {variant !== 'minimal' && (
           <div className="flex flex-col gap-2">
             <ResponsiveButton
+              screenSize={screenSize}
               onClick={handleRecenter}
               variant="secondary"
               size={{ mobile: 'xs', tablet: 'xs', desktop: 'sm', wide: 'sm' }}
@@ -129,6 +133,7 @@ export function ModularMiniMapPanel({
               Recenter
             </ResponsiveButton>
             <ResponsiveButton
+              screenSize={screenSize}
               onClick={() => setFollowSelection((v: boolean) => !v)}
               variant={followSelection ? 'primary' : 'secondary'}
               size={{ mobile: 'xs', tablet: 'xs', desktop: 'sm', wide: 'sm' }}
@@ -136,6 +141,7 @@ export function ModularMiniMapPanel({
               {followSelection ? 'Following' : 'Follow Sel.'}
             </ResponsiveButton>
             <ResponsiveButton
+              screenSize={screenSize}
               onClick={() => viewport?.setZoom((viewport.scale.x || 1) * 1.1, true)}
               variant="secondary"
               size={{ mobile: 'xs', tablet: 'xs', desktop: 'sm', wide: 'sm' }}
@@ -143,6 +149,7 @@ export function ModularMiniMapPanel({
               Zoom +
             </ResponsiveButton>
             <ResponsiveButton
+              screenSize={screenSize}
               onClick={() => viewport?.setZoom((viewport.scale.x || 1) * 0.9, true)}
               variant="secondary"
               size={{ mobile: 'xs', tablet: 'xs', desktop: 'sm', wide: 'sm' }}
