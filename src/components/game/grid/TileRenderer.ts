@@ -25,6 +25,14 @@ const MAX_CACHED_TEXTURES = 100;
 
 const ANIMATED_TILE_TYPES = new Set(["water", "forest", "river"]);
 
+const runWhenVerbose = (callback: () => void) => {
+  if (!logger.isLevelEnabled?.("debug")) {
+    return;
+  }
+
+  callback();
+};
+
 // Clean up texture cache when it gets too large
 function cleanupTextureCache() {
   if (textureCache.size > MAX_CACHED_TEXTURES) {
@@ -59,11 +67,16 @@ export function getTileTexture(
   const cacheKey = getTextureCacheKey(tileType, tileWidth, tileHeight);
   const cached = textureCache.get(cacheKey);
   if (cached) {
-    logger.debug(`[TILE_TEXTURE] Cache hit for ${tileKey} using key ${cacheKey}`);
+    runWhenVerbose(() => {
+      logger.debug(`[TILE_TEXTURE] Cache hit for ${tileKey} using key ${cacheKey}`);
+    });
     return cached;
   }
 
-  const startTime = performance.now();
+  let startTime: number | undefined;
+  runWhenVerbose(() => {
+    startTime = performance.now();
+  });
   const tempContainer = new PIXI.Container();
   const baseGraphic = new PIXI.Graphics();
   baseGraphic.position.set(tileWidth / 2, tileHeight / 2);
@@ -156,10 +169,16 @@ export function getTileTexture(
   textureCache.set(cacheKey, renderTexture);
   cleanupTextureCache();
 
-  const createTime = performance.now() - startTime;
-  logger.debug(
-    `[TILE_TEXTURE] Generated texture for ${tileKey} (type: ${tileType}) in ${createTime.toFixed(2)}ms`
-  );
+  runWhenVerbose(() => {
+    if (startTime === undefined) {
+      return;
+    }
+
+    const createTime = performance.now() - startTime;
+    logger.debug(
+      `[TILE_TEXTURE] Generated texture for ${tileKey} (type: ${tileType}) in ${createTime.toFixed(2)}ms`
+    );
+  });
 
   return renderTexture;
 }
@@ -174,15 +193,22 @@ export function createTileSprite(
   renderer: Renderer,
   options?: { tileTypeOverride?: string },
 ): GridTile {
-  const startTime = performance.now();
+  let startTime: number | undefined;
   const tileKey = `${gridX},${gridY}`;
 
-  logger.debug(`[TILE_CREATE] Starting creation of tile ${tileKey}`);
+  runWhenVerbose(() => {
+    startTime = performance.now();
+    logger.debug(`[TILE_CREATE] Starting creation of tile ${tileKey}`);
+  });
 
   const { worldX, worldY } = gridToWorld(gridX, gridY, tileWidth, tileHeight);
   const tileType = options?.tileTypeOverride ?? (tileTypes[gridY]?.[gridX] || "unknown");
 
-  logger.debug(`[TILE_CREATE] Creating tile ${tileKey} (${tileType}) at world position (${worldX}, ${worldY})`);
+  runWhenVerbose(() => {
+    logger.debug(
+      `[TILE_CREATE] Creating tile ${tileKey} (${tileType}) at world position (${worldX}, ${worldY})`
+    );
+  });
   if (!renderer) {
     throw new Error(`Renderer is required to create tile sprites. Missing for tile ${tileKey}`);
   }
@@ -198,7 +224,9 @@ export function createTileSprite(
   sprite.hitArea = new PIXI.Polygon([0, -hy, hx, 0, 0, hy, -hx, 0]);
   sprite.cursor = "pointer";
 
-  logger.debug(`[TILE_GRAPHICS] Created sprite for ${tileKey} using cached texture`);
+  runWhenVerbose(() => {
+    logger.debug(`[TILE_GRAPHICS] Created sprite for ${tileKey} using cached texture`);
+  });
 
   // Optional animated overlays per tile type
   let overlay: PIXI.Graphics | undefined;
@@ -208,18 +236,33 @@ export function createTileSprite(
     (overlay as unknown as { eventMode: string }).eventMode = "none";
     overlay.position.set(worldX, worldY);
     gridContainer.addChild(overlay);
-    logger.debug(`[TILE_GRAPHICS] Added overlay graphics to grid container for ${tileKey}`);
+    runWhenVerbose(() => {
+      logger.debug(`[TILE_GRAPHICS] Added overlay graphics to grid container for ${tileKey}`);
+    });
   } else {
-    logger.debug(`[TILE_GRAPHICS] Skipping overlay allocation for ${tileKey} (${tileType})`);
+    runWhenVerbose(() => {
+      logger.debug(`[TILE_GRAPHICS] Skipping overlay allocation for ${tileKey} (${tileType})`);
+    });
   }
 
-  const createTime = performance.now() - startTime;
-  logger.info(`[TILE_CREATE] Created tile ${tileKey} (${tileType}) in ${createTime.toFixed(2)}ms. Sprite ID: ${sprite.uid}`);
+  runWhenVerbose(() => {
+    if (startTime === undefined) {
+      return;
+    }
+
+    const createTime = performance.now() - startTime;
+    logger.info(
+      `[TILE_CREATE] Created tile ${tileKey} (${tileType}) in ${createTime.toFixed(2)}ms. Sprite ID: ${sprite.uid}`
+    );
+  });
 
   // Dispose method to properly clean up all PIXI objects
   const dispose = () => {
-    const disposeStartTime = performance.now();
-    logger.debug(`[TILE_DISPOSE] Starting disposal of tile ${tileKey}. Sprite destroyed: ${sprite.destroyed}`);
+    let disposeStartTime: number | undefined;
+    runWhenVerbose(() => {
+      disposeStartTime = performance.now();
+      logger.debug(`[TILE_DISPOSE] Starting disposal of tile ${tileKey}. Sprite destroyed: ${sprite.destroyed}`);
+    });
 
     let disposedObjects = 0;
 
@@ -230,7 +273,9 @@ export function createTileSprite(
         }
         overlay.destroy({ children: true, texture: true });
         disposedObjects++;
-        logger.debug(`[TILE_DISPOSE] Destroyed overlay graphics for tile ${tileKey}`);
+        runWhenVerbose(() => {
+          logger.debug(`[TILE_DISPOSE] Destroyed overlay graphics for tile ${tileKey}`);
+        });
       }
     } catch (error) {
       logger.error(`[TILE_DISPOSE] Error destroying overlay graphics for tile ${tileKey}:`, error);
@@ -242,20 +287,34 @@ export function createTileSprite(
         const parent = sprite.parent;
         const parentChildrenBefore = parent.children.length;
         parent.removeChild(sprite);
-        logger.debug(`[TILE_DISPOSE] Removed tile ${tileKey} from parent. Parent children: ${parentChildrenBefore} -> ${parent.children.length}`);
+        runWhenVerbose(() => {
+          logger.debug(
+            `[TILE_DISPOSE] Removed tile ${tileKey} from parent. Parent children: ${parentChildrenBefore} -> ${parent.children.length}`
+          );
+        });
       }
 
       if (!sprite.destroyed) {
         sprite.destroy({ children: true });
         disposedObjects++;
-        logger.debug(`[TILE_DISPOSE] Destroyed main sprite for tile ${tileKey}`);
+        runWhenVerbose(() => {
+          logger.debug(`[TILE_DISPOSE] Destroyed main sprite for tile ${tileKey}`);
+        });
       }
     } catch (error) {
       logger.error(`[TILE_DISPOSE] Error destroying main sprite for tile ${tileKey}:`, error);
     }
 
-    const disposeTime = performance.now() - disposeStartTime;
-    logger.info(`[TILE_DISPOSE] Disposed tile ${tileKey} in ${disposeTime.toFixed(2)}ms. Objects disposed: ${disposedObjects}`);
+    runWhenVerbose(() => {
+      if (disposeStartTime === undefined) {
+        return;
+      }
+
+      const disposeTime = performance.now() - disposeStartTime;
+      logger.info(
+        `[TILE_DISPOSE] Disposed tile ${tileKey} in ${disposeTime.toFixed(2)}ms. Objects disposed: ${disposedObjects}`
+      );
+    });
   };
 
   return { x: gridX, y: gridY, worldX, worldY, tileType, sprite, overlay, dispose };
