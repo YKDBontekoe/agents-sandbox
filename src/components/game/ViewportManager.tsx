@@ -1,25 +1,32 @@
 "use client";
 
-import { useEffect, useRef, useCallback } from "react";
-import * as PIXI from "pixi.js";
+import { useEffect, useMemo } from "react";
+import type { ReactNode } from "react";
 import { useGameContext } from "./GameContext";
 import logger from "@/lib/logger";
-
-interface ViewportBounds {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
+import { useViewportSetup, type UseViewportSetupOptions } from "@/hooks/useViewportSetup";
+import {
+  useViewportPerformanceMonitor,
+  type UseViewportPerformanceMonitorOptions,
+  type PerformanceMonitorLogger,
+} from "@/hooks/useViewportPerformanceMonitor";
+import {
+  createViewportChangeWatcher,
+  type ViewportBounds,
+  type ViewportChangeWatcherOptions,
+} from "./viewport/viewportChangeWatcher";
 
 interface ViewportManagerProps {
-  children?: React.ReactNode;
+  children?: ReactNode;
   initialZoom?: number;
   minZoom?: number;
   maxZoom?: number;
   worldWidth?: number;
   worldHeight?: number;
   onViewportChange?: (bounds: ViewportBounds, scale: number) => void;
+  viewportSetup?: Partial<Omit<UseViewportSetupOptions, "viewport">>;
+  viewportWatcher?: Partial<Omit<ViewportChangeWatcherOptions, "viewport" | "onChange">>;
+  performanceMonitor?: Partial<Omit<UseViewportPerformanceMonitorOptions, "ticker">>;
 }
 
 export default function ViewportManager({
@@ -30,159 +37,83 @@ export default function ViewportManager({
   worldWidth = 10000,
   worldHeight = 10000,
   onViewportChange,
+  viewportSetup,
+  viewportWatcher,
+  performanceMonitor,
 }: ViewportManagerProps) {
   const { viewport, app } = useGameContext();
-  const lastBoundsRef = useRef<ViewportBounds>({ x: 0, y: 0, width: 0, height: 0 });
-  const lastScaleRef = useRef<number>(1);
-  const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Throttled viewport change handler
-  const handleViewportChange = useCallback(() => {
-    if (!viewport || !onViewportChange) return;
-
-    const bounds = {
-      x: viewport.left,
-      y: viewport.top,
-      width: viewport.worldScreenWidth,
-      height: viewport.worldScreenHeight
+  const setupConfig = useMemo<Omit<UseViewportSetupOptions, "viewport">>(() => {
+    const defaultSetup: Omit<UseViewportSetupOptions, "viewport"> = {
+      zoom: { value: initialZoom, animate: true },
+      center: { x: 0, y: 0 },
+      clamp: {
+        left: -worldWidth / 2,
+        top: -worldHeight / 2,
+        right: worldWidth / 2,
+        bottom: worldHeight / 2,
+      },
+      clampZoom: {
+        minScale: minZoom,
+        maxScale: maxZoom,
+      },
+      drag: { mouseButtons: "left" },
+      pinch: true,
+      wheel: { smooth: 3 },
+      decelerate: { friction: 0.88 },
     };
-    const scale = viewport.scale?.x || 1;
-    const lastBounds = lastBoundsRef.current;
-    const lastScale = lastScaleRef.current;
 
-    // Check if viewport changed significantly
-    const boundsChanged = 
-      Math.abs(bounds.x - lastBounds.x) > 50 ||
-      Math.abs(bounds.y - lastBounds.y) > 50 ||
-      Math.abs(bounds.width - lastBounds.width) > 100 ||
-      Math.abs(bounds.height - lastBounds.height) > 100;
-    
-    const scaleChanged = Math.abs(scale - lastScale) > 0.05;
+    return {
+      ...defaultSetup,
+      ...viewportSetup,
+    };
+  }, [initialZoom, minZoom, maxZoom, worldWidth, worldHeight, viewportSetup]);
 
-    if (boundsChanged || scaleChanged) {
-      // Clear existing timeout
-      if (updateTimeoutRef.current) {
-        clearTimeout(updateTimeoutRef.current);
-      }
+  useViewportSetup({
+    viewport,
+    ...setupConfig,
+  });
 
-      // Throttle updates to avoid excessive calls
-      updateTimeoutRef.current = setTimeout(() => {
-        onViewportChange(bounds, scale);
-        lastBoundsRef.current = bounds;
-        lastScaleRef.current = scale;
-      }, 150);
-    }
-  }, [viewport, onViewportChange]);
-
-  // Initialize viewport settings
   useEffect(() => {
     if (!viewport) return;
 
-    // Set initial zoom and position
-    viewport.setZoom(initialZoom, true);
-    viewport.moveCenter(0, 0);
-
-    // Configure viewport constraints
-    viewport.clamp({
-      left: -worldWidth / 2,
-      top: -worldHeight / 2,
-      right: worldWidth / 2,
-      bottom: worldHeight / 2,
-    });
-
-    viewport.clampZoom({
-      minScale: minZoom,
-      maxScale: maxZoom,
-    });
-
-    // Enable smooth interactions
-    viewport.drag({ mouseButtons: 'left' });
-    viewport.pinch();
-    viewport.wheel({ smooth: 3 });
-    viewport.decelerate({ friction: 0.88 });
-
-    logger.debug('Viewport initialized with bounds:', {
+    logger.debug("Viewport initialized with bounds:", {
       world: { width: worldWidth, height: worldHeight },
       zoom: { initial: initialZoom, min: minZoom, max: maxZoom },
     });
+  }, [viewport, worldWidth, worldHeight, initialZoom, minZoom, maxZoom]);
 
-    return () => {
-      if (updateTimeoutRef.current) {
-        clearTimeout(updateTimeoutRef.current);
-      }
-    };
-  }, [viewport, initialZoom, minZoom, maxZoom, worldWidth, worldHeight]);
-
-  // Set up viewport event listeners
   useEffect(() => {
-    if (!viewport) return;
+    if (!viewport || !onViewportChange) return;
 
-    viewport.on('moved', handleViewportChange);
-    viewport.on('zoomed', handleViewportChange);
-    viewport.on('moved-end', handleViewportChange);
-    viewport.on('zoomed-end', handleViewportChange);
-
-    // Initial viewport change call
-    handleViewportChange();
+    const cleanup = createViewportChangeWatcher({
+      viewport,
+      onChange: onViewportChange,
+      ...(viewportWatcher ?? {}),
+    });
 
     return () => {
-      viewport.off('moved', handleViewportChange);
-      viewport.off('zoomed', handleViewportChange);
-      viewport.off('moved-end', handleViewportChange);
-      viewport.off('zoomed-end', handleViewportChange);
+      cleanup();
     };
-  }, [viewport, handleViewportChange]);
+  }, [viewport, onViewportChange, viewportWatcher]);
 
-  // Optimized performance monitoring with throttling
-  useEffect(() => {
-    if (!app?.ticker) return;
+  const monitorEnabled = performanceMonitor?.enabled ?? true;
+  const monitorLogger: PerformanceMonitorLogger | undefined =
+    performanceMonitor?.logger ?? { warn: (message: string) => logger.warn(message) };
 
-    let frameCount = 0;
-    let lastTime = performance.now();
-    const fpsHistory: number[] = [];
-    let monitoringCounter = 0;
-    const MONITORING_INTERVAL = 60; // Only check every 60 frames (~1 second at 60fps)
-
-    const monitorPerformance = () => {
-      frameCount++;
-      monitoringCounter++;
-      
-      // Only perform expensive calculations periodically
-      if (monitoringCounter >= MONITORING_INTERVAL) {
-        const currentTime = performance.now();
-        const timeDiff = currentTime - lastTime;
-        
-        if (timeDiff >= 1000) {
-          const fps = Math.round((frameCount * 1000) / timeDiff);
-          fpsHistory.push(fps);
-          
-          // Keep only last 5 FPS measurements for efficiency
-          if (fpsHistory.length > 5) {
-            fpsHistory.shift();
-          }
-          
-          // Only calculate average and log if we have performance issues
-          if (fps < 30) {
-            const avgFps = fpsHistory.reduce((a, b) => a + b, 0) / fpsHistory.length;
-            logger.warn(`Low FPS detected: ${fps} (avg: ${avgFps.toFixed(1)})`);
-          }
-          
-          frameCount = 0;
-          lastTime = currentTime;
-        }
-        monitoringCounter = 0;
-      }
-    };
-
-    app.ticker.add(monitorPerformance);
-
-    return () => {
-      app.ticker.remove(monitorPerformance);
-    };
-  }, [app]);
+  useViewportPerformanceMonitor({
+    ticker: app?.ticker ?? null,
+    enabled: monitorEnabled,
+    monitoringInterval: performanceMonitor?.monitoringInterval,
+    sampleSize: performanceMonitor?.sampleSize,
+    fpsWarningThreshold: performanceMonitor?.fpsWarningThreshold,
+    logger: monitorLogger,
+    onSample: performanceMonitor?.onSample,
+  });
 
   return <>{children}</>;
 }
 
-export type { ViewportManagerProps, ViewportBounds };
+export type { ViewportManagerProps };
+export type { ViewportBounds } from "./viewport/viewportChangeWatcher";
 export { ViewportManager };
