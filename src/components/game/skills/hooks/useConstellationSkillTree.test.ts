@@ -88,7 +88,7 @@ describe('useConstellationSkillTree', () => {
 
   it('selects focused node and centers view when controls are registered', async () => {
     const focusedNode = createConstellationNode('focus', { x: 50, y: -30 });
-    let layout = createLayout([focusedNode], 120);
+    const layout = createLayout([focusedNode], 120);
     vi.mocked(createConstellationLayout).mockImplementation(() => layout);
 
     const onSelectNode = vi.fn();
