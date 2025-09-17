@@ -22,7 +22,7 @@ interface LoadTileAtlasOptions {
   renderer: Renderer;
   tileWidth: number;
   tileHeight: number;
-  tileTypes?: string[];
+  tileTypes?: readonly string[];
 }
 
 const atlasResources = new Map<string, TileAtlasResource>();
@@ -42,7 +42,7 @@ function registerTileAtlasParser() {
   parserRegistered = true;
 }
 
-function normalizeTileTypes(tileTypes?: string[]): string[] {
+function normalizeTileTypes(tileTypes?: readonly string[]): string[] {
   const baseList = tileTypes && tileTypes.length > 0 ? tileTypes : getAvailableTileTypes();
   const unique = new Set(baseList);
   unique.add("unknown");
@@ -89,8 +89,11 @@ function createAtlasResource({
     const frame = new PIXI.Rectangle(offsetX, offsetY, tileWidth, tileHeight);
     frames[tileType] = frame;
 
-    const texture = new PIXI.Texture({ baseTexture: atlasTexture.baseTexture, frame });
-    texture.defaultAnchor.set(0.5, 0.5);
+    const texture = new PIXI.Texture({
+      source: atlasTexture.source,
+      frame,
+      defaultAnchor: { x: 0.5, y: 0.5 },
+    });
     textures[tileType] = texture;
   }
 
