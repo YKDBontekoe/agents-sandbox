@@ -10,15 +10,22 @@ function HUDPresetIcon({ icon }: { icon: HUDLayoutPresetIconData }) {
   const { viewBox = '0 0 24 24', paths } = icon;
   return (
     <svg fill="none" stroke="currentColor" viewBox={viewBox} aria-hidden="true">
-      {paths.map(({ d, strokeLinecap = 'round', strokeLinejoin = 'round', strokeWidth = 2 }) => (
-        <path
-          key={d}
-          d={d}
-          strokeLinecap={strokeLinecap}
-          strokeLinejoin={strokeLinejoin}
-          strokeWidth={strokeWidth}
-        />
-      ))}
+      {paths.map(({ d, strokeLinecap = 'round', strokeLinejoin = 'round', strokeWidth = 2 }) => {
+        const safeStrokeLinejoin: React.SVGProps<SVGPathElement>['strokeLinejoin'] =
+          strokeLinejoin === 'arcs' || strokeLinejoin === 'miter-clip'
+            ? 'miter'
+            : strokeLinejoin;
+
+        return (
+          <path
+            key={d}
+            d={d}
+            strokeLinecap={strokeLinecap}
+            strokeLinejoin={safeStrokeLinejoin}
+            strokeWidth={strokeWidth}
+          />
+        );
+      })}
     </svg>
   );
 }
