@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { WorkerSimulationSystem } from '@engine/simulation/workerSimulation';
-import { createDefaultJobCatalog } from '../jobCatalog';
+import { JobCatalogService } from '../jobCatalogService';
+import { WorkerRepository } from '../workerRepository';
 import {
   LaborMarketService,
   type LaborMarketUpdateContext,
@@ -37,15 +38,17 @@ class MockWorkerProgressionService extends WorkerProgressionService {
 }
 
 describe('WorkerSimulationSystem integration', () => {
-  it('delegates worker updates to progression and labor market services', () => {
-    const jobCatalog = createDefaultJobCatalog();
+  it('creates workers, assigns them, and surfaces summaries', () => {
+    const jobCatalogService = new JobCatalogService();
     const laborMarketService = new MockLaborMarketService();
     const progressionService = new MockWorkerProgressionService();
+    const repository = new WorkerRepository();
 
     const system = new WorkerSimulationSystem({
-      jobCatalog,
+      jobCatalogService,
       laborMarketService,
       workerProgressionService: progressionService,
+      workerRepository: repository,
     });
 
     const citizenBehavior = new CitizenBehaviorSystem();
@@ -55,6 +58,11 @@ describe('WorkerSimulationSystem integration', () => {
 
     const worker = system.createWorker(citizen, 'farmer');
     expect(worker).not.toBeNull();
+    expect(repository.getWorker(citizen.id)).toBeDefined();
+
+    const workplace = system.createWorkplace('building-1', 'field operations');
+    expect(system.assignWorkerToWorkplace(citizen.id, 'building-1')).toBe(true);
+    expect(workplace.workers).toContain(citizen.id);
 
     const resources: SimResources = {
       grain: 100,
@@ -68,7 +76,20 @@ describe('WorkerSimulationSystem integration', () => {
 
     system.updateSystem(
       {
-        buildings: [],
+        buildings: [
+          {
+            id: 'building-1',
+            typeId: 'farm',
+            x: 0,
+            y: 0,
+            level: 1,
+            workers: 1,
+            condition: 'good',
+            lastMaintenance: 0,
+            maintenanceDebt: 0,
+            utilityEfficiency: 0.8,
+          },
+        ],
         resources,
         citizens: [citizen],
       },
@@ -79,16 +100,23 @@ describe('WorkerSimulationSystem integration', () => {
     expect(progressionService.updatedWorkers).toContain(citizen.id);
 
     expect(laborMarketService.updateCalls).toBe(1);
-    expect(laborMarketService.contexts[0].buildings).toEqual([]);
+    expect(laborMarketService.contexts[0].buildings).toHaveLength(1);
     expect(laborMarketService.contexts[0].resources).toEqual(resources);
 
     const updatedWorker = system.getWorker(citizen.id);
     expect(updatedWorker).toBeDefined();
     expect(updatedWorker?.experienceLevel).toBeGreaterThan(0);
 
+    const workerSummary = system.getWorkerPerformance(citizen.id);
+    expect(workerSummary).not.toBeNull();
+    expect(workerSummary?.efficiency).toBeGreaterThan(0);
+    expect(workerSummary?.issues).toBeDefined();
+
     const summary = system.getLaborMarketSummary();
     expect(summary.unemployment).toBe(
       laborMarketService.getLaborMarket().unemploymentRate
     );
+
+    expect(system.getAllWorkers()).toHaveLength(1);
   });
 });
