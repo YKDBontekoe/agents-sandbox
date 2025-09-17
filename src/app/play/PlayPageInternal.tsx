@@ -38,7 +38,7 @@ import type { PathHint } from '@/components/game/PathHintsLayer';
 import type { Pulse } from '@/components/game/BuildingPulseLayer';
 import TileInfoPanel from '@/components/game/panels/TileInfoPanel';
 import GameLayers from '@/components/game/GameLayers';
-import type { CrisisData } from '@/components/game/CrisisModal';
+import CrisisModal, { type CrisisData } from '@/components/game/CrisisModal';
 import GoalBanner from '@/components/game/GoalBanner';
 import OnboardingGuide from '@/components/game/OnboardingGuide';
 import ModularWorkerPanel from '@/components/game/hud/panels/ModularWorkerPanel';
@@ -416,7 +416,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   const [isPaused, setIsPaused] = useState(true);
   const [timeRemaining, setTimeRemaining] = useState(60);
   const [edgeScrollEnabled, setEdgeScrollEnabled] = useState(true);
-  const [, setCrisis] = useState<CrisisData | null>(null);
+  const [crisis, setCrisis] = useState<CrisisData | null>(null);
   const [isCouncilOpen, setIsCouncilOpen] = useState(false);
   const [onboardingStep, setOnboardingStep] = useState<number>(() => {
     if (typeof window === 'undefined') return 1;
@@ -529,6 +529,35 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   const handleResumeSimulation = useCallback(() => {
     resumeSimulation({ stateId, setIsPaused, controller: timeSystem ?? undefined });
   }, [stateId, setIsPaused, timeSystem]);
+
+  const handleResolveCrisis = useCallback(async () => {
+    try {
+      if (stateId) {
+        const response = await fetch('/api/state', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: stateId,
+            auto_ticking: true,
+            last_tick_at: new Date().toISOString(),
+          }),
+        });
+        if (!response.ok) {
+          const payload = (await response.json().catch(() => ({}))) as { error?: string };
+          const message = payload?.error || `Failed to acknowledge crisis (${response.status})`;
+          throw new Error(message);
+        }
+      }
+      timeSystem?.setSpeed?.(TIME_SPEEDS.NORMAL);
+      setIsPaused(false);
+      setError(null);
+      setCrisis(null);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      logger.error('Failed to resolve crisis:', message);
+      setError(message);
+    }
+  }, [stateId, timeSystem, setIsPaused, setError, setCrisis]);
 
   // Handle TimeSystem cleanup
   useEffect(() => {
@@ -1684,6 +1713,13 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
       citizens_count: (json as any).citizens_count,
       ...(sanitizedSkills !== undefined ? { skills: sanitizedSkills } : {}),
     });
+    const crisisPayload = (json as { crisis?: CrisisData | null }).crisis ?? null;
+    if (crisisPayload) {
+      setCrisis(crisisPayload);
+      setIsPaused(true);
+    } else {
+      setCrisis(null);
+    }
     if (sanitizedSkills !== undefined) {
       syncSkillsFromServer(sanitizedSkills);
     }
@@ -1753,6 +1789,8 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
       if (json.crisis) {
         setIsPaused(true);
         setCrisis(json.crisis);
+      } else {
+        setCrisis(null);
       }
       await fetchProposals();
       
@@ -2114,6 +2152,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   return (
     <div className="h-dvh w-full bg-gray-900 overflow-hidden relative">
       <div className="relative flex flex-col min-w-0 h-full">
+        {crisis ? <CrisisModal crisis={crisis} onResolve={handleResolveCrisis} /> : null}
         <GoalBanner />
         <div className="flex-1 relative min-h-0">
         {mapSizeModalOpen && (
