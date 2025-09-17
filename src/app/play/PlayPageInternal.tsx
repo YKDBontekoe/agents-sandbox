@@ -42,7 +42,13 @@ import type { CrisisData } from '@/components/game/CrisisModal';
 import GoalBanner from '@/components/game/GoalBanner';
 import OnboardingGuide from '@/components/game/OnboardingGuide';
 import ModularWorkerPanel from '@/components/game/hud/panels/ModularWorkerPanel';
-import ModularQuestPanel from '@/components/game/hud/panels/ModularQuestPanel';
+import ModularQuestPanel, {
+  createInitialQuestSnapshot,
+  QUEST_BLUEPRINTS,
+  type QuestStateSnapshot,
+  type QuestChapterProgress,
+  type QuestObjectiveProgress,
+} from '@/components/game/hud/panels/ModularQuestPanel';
 import NotificationHost from '@/components/game/hud/NotificationHost';
 import { useNotify } from '@/state/useNotify';
 import type { Notification } from '@/components/game/hud/types';
@@ -141,6 +147,135 @@ interface PlayPageProps {
 type SkillUnlockNotification = Pick<Notification, 'type' | 'title' | 'message'> & {
   dedupeKey?: string;
   dedupeMs?: number;
+};
+
+const QUEST_STORAGE_KEY = 'ad_quest_state_v1';
+
+const sanitizeStoredQuestState = (stored: unknown): QuestStateSnapshot => {
+  const base = createInitialQuestSnapshot();
+  if (!stored || typeof stored !== 'object') {
+    return base;
+  }
+
+  const partial = stored as Partial<QuestStateSnapshot>;
+  const next: QuestStateSnapshot = {
+    activeChapterId: base.activeChapterId,
+    chapterOrder: [...base.chapterOrder],
+    chapters: { ...base.chapters },
+  };
+
+  if (Array.isArray(partial.chapterOrder)) {
+    const filtered = partial.chapterOrder.filter(id => next.chapterOrder.includes(id));
+    if (filtered.length === next.chapterOrder.length) {
+      next.chapterOrder = filtered;
+    }
+  }
+
+  if (typeof partial.activeChapterId === 'string' && next.chapterOrder.includes(partial.activeChapterId)) {
+    next.activeChapterId = partial.activeChapterId;
+  }
+
+  const storedChapters = partial.chapters;
+  if (storedChapters && typeof storedChapters === 'object') {
+    for (const chapterId of next.chapterOrder) {
+      const storedChapter = (storedChapters as Record<string, QuestChapterProgress | undefined>)[chapterId];
+      const nextChapter = next.chapters[chapterId];
+      if (!storedChapter || !nextChapter) continue;
+
+      if (storedChapter.status === 'complete') {
+        nextChapter.status = 'complete';
+      } else if (storedChapter.status === 'active') {
+        nextChapter.status = 'active';
+      }
+
+      const storedObjectives = storedChapter.objectives;
+      if (!storedObjectives || typeof storedObjectives !== 'object') continue;
+
+      for (const objectiveId of Object.keys(nextChapter.objectives)) {
+        const storedObjective = (storedObjectives as Record<string, QuestObjectiveProgress | undefined>)[objectiveId];
+        if (!storedObjective) continue;
+        const nextObjective = nextChapter.objectives[objectiveId];
+
+        if (storedObjective.status === 'complete') {
+          nextObjective.status = 'complete';
+        } else if (storedObjective.status === 'in-progress' && nextObjective.status !== 'complete') {
+          nextObjective.status = 'in-progress';
+        }
+
+        if (
+          storedObjective.progress &&
+          typeof storedObjective.progress.current === 'number' &&
+          typeof storedObjective.progress.target === 'number'
+        ) {
+          nextObjective.progress = {
+            current: storedObjective.progress.current,
+            target: storedObjective.progress.target,
+          };
+        }
+
+        if (typeof storedObjective.context === 'string') {
+          nextObjective.context = storedObjective.context;
+        }
+      }
+    }
+  }
+
+  return next;
+};
+
+const questStateEquals = (a: QuestStateSnapshot, b: QuestStateSnapshot): boolean => {
+  if (a === b) return true;
+  if (a.activeChapterId !== b.activeChapterId) return false;
+  if (a.chapterOrder.length !== b.chapterOrder.length) return false;
+  for (let i = 0; i < a.chapterOrder.length; i += 1) {
+    if (a.chapterOrder[i] !== b.chapterOrder[i]) {
+      return false;
+    }
+  }
+
+  for (const chapterId of a.chapterOrder) {
+    const chapterA = a.chapters[chapterId];
+    const chapterB = b.chapters[chapterId];
+    if (!chapterA || !chapterB) return false;
+    if (chapterA.status !== chapterB.status) return false;
+
+    const objectivesA = chapterA.objectives;
+    const objectivesB = chapterB.objectives;
+    const keysA = Object.keys(objectivesA);
+    if (keysA.length !== Object.keys(objectivesB).length) return false;
+    for (const objectiveId of keysA) {
+      const objA = objectivesA[objectiveId];
+      const objB = objectivesB[objectiveId];
+      if (!objB) return false;
+      if (objA.status !== objB.status) return false;
+      const progA = objA.progress;
+      const progB = objB.progress;
+      if (!!progA !== !!progB) return false;
+      if (progA && progB) {
+        if (progA.current !== progB.current || progA.target !== progB.target) return false;
+      }
+      if ((objA.context ?? '') !== (objB.context ?? '')) return false;
+    }
+  }
+
+  return true;
+};
+
+const loadQuestStateFromStorage = (): QuestStateSnapshot => {
+  if (typeof window === 'undefined') {
+    return createInitialQuestSnapshot();
+  }
+  try {
+    const raw = window.localStorage.getItem(QUEST_STORAGE_KEY);
+    if (!raw) {
+      return createInitialQuestSnapshot();
+    }
+    const parsed = JSON.parse(raw);
+    return sanitizeStoredQuestState(parsed);
+  } catch (error) {
+    logger.warn('Failed to read quest state from storage', error);
+    return createInitialQuestSnapshot();
+  }
 };
 
 export function ensureStateForSkillUnlock(
@@ -310,7 +445,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   // building hover details disabled in stable mode
   const [gameMode, setGameMode] = useState<'casual' | 'advanced'>('casual');
   const [, setShowOnboarding] = useState(false);
-  const [, setGuideProgress] = useState({ selectedTile: false, openedCouncil: false, generated: false, accepted: false, advanced: false });
+  const [guideProgress, setGuideProgress] = useState({ selectedTile: false, openedCouncil: false, generated: false, accepted: false, advanced: false });
   const [, setGuideHint] = useState<string | null>(null);
   const [isSimMode, setIsSimMode] = useState(false);
   const [simResources, setSimResources] = useState<SimResources | null>(null);
@@ -552,38 +687,6 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   const [pendingEdictChanges, setPendingEdictChanges] = useState<Record<string, number>>({});
 
   // Milestone helpers
-  const getMilestones = () => {
-    if (typeof window === 'undefined') return {} as Record<string, boolean>;
-    try { return JSON.parse(localStorage.getItem('ad_milestones_completed') || '{}'); } catch { return {}; }
-  };
-  const setMilestone = (k: string) => { try { const m = getMilestones(); m[k] = true; localStorage.setItem('ad_milestones_completed', JSON.stringify(m)); } catch {} };
-  const hasMilestone = (k: string) => !!getMilestones()[k];
-  const award = async (delta: Partial<Record<'coin'|'grain'|'mana'|'favor', number>>) => {
-    const newRes = { ...state!.resources } as Record<string, number>;
-    (Object.keys(delta) as Array<keyof typeof delta>).forEach(k => { newRes[k as string] = Math.max(0, (newRes[k as string] || 0) + (delta[k] || 0)); });
-    setState(prev => prev ? { ...prev, resources: newRes } : prev);
-    await saveState({ resources: newRes });
-    const parts = Object.entries(delta).map(([k,v]) => `${k} +${v}`).join('  ')
-      notify({ type: 'success', title: 'Milestone Reward', message: parts })
-  };
-  const checkMilestones = async () => {
-    if (!state) return;
-    // First farm
-    if (!hasMilestone('m_farm') && placedBuildings.some(b => b.typeId === 'farm')) { setMilestone('m_farm'); await award({ coin: 10 }); }
-    // First route
-    if (!hasMilestone('m_route') && (routes?.length || 0) > 0) { setMilestone('m_route'); await award({ favor: 5 }); }
-    // 5 workers assigned
-    const assigned = placedBuildings.reduce((s,b)=>s+(b.workers||0),0);
-    if (!hasMilestone('m_workers5') && assigned >= 5) { setMilestone('m_workers5'); await award({ grain: 20 }); }
-    // Storehouse logistics
-    const hasStore = placedBuildings.some(b => b.typeId === 'storehouse');
-    const connectedToStore = hasStore && (routes || []).some(r => {
-      const a = placedBuildings.find(b=>b.id===r.fromId); const b = placedBuildings.find(b=>b.id===r.toId);
-      return a?.typeId=='storehouse' || b?.typeId=='storehouse';
-    });
-    if (!hasMilestone('m_storehouse') && hasStore && connectedToStore) { setMilestone('m_storehouse'); await award({ coin: 20 }); }
-  };
-
   const [unlockedSkillIds, setUnlockedSkillIds] = useState<string[]>(() => {
     const skillsFromProps = Array.isArray(initialState?.skills)
       ? sanitizeSkillList(initialState?.skills)
@@ -765,6 +868,299 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
       logger.error('Failed to save state:', err);
     }
   }, [state]);
+
+  const getMilestones = useCallback(() => {
+    if (typeof window === 'undefined') return {} as Record<string, boolean>;
+    try {
+      return JSON.parse(localStorage.getItem('ad_milestones_completed') || '{}');
+    } catch {
+      return {};
+    }
+  }, []);
+
+  const [questState, setQuestState] = useState<QuestStateSnapshot>(() => loadQuestStateFromStorage());
+
+  const computeQuestSnapshot = useCallback(
+    (previous: QuestStateSnapshot): QuestStateSnapshot => {
+      const base = createInitialQuestSnapshot();
+      const milestoneSnapshot = getMilestones();
+      const safeRoutes = routes ?? [];
+      const buildingList = placedBuildings;
+      const buildingById = new Map(buildingList.map(b => [b.id, b]));
+      const farmBuildings = buildingList.filter(b => b.typeId === 'farm');
+      const farmCount = farmBuildings.length;
+      const farmWorkers = farmBuildings.reduce((sum, b) => sum + (b.workers || 0), 0);
+      const tradePostCount = buildingList.filter(b => b.typeId === 'trade_post').length;
+      const councilCount = buildingList.filter(b => b.typeId === 'council_hall').length;
+      const storehousePresent = buildingList.some(b => b.typeId === 'storehouse');
+      const connectedToStorehouse =
+        storehousePresent &&
+        safeRoutes.some(route => {
+          const from = buildingById.get(route.fromId);
+          const to = buildingById.get(route.toId);
+          return from?.typeId === 'storehouse' || to?.typeId === 'storehouse';
+        });
+      const proposalsCount = proposals.length;
+      const proposalsSummoned = guideProgress.generated || proposalsCount > 0;
+      const unlockedCount = unlockedSkillIds.length;
+      const grain = Math.round(state?.resources?.grain ?? 0);
+      const cycle = state?.cycle ?? 0;
+
+      const next: QuestStateSnapshot = {
+        activeChapterId: base.activeChapterId,
+        chapterOrder: [...base.chapterOrder],
+        chapters: {},
+      };
+
+      let firstActiveChapter: string | null = null;
+
+      for (const chapter of QUEST_BLUEPRINTS) {
+        const previousChapter = previous.chapters[chapter.id];
+        const objectiveStates: Record<string, QuestObjectiveProgress> = {};
+        let chapterComplete = true;
+
+        for (const objective of chapter.objectives) {
+          const previousObjective = previousChapter?.objectives?.[objective.id];
+          const evaluation = (() => {
+            switch (objective.id) {
+              case 'build-farm': {
+                const complete = Boolean(milestoneSnapshot.m_farm) || farmCount > 0;
+                return {
+                  complete,
+                  progress: { current: farmCount, target: objective.target ?? 1 },
+                  context: `Farms raised: ${farmCount}`,
+                };
+              }
+              case 'assign-farm-worker': {
+                const complete = farmWorkers > 0;
+                return {
+                  complete,
+                  progress: { current: farmWorkers, target: objective.target ?? 1 },
+                  context:
+                    farmWorkers > 0
+                      ? `${farmWorkers} worker${farmWorkers === 1 ? '' : 's'} tending fields`
+                      : 'Assign a worker from the Worker panel.',
+                };
+              }
+              case 'secure-grain-cycle': {
+                const target = objective.target ?? 20;
+                const complete = cycle > 1 && grain >= target;
+                return {
+                  complete,
+                  progress: { current: Math.min(grain, target), target },
+                  context: `Cycle ${cycle} • Grain ${Math.max(0, grain)}`,
+                };
+              }
+              case 'raise-trade-post': {
+                const complete = tradePostCount > 0;
+                return {
+                  complete,
+                  progress: { current: tradePostCount, target: objective.target ?? 1 },
+                  context: `Trade posts built: ${tradePostCount}`,
+                };
+              }
+              case 'open-trade-route': {
+                const routeCount = safeRoutes.length;
+                const complete = Boolean(milestoneSnapshot.m_route) || routeCount > 0;
+                return {
+                  complete,
+                  progress: { current: routeCount, target: objective.target ?? 1 },
+                  context: `Routes active: ${routeCount}`,
+                };
+              }
+              case 'storehouse-network': {
+                const complete = Boolean(milestoneSnapshot.m_storehouse) || connectedToStorehouse;
+                return {
+                  complete,
+                  progress: { current: connectedToStorehouse ? 1 : 0, target: objective.target ?? 1 },
+                  context: connectedToStorehouse
+                    ? 'Storehouse linked into trade routes.'
+                    : 'Link a storehouse via a trade route.',
+                };
+              }
+              case 'build-council-hall': {
+                const complete = councilCount > 0;
+                return {
+                  complete,
+                  progress: { current: councilCount, target: objective.target ?? 1 },
+                  context: complete ? 'Council convened.' : 'Construct a hall to unlock decrees.',
+                };
+              }
+              case 'summon-proposals': {
+                return {
+                  complete: proposalsSummoned,
+                  progress: { current: proposalsSummoned ? 1 : 0, target: 1 },
+                  context: proposalsSummoned
+                    ? `Proposals ready: ${proposalsCount}`
+                    : 'Call for guidance from the council.',
+                };
+              }
+              case 'unlock-first-skill': {
+                const complete = unlockedCount > 0;
+                return {
+                  complete,
+                  progress: { current: unlockedCount, target: objective.target ?? 1 },
+                  context: complete
+                    ? `Skills unlocked: ${unlockedCount}`
+                    : 'Spend coin, mana, or favor to unlock a skill.',
+                };
+              }
+              default:
+                return { complete: false };
+            }
+          })();
+
+          const isComplete = previousObjective?.status === 'complete' || evaluation.complete;
+          let progress = evaluation.progress;
+          if (progress && progress.target > 0) {
+            const clampedCurrent = Math.max(0, Math.min(progress.current, progress.target));
+            progress = {
+              current: isComplete ? progress.target : clampedCurrent,
+              target: progress.target,
+            };
+          }
+
+          objectiveStates[objective.id] = {
+            status: isComplete ? 'complete' : 'in-progress',
+            progress,
+            context: evaluation.context,
+          };
+
+          if (!isComplete) {
+            chapterComplete = false;
+          }
+        }
+
+        let chapterStatus: QuestChapterProgress['status'];
+        if (previousChapter?.status === 'complete' || chapterComplete) {
+          chapterStatus = 'complete';
+        } else if (!firstActiveChapter) {
+          chapterStatus = 'active';
+          firstActiveChapter = chapter.id;
+        } else {
+          chapterStatus = 'locked';
+        }
+
+        if (chapterStatus === 'locked') {
+          for (const objectiveId of Object.keys(objectiveStates)) {
+            const objectiveState = objectiveStates[objectiveId];
+            if (objectiveState.status !== 'complete') {
+              objectiveStates[objectiveId] = { ...objectiveState, status: 'locked' };
+            }
+          }
+        }
+
+        next.chapters[chapter.id] = {
+          status: chapterStatus,
+          objectives: objectiveStates,
+        };
+      }
+
+      if (firstActiveChapter) {
+        next.activeChapterId = firstActiveChapter;
+      } else {
+        next.activeChapterId = base.chapterOrder[base.chapterOrder.length - 1] ?? base.activeChapterId;
+      }
+
+      return next;
+    },
+    [state, placedBuildings, routes, unlockedSkillIds, guideProgress, proposals, getMilestones],
+  );
+
+  useEffect(() => {
+    setQuestState(prev => {
+      const next = computeQuestSnapshot(prev);
+      return questStateEquals(prev, next) ? prev : next;
+    });
+  }, [computeQuestSnapshot]);
+
+  const refreshQuestState = useCallback(() => {
+    setQuestState(prev => {
+      const next = computeQuestSnapshot(prev);
+      return questStateEquals(prev, next) ? prev : next;
+    });
+  }, [computeQuestSnapshot]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(QUEST_STORAGE_KEY, JSON.stringify(questState));
+    } catch (error) {
+      logger.warn('Failed to persist quest state', error);
+    }
+  }, [questState]);
+
+  const setMilestone = useCallback(
+    (key: string) => {
+      try {
+        const current = getMilestones();
+        if (!current[key]) {
+          current[key] = true;
+          localStorage.setItem('ad_milestones_completed', JSON.stringify(current));
+          refreshQuestState();
+        }
+      } catch (error) {
+        logger.warn('Failed to record milestone', error);
+      }
+    },
+    [getMilestones, refreshQuestState],
+  );
+
+  const hasMilestone = useCallback((key: string) => !!getMilestones()[key], [getMilestones]);
+
+  const award = useCallback(
+    async (delta: Partial<Record<'coin' | 'grain' | 'mana' | 'favor', number>>) => {
+      if (!state) return;
+      const newResources = { ...state.resources } as Record<string, number>;
+      (Object.keys(delta) as Array<keyof typeof delta>).forEach(resourceKey => {
+        const amount = delta[resourceKey];
+        if (typeof amount === 'number' && Number.isFinite(amount)) {
+          const key = resourceKey as string;
+          newResources[key] = Math.max(0, (newResources[key] || 0) + amount);
+        }
+      });
+      setState(prev => (prev ? { ...prev, resources: newResources } : prev));
+      await saveState({ resources: newResources });
+      const message = Object.entries(delta)
+        .filter(([, value]) => typeof value === 'number')
+        .map(([resource, value]) => `${resource} +${value}`)
+        .join('  ');
+      if (message) {
+        notify({ type: 'success', title: 'Milestone Reward', message });
+      }
+    },
+    [state, saveState, notify],
+  );
+
+  const checkMilestones = useCallback(async () => {
+    if (!state) return;
+
+    if (!hasMilestone('m_farm') && placedBuildings.some(b => b.typeId === 'farm')) {
+      setMilestone('m_farm');
+      await award({ coin: 10 });
+    }
+    if (!hasMilestone('m_route') && (routes?.length || 0) > 0) {
+      setMilestone('m_route');
+      await award({ favor: 5 });
+    }
+    const assignedWorkers = placedBuildings.reduce((sum, building) => sum + (building.workers || 0), 0);
+    if (!hasMilestone('m_workers5') && assignedWorkers >= 5) {
+      setMilestone('m_workers5');
+      await award({ grain: 20 });
+    }
+    const hasStorehouse = placedBuildings.some(b => b.typeId === 'storehouse');
+    const storehouseLinked =
+      hasStorehouse &&
+      (routes || []).some(route => {
+        const from = placedBuildings.find(b => b.id === route.fromId);
+        const to = placedBuildings.find(b => b.id === route.toId);
+        return from?.typeId === 'storehouse' || to?.typeId === 'storehouse';
+      });
+    if (!hasMilestone('m_storehouse') && hasStorehouse && storehouseLinked) {
+      setMilestone('m_storehouse');
+      await award({ coin: 20 });
+    }
+  }, [state, hasMilestone, placedBuildings, routes, setMilestone, award]);
 
   // Listen for skill unlock events to deduct costs & persist the latest state slices
   const onUnlock = useCallback(async (e: any) => {
@@ -2280,16 +2676,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
                 await checkMilestones();
               }}
             />
-            <ModularQuestPanel
-              completed={{
-                farm: placedBuildings.some(b => b.typeId === 'farm'),
-                house: placedBuildings.some(b => b.typeId === 'house'),
-                assign: placedBuildings.some(b => (b.workers || 0) > 0),
-                council: placedBuildings.some(b => b.typeId === 'council_hall'),
-                proposals: proposals.length > 0,
-                advance: state.cycle > 1,
-              }}
-            />
+            <ModularQuestPanel questState={questState} />
 
           </IntegratedHUDSystem>
           <NotificationHost />
@@ -2373,6 +2760,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
                 if (onboardingStep === 1 && typeId === 'farm') setOnboardingStep(2);
                 if (onboardingStep === 2 && typeId === 'house') setOnboardingStep(3);
                 if (onboardingStep === 4 && typeId === 'council_hall') setOnboardingStep(5);
+                await checkMilestones();
               }}
               onUpgrade={async (buildingId) => {
                 if (!simResources) return;
