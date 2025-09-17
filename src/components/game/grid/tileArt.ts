@@ -11,7 +11,7 @@ function shade(hex: number, factor: number): number {
   return (r << 16) | (g << 8) | b;
 }
 
-export function getAvailableTileTypes(): string[] {
+export function getAvailableTileTypes(): readonly string[] {
   return TILE_TYPE_LIST;
 }
 
