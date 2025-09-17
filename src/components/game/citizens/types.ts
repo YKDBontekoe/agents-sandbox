@@ -4,54 +4,24 @@ import type {
   AnimatedVehicle as EngineAnimatedVehicle,
   VisualBuilding,
 } from "@engine/visuals/citizens";
+import type {
+  CitizenActivity as EngineCitizenActivity,
+  CitizenBuildingRef,
+  SimulationCitizen as EngineSimulationCitizen,
+} from "@engine/simulation/citizens/citizenSimulation";
 
-export interface BuildingRef {
-  id: string;
-  typeId: string;
-  x: number;
-  y: number;
-  workers?: number;
-}
+export type BuildingRef = CitizenBuildingRef;
 
 export interface RoadTile {
   x: number;
   y: number;
 }
 
-export type CitizenActivity =
-  | "CommuteToWork"
-  | "Work"
-  | "CommuteToShop"
-  | "Shop"
-  | "CommuteHome"
-  | "Sleep";
+export type CitizenActivity = EngineCitizenActivity;
+export type SimulationCitizen = EngineSimulationCitizen;
 
-export interface Citizen {
-  x: number;
-  y: number;
-  tx: number;
-  ty: number;
-  path: Array<{ x: number; y: number }>;
-  carrying: string | null;
+export interface Citizen extends SimulationCitizen {
   sprite: PIXI.Graphics | null;
-  speed: number;
-  name: string;
-  role: "Hauler" | "Builder";
-  homeX: number;
-  homeY: number;
-  workX: number;
-  workY: number;
-  workId?: string;
-  shopX: number;
-  shopY: number;
-  activity: CitizenActivity;
-  nextDecisionHour: number;
-  baseWorldY: number;
-  wanderCooldown: number;
-  lastDist: number;
-  stuckFor: number;
-  repathCooldown: number;
-  delivered?: "wood" | "planks" | "grain";
 }
 
 export interface CitizensLayerProps {
