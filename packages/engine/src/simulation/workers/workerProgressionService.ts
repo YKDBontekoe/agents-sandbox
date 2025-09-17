@@ -3,14 +3,15 @@ import type { Citizen } from '../citizens/citizen';
 import type { JobRole, WorkerProfile, Workplace } from './types';
 import type { LaborMarket } from './laborMarketService';
 import { calculateWageAdjustment, checkCareerProgression } from './career';
+import { JobCatalogService } from './jobCatalogService';
 
 export interface WorkerProgressionContext {
   gameTime: GameTime;
-  jobRoles: Map<string, JobRole>;
+  jobCatalog: JobCatalogService;
   laborMarket: LaborMarket;
   citizen?: Citizen;
-  workers: Map<string, WorkerProfile>;
-  workplaces: Map<string, Workplace>;
+  workers: ReadonlyMap<string, WorkerProfile>;
+  workplaces: ReadonlyMap<string, Workplace>;
   random?: () => number;
 }
 
@@ -21,7 +22,7 @@ export class WorkerProgressionService {
     this.updateExperience(worker);
     this.updatePerformance(worker);
     this.updateJobSatisfaction(worker, context.citizen, context.laborMarket);
-    checkCareerProgression(worker, context.gameTime, context.jobRoles);
+    checkCareerProgression(worker, context.gameTime, context.jobCatalog);
     this.updateWorkLifeBalance(worker);
     this.handleWorkplaceInteractions(
       worker,
@@ -105,8 +106,8 @@ export class WorkerProgressionService {
 
   private handleWorkplaceInteractions(
     worker: WorkerProfile,
-    workers: Map<string, WorkerProfile>,
-    workplaces: Map<string, Workplace>,
+    workers: ReadonlyMap<string, WorkerProfile>,
+    workplaces: ReadonlyMap<string, Workplace>,
     random: () => number
   ): void {
     const workplace = Array.from(workplaces.values()).find(w => w.workers.includes(worker.citizenId));
@@ -125,7 +126,7 @@ export class WorkerProgressionService {
     worker: WorkerProfile,
     coworkerId: string,
     workplace: Workplace,
-    workers: Map<string, WorkerProfile>
+    workers: ReadonlyMap<string, WorkerProfile>
   ): void {
     const coworker = workers.get(coworkerId);
     if (!coworker) return;

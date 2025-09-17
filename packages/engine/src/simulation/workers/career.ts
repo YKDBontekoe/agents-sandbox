@@ -1,5 +1,6 @@
 import type { GameTime } from '../../types/gameTime';
-import type { JobRole, WorkerProfile } from './types';
+import type { WorkerProfile } from './types';
+import { JobCatalogService } from './jobCatalogService';
 
 // Adjust job satisfaction based on how a worker's wage compares to the market
 export function calculateWageAdjustment(worker: WorkerProfile, marketWage: number): number {
@@ -13,7 +14,7 @@ export function calculateWageAdjustment(worker: WorkerProfile, marketWage: numbe
 export function checkCareerProgression(
   worker: WorkerProfile,
   gameTime: GameTime,
-  jobRoles: Map<string, JobRole>
+  jobCatalog: JobCatalogService
 ): void {
   const currentCycle = Math.floor(gameTime.totalMinutes / 60);
 
@@ -30,7 +31,7 @@ export function checkCareerProgression(
   }
 
   if (worker.jobSatisfaction < 30 && Math.random() < 0.02) {
-    considerJobChange(worker, jobRoles);
+    considerJobChange(worker, jobCatalog);
   }
 }
 
@@ -64,10 +65,10 @@ export function promoteWorker(worker: WorkerProfile, currentCycle: number): void
 }
 
 // Consider switching jobs when better opportunities exist
-export function considerJobChange(worker: WorkerProfile, jobRoles: Map<string, JobRole>): void {
-  const availableRoles = Array.from(jobRoles.values()).filter(
-    (role) => role.id !== worker.currentRole.id
-  );
+export function considerJobChange(worker: WorkerProfile, jobCatalog: JobCatalogService): void {
+  const availableRoles = jobCatalog
+    .listRoles()
+    .filter((role) => role.id !== worker.currentRole.id);
 
   for (const role of availableRoles) {
     if (

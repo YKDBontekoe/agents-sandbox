@@ -1,9 +1,8 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import PreviewLayer from './PreviewLayer';
 import DistrictSprites, { type District } from './districts';
 import { LeylineSystem, type Leyline } from '../../../apps/web/features/leylines';
 import HeatLayer from './HeatLayer';
-import { BuildingsLayer } from '../../../apps/web/features/buildings';
 import { RoutesLayer } from '../../../apps/web/features/routes';
 import RoadsLayer from './RoadsLayer';
 import AnimatedCitizensLayer from './AnimatedCitizensLayer';
@@ -16,35 +15,22 @@ import SeasonalLayer from './SeasonalLayer';
 import MarkersLayer from './MarkersLayer';
 import EnhancedVisualEffectsLayer from './EnhancedVisualEffectsLayer';
 import VisualIndicatorLayer from './VisualIndicatorLayer';
-import { SIM_BUILDINGS, BUILDABLE_TILES } from './simCatalog';
-import { canAfford, type SimResources } from './resourceUtils';
+import { type SimResources } from './resourceUtils';
 import type { GameResources } from './hud/types';
 
 import type { VisualIndicator } from '@engine';
 
 import type { BuildTypeId } from './panels/TileInfoPanel';
 
-interface StoredBuilding {
-  id: string;
-  typeId: keyof typeof SIM_BUILDINGS;
-  x: number;
-  y: number;
-  level: number;
-  workers: number;
-}
-
-interface TradeRoute {
-  id: string;
-  fromId: string;
-  toId: string;
-}
-
-interface Marker { id: string; x: number; y: number; label?: string }
+import ConnectedBuildingsLayer from './layers/ConnectedBuildingsLayer';
+import { useBuildPlacementHints } from './layers/useBuildPlacementHints';
+import { useLayerDatasets } from './layers/useLayerDatasets';
+import type { Marker, StoredBuilding, TileSelection, TradeRoute } from './layers/types';
 
 export interface GameLayersProps {
   tileTypes: string[][];
-  hoverTile: { x: number; y: number; tileType?: string } | null;
-  selectedTile: { x: number; y: number; tileType?: string } | null;
+  hoverTile: TileSelection | null;
+  selectedTile: TileSelection | null;
   placedBuildings: StoredBuilding[];
   previewTypeId: BuildTypeId | null;
   tutorialFree: Partial<Record<BuildTypeId, number>>;
@@ -116,32 +102,19 @@ const GameLayers: React.FC<GameLayersProps> = ({
   cycle,
   constructionEvents,
 }) => {
-  const buildHint = useMemo(() => {
-    if (!previewTypeId) return undefined;
-    const tile = hoverTile || selectedTile;
-    if (!tile) return undefined;
-    const occupied = placedBuildings.some(b => b.x === tile.x && b.y === tile.y);
-    if (occupied) return { valid: false, reason: 'Occupied' } as const;
-      const allowed = (BUILDABLE_TILES as Record<string, string[]>)[previewTypeId];
-    if (allowed && tile.tileType && !allowed.includes(tile.tileType)) return { valid: false, reason: 'Invalid terrain' } as const;
-    const needsCouncil = (previewTypeId === 'trade_post' || previewTypeId === 'automation_workshop');
-    const hasCouncil = placedBuildings.some(b => b.typeId === 'council_hall');
-    if (needsCouncil && !hasCouncil) return { valid: false, reason: 'Requires Council Hall' } as const;
-    const hasFree = (tutorialFree[previewTypeId] || 0) > 0;
-    if (!hasFree && simResources) {
-      const cost = SIM_BUILDINGS[previewTypeId].cost as Record<string, number>;
-      const lack: string[] = [];
-      (Object.keys(cost) as Array<keyof typeof cost>).forEach((k) => {
-        const need = cost[k] || 0;
-        const cur = simResources[k as keyof SimResources] || 0;
-        if (need > cur) lack.push(`${String(k)} ${need - cur}`);
-      });
-      if (lack.length > 0) return { valid: false, reason: `Insufficient: ${lack.slice(0,3).join(', ')}` } as const;
-    }
-    return { valid: true } as const;
-  }, [previewTypeId, hoverTile, selectedTile, placedBuildings, tutorialFree, simResources]);
+  const placementHints = useBuildPlacementHints({
+    previewTypeId,
+    hoverTile,
+    selectedTile,
+    placedBuildings,
+    tutorialFree,
+    simResources,
+  });
 
-  const buildingsForLayer = useMemo(() => placedBuildings.map(b => ({ id: b.id, typeId: b.typeId, x: b.x, y: b.y, workers: b.workers, level: b.level })), [placedBuildings]);
+  const { buildings, storeConnectedIds, routeDefs, routeBuildings, workingCitizens } = useLayerDatasets({
+    placedBuildings,
+    routes,
+  });
 
   return (
     <>
@@ -149,12 +122,12 @@ const GameLayers: React.FC<GameLayersProps> = ({
         hoverTile={hoverTile}
         selectedTile={selectedTile}
         tileTypes={tileTypes}
-        buildings={buildingsForLayer}
+        buildings={buildings}
         previewTypeId={previewTypeId}
-        buildHint={buildHint}
-        highlightAllPlaceable={!!previewTypeId}
-        hasCouncil={placedBuildings.some(b => b.typeId === 'council_hall')}
-        affordable={previewTypeId ? ((tutorialFree[previewTypeId] || 0) > 0 || (simResources ? canAfford(SIM_BUILDINGS[previewTypeId].cost, simResources) : false)) : false}
+        buildHint={placementHints.buildHint}
+        highlightAllPlaceable={placementHints.highlightAllPlaceable}
+        hasCouncil={placementHints.hasCouncil}
+        affordable={placementHints.affordable}
       />
       <DistrictSprites districts={districts} tileTypes={tileTypes} onDistrictHover={() => {}} />
       <LeylineSystem
@@ -166,26 +139,14 @@ const GameLayers: React.FC<GameLayersProps> = ({
         onLeylineRemove={onLeylineRemove}
       />
       <HeatLayer gridSize={Math.max(tileTypes.length, tileTypes[0]?.length ?? 0)} tileWidth={64} tileHeight={32} unrest={resources.unrest} threat={resources.threat} />
-      {(() => {
-        const connected = new Set<string>();
-        (routes || []).forEach(r => {
-          const a = placedBuildings.find(b => b.id === r.fromId);
-          const b = placedBuildings.find(b => b.id === r.toId);
-          if (!a || !b) return;
-          if (a.typeId === 'storehouse' && b.id) connected.add(b.id);
-          if (b.typeId === 'storehouse' && a.id) connected.add(a.id);
-        });
-        return (
-          <BuildingsLayer
-            buildings={buildingsForLayer}
-            storeConnectedIds={Array.from(connected)}
-            selected={selectedTile ? { x: selectedTile.x, y: selectedTile.y } : null}
-          />
-        );
-      })()}
+      <ConnectedBuildingsLayer
+        buildings={buildings}
+        storeConnectedIds={storeConnectedIds}
+        selectedTile={selectedTile}
+      />
       <RoutesLayer
-        routes={(routes || []).map(r => ({ id: r.id, fromId: r.fromId, toId: r.toId }))}
-        buildings={placedBuildings.map(b => ({ id: b.id, x: b.x, y: b.y }))}
+        routes={routeDefs}
+        buildings={routeBuildings}
         draftFromId={routeDraftFrom}
         draftToId={routeHoverToId}
       />
@@ -195,7 +156,7 @@ const GameLayers: React.FC<GameLayersProps> = ({
       {showRoads && <RoadsLayer roads={roads} />}
       {showCitizens && (
         <AnimatedCitizensLayer
-          buildings={buildingsForLayer}
+          buildings={buildings}
           roads={roads}
           tileTypes={tileTypes}
           citizensCount={citizensCount}
@@ -213,8 +174,8 @@ const GameLayers: React.FC<GameLayersProps> = ({
       <VisualIndicatorLayer indicators={visualIndicators} />
       <MarkersLayer markers={markers.map(m => ({ id: m.id, gridX: m.x, gridY: m.y, label: m.label }))} />
       <EnhancedVisualEffectsLayer
-        buildings={buildingsForLayer}
-        citizens={placedBuildings.filter(b => b.workers > 0).map(b => ({ id: b.id, x: b.x, y: b.y, activity: 'working', speed: 1.0 }))}
+        buildings={buildings}
+        citizens={workingCitizens}
         roads={roads}
         gameTime={{ hour: Math.floor((Date.now() / 60000) % 24), minute: Math.floor((Date.now() / 1000) % 60), day: Math.floor(Date.now() / 86400000) }}
         cityMetrics={{ population: citizensCount, happiness: 75, pollution: 20, traffic: roads.length * 10 }}
