@@ -14,7 +14,7 @@ import {
   selectBestPattern,
   type PatternEvaluationState
 } from './ai/patternEngine';
-import { BehaviorHistoryStore } from './ai/stores/behaviorHistoryStore';
+import { BehaviorHistoryStore, type BehaviorHistoryEntry } from './ai/stores/behaviorHistoryStore';
 import {
   RelationshipStore,
   type CitizenRelationshipRecord
@@ -55,6 +55,23 @@ export class CitizenAI {
     });
   }
 
+  getCitizenState(citizenId: string): {
+    profile: CitizenProfile;
+    currentGoal: PathfindingGoal | undefined;
+    lastBehavior: BehaviorHistoryEntry | undefined;
+  } | null {
+    const profile = this.profiles.get(citizenId);
+    if (!profile) {
+      return null;
+    }
+
+    return {
+      profile,
+      currentGoal: this.currentGoals.get(citizenId),
+      lastBehavior: this.historyStore.getLast(citizenId),
+    };
+  }
+
   initializeCitizen(citizen: Citizen): CitizenProfile {
     const profile = createCitizenProfile(citizen, this.rng);
     this.profiles.set(citizen.id, profile);
@@ -65,7 +82,15 @@ export class CitizenAI {
     return profile;
   }
 
+  getCitizenState(citizenId: string): CitizenProfile | undefined {
+    return this.profiles.get(citizenId);
+  }
+
   getProfile(citizenId: string): CitizenProfile | undefined {
+    return this.profiles.get(citizenId);
+  }
+
+  getCitizenState(citizenId: string): CitizenProfile | undefined {
     return this.profiles.get(citizenId);
   }
 

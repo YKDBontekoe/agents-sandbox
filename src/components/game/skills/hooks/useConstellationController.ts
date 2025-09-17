@@ -1,5 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
-import type { RefObject } from 'react';
+import {
+  useCallback,
+  useMemo,
+  type Dispatch,
+  type MouseEvent as ReactMouseEvent,
+  type RefObject,
+  type SetStateAction,
+  type WheelEvent as ReactWheelEvent,
+} from 'react';
 import type {
   ConstellationNode,
   SkillNode,
@@ -8,6 +15,8 @@ import type {
   ParticleEffect,
 } from '../types';
 import type { ConstellationLayout } from '../layout/constellation';
+import { useConstellationPanZoom } from './useConstellationPanZoom';
+import { useConstellationHover } from './useConstellationHover';
 
 interface UseConstellationControllerOptions {
   canvasRef: RefObject<HTMLCanvasElement | null>;
@@ -17,11 +26,11 @@ interface UseConstellationControllerOptions {
   zoom: number;
   hover: ConstellationNode | null;
   selected: ConstellationNode | null;
-  onHoverChange: React.Dispatch<React.SetStateAction<ConstellationNode | null>>;
+  onHoverChange: Dispatch<SetStateAction<ConstellationNode | null>>;
   onSelectedChange: (node: ConstellationNode | null) => void;
-  onPanChange: React.Dispatch<React.SetStateAction<Vec2>>;
-  onZoomChange: React.Dispatch<React.SetStateAction<number>>;
-  onTooltipChange: React.Dispatch<React.SetStateAction<TooltipState>>;
+  onPanChange: Dispatch<SetStateAction<Vec2>>;
+  onZoomChange: Dispatch<SetStateAction<number>>;
+  onTooltipChange: Dispatch<SetStateAction<TooltipState>>;
   onUnlock: (node: SkillNode) => void;
   colorFor: (category: SkillNode['category']) => string;
   checkUnlock: (node: SkillNode) => { ok: boolean; reasons: string[] };
@@ -36,20 +45,18 @@ interface UseConstellationControllerOptions {
 }
 
 interface ControllerHandlers {
-  onMouseMove: (event: React.MouseEvent<HTMLCanvasElement>) => void;
-  onMouseDown: (event: React.MouseEvent<HTMLCanvasElement>) => void;
+  onMouseMove: (event: ReactMouseEvent<HTMLCanvasElement>) => void;
+  onMouseDown: (event: ReactMouseEvent<HTMLCanvasElement>) => void;
   onMouseUp: () => void;
   onMouseLeave: () => void;
   onClick: () => void;
-  onWheel: (event: React.WheelEvent<HTMLCanvasElement>) => void;
+  onWheel: (event: ReactWheelEvent<HTMLCanvasElement>) => void;
   zoomIn: () => void;
   zoomOut: () => void;
   resetZoom: () => void;
   fitToView: () => void;
   zoomTo: (value: number, options?: { animate?: boolean }) => void;
 }
-
-const clampZoom = (value: number) => Math.max(0.2, Math.min(4.0, value));
 
 export function useConstellationController({
   canvasRef,
@@ -70,280 +77,54 @@ export function useConstellationController({
   updateNodeTransition,
   spawnParticles,
 }: UseConstellationControllerOptions): ControllerHandlers {
-  const dragRef = useRef<{ dragging: boolean; start: Vec2; startPan: Vec2 }>({
-    dragging: false,
-    start: { x: 0, y: 0 },
-    startPan: { x: 0, y: 0 },
+  const panZoom = useConstellationPanZoom({
+    canvasRef,
+    layout,
+    size,
+    pan,
+    zoom,
+    onPanChange,
+    onZoomChange,
   });
-  const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const hoverTargetRef = useRef<ConstellationNode | null>(null);
-  const zoomAnimationRef = useRef<number | null>(null);
-  const latestZoomRef = useRef(zoom);
 
-  useEffect(() => {
-    latestZoomRef.current = zoom;
-  }, [zoom]);
-
-  const clearHoverTimeout = useCallback(() => {
-    if (hoverTimeoutRef.current !== null) {
-      clearTimeout(hoverTimeoutRef.current);
-      hoverTimeoutRef.current = null;
-    }
-  }, []);
-
-  const hideTooltip = useCallback(() => {
-    clearHoverTimeout();
-    onTooltipChange((prev) => {
-      if (!prev.visible && prev.node === null && prev.fadeIn === 0) {
-        return prev;
-      }
-      return { ...prev, visible: false, fadeIn: 0, node: null };
-    });
-  }, [clearHoverTimeout, onTooltipChange]);
-
-  const clearZoomAnimation = useCallback(() => {
-    if (zoomAnimationRef.current !== null) {
-      cancelAnimationFrame(zoomAnimationRef.current);
-      zoomAnimationRef.current = null;
-    }
-  }, []);
-
-  useEffect(() => () => {
-    clearHoverTimeout();
-    clearZoomAnimation();
-  }, [clearHoverTimeout, clearZoomAnimation]);
-
-  const zoomTo = useCallback(
-    (targetZoom: number, options?: { animate?: boolean }) => {
-      const clamped = clampZoom(targetZoom);
-      if (options?.animate) {
-        clearZoomAnimation();
-        const step = () => {
-          let shouldContinue = true;
-          onZoomChange((prev) => {
-            const diff = clamped - prev;
-            if (Math.abs(diff) <= 0.001) {
-              latestZoomRef.current = clamped;
-              shouldContinue = false;
-              return clamped;
-            }
-            const next = prev + diff * 0.2;
-            latestZoomRef.current = next;
-            return next;
-          });
-          if (shouldContinue) {
-            zoomAnimationRef.current = requestAnimationFrame(step);
-          } else {
-            zoomAnimationRef.current = null;
-          }
-        };
-        zoomAnimationRef.current = requestAnimationFrame(step);
-      } else {
-        clearZoomAnimation();
-        latestZoomRef.current = clamped;
-        onZoomChange(clamped);
-      }
-    },
-    [clearZoomAnimation, onZoomChange],
-  );
-
-  const zoomIn = useCallback(() => {
-    zoomTo(latestZoomRef.current * 1.2);
-  }, [zoomTo]);
-
-  const zoomOut = useCallback(() => {
-    zoomTo(latestZoomRef.current * 0.8);
-  }, [zoomTo]);
-
-  const resetZoom = useCallback(() => {
-    zoomTo(1.0);
-    onPanChange({ x: 0, y: 0 });
-  }, [zoomTo, onPanChange]);
-
-  const fitToView = useCallback(() => {
-    if (layout.nodes.length === 0) return;
-    const bounds = layout.nodes.reduce(
-      (acc, node) => ({
-        minX: Math.min(acc.minX, node.x),
-        maxX: Math.max(acc.maxX, node.x),
-        minY: Math.min(acc.minY, node.y),
-        maxY: Math.max(acc.maxY, node.y),
-      }),
-      { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity },
-    );
-
-    const padding = 100;
-    const contentWidth = bounds.maxX - bounds.minX + padding * 2;
-    const contentHeight = bounds.maxY - bounds.minY + padding * 2;
-
-    const scaleX = size.w / contentWidth;
-    const scaleY = size.h / contentHeight;
-    const newZoom = Math.min(scaleX, scaleY, 2.0);
-
-    zoomTo(newZoom);
-    const centerX = (bounds.minX + bounds.maxX) / 2;
-    const centerY = (bounds.minY + bounds.maxY) / 2;
-    onPanChange({ x: -centerX * newZoom, y: -centerY * newZoom });
-  }, [layout.nodes, size, zoomTo, onPanChange]);
+  const hoverHandlers = useConstellationHover({
+    canvasRef,
+    layout,
+    hover,
+    onHoverChange,
+    onTooltipChange,
+    updateNodeTransition,
+    spawnParticles,
+    colorFor,
+  });
 
   const handleMouseMove = useCallback(
-    (event: React.MouseEvent<HTMLCanvasElement>) => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-
-      const rect = canvas.getBoundingClientRect();
-      const mouseX = event.clientX - rect.left;
-      const mouseY = event.clientY - rect.top;
-
-      if (dragRef.current.dragging) {
-        const dx = mouseX - dragRef.current.start.x;
-        const dy = mouseY - dragRef.current.start.y;
-
-        if (dx !== 0 || dy !== 0) {
-          hoverTargetRef.current = null;
-          if (hover) {
-            updateNodeTransition(hover.node.id, { scale: 1, glowIntensity: 0 });
-            onHoverChange(null);
-          }
-          hideTooltip();
-        }
-
-        onPanChange({
-          x: dragRef.current.startPan.x + dx,
-          y: dragRef.current.startPan.y + dy,
-        });
-        return;
-      }
-
-      const worldX = (mouseX - size.w / 2 - pan.x) / zoom;
-      const worldY = (mouseY - size.h / 2 - pan.y) / zoom;
-
-      let hoveredNode: ConstellationNode | null = null;
-      for (const cNode of layout.nodes) {
-        const dx = worldX - cNode.x;
-        const dy = worldY - cNode.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-        if (distance <= 20) {
-          hoveredNode = cNode;
-          break;
-        }
-      }
-
-      if (hoveredNode && hoveredNode !== hover) {
-        const nodeColor = colorFor(hoveredNode.node.category);
-        spawnParticles(hoveredNode.x, hoveredNode.y, 'hover', 4, nodeColor);
-        updateNodeTransition(hoveredNode.node.id, { scale: 1.1, glowIntensity: 0.8 });
-      }
-
-      if (hover && hoveredNode !== hover) {
-        updateNodeTransition(hover.node.id, { scale: 1, glowIntensity: 0 });
-      }
-
-      hoverTargetRef.current = hoveredNode;
-      onHoverChange(hoveredNode);
-
-      if (hoveredNode && hoveredNode !== hover) {
-        const hoverCanvas = canvasRef.current;
-        if (hoverCanvas) {
-          const hoverRect = hoverCanvas.getBoundingClientRect();
-          const canvasWidth = hoverRect.width;
-          const canvasHeight = hoverRect.height;
-          let tooltipX = mouseX;
-          let tooltipY = mouseY;
-          let anchor: TooltipState['anchor'] = 'top';
-          let offset = { x: 15, y: -10 };
-          const tooltipWidth = 250;
-          const tooltipHeight = 120;
-
-          if (mouseX + tooltipWidth + 20 > canvasWidth) {
-            anchor = 'left';
-            offset = { x: -tooltipWidth - 15, y: -tooltipHeight / 2 };
-          } else if (mouseY + tooltipHeight + 20 > canvasHeight) {
-            anchor = 'bottom';
-            offset = { x: 15, y: -tooltipHeight - 15 };
-          } else if (mouseY - tooltipHeight - 20 < 0) {
-            anchor = 'top';
-            offset = { x: 15, y: 15 };
-          }
-
-          tooltipX = Math.max(10, Math.min(canvasWidth - tooltipWidth - 10, mouseX + offset.x));
-          tooltipY = Math.max(10, Math.min(canvasHeight - tooltipHeight - 10, mouseY + offset.y));
-
-          clearHoverTimeout();
-          const targetNodeId = hoveredNode.node.id;
-          const targetAnchor = anchor;
-          const targetOffset = offset;
-          const targetX = tooltipX;
-          const targetY = tooltipY;
-
-          hoverTimeoutRef.current = setTimeout(() => {
-            if (hoverTargetRef.current?.node.id !== targetNodeId) return;
-            onTooltipChange({
-              visible: true,
-              x: targetX,
-              y: targetY,
-              node: hoveredNode.node,
-              fadeIn: 0,
-              anchor: targetAnchor,
-              offset: targetOffset,
-            });
-          }, 150);
-        }
-      } else if (!hoveredNode) {
-        hideTooltip();
-      }
+    (event: ReactMouseEvent<HTMLCanvasElement>) => {
+      const result = panZoom.handleMouseMove(event);
+      hoverHandlers.handleMouseMove(result);
     },
-    [
-      canvasRef,
-      layout.nodes,
-      pan,
-      zoom,
-      size,
-      hover,
-      onHoverChange,
-      hideTooltip,
-      colorFor,
-      spawnParticles,
-      updateNodeTransition,
-      clearHoverTimeout,
-      onPanChange,
-      onTooltipChange,
-    ],
+    [hoverHandlers, panZoom],
   );
 
   const handleMouseDown = useCallback(
-    (event: React.MouseEvent<HTMLCanvasElement>) => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      const rect = canvas.getBoundingClientRect();
-      const mouseX = event.clientX - rect.left;
-      const mouseY = event.clientY - rect.top;
-      dragRef.current = {
-        dragging: true,
-        start: { x: mouseX, y: mouseY },
-        startPan: { ...pan },
-      };
-      clearHoverTimeout();
+    (event: ReactMouseEvent<HTMLCanvasElement>) => {
+      hoverHandlers.cancelHoverIntent();
+      panZoom.handleMouseDown(event);
     },
-    [canvasRef, pan, clearHoverTimeout],
+    [hoverHandlers, panZoom],
   );
 
   const handleMouseUp = useCallback(() => {
-    dragRef.current.dragging = false;
-  }, []);
+    panZoom.handleMouseUp();
+  }, [panZoom]);
 
   const handleMouseLeave = useCallback(() => {
-    dragRef.current.dragging = false;
-    hoverTargetRef.current = null;
-    if (hover) {
-      updateNodeTransition(hover.node.id, { scale: 1, glowIntensity: 0 });
-      onHoverChange(null);
-    }
-    hideTooltip();
-  }, [hover, hideTooltip, onHoverChange, updateNodeTransition]);
+    panZoom.handleMouseLeave();
+    hoverHandlers.handleMouseLeave();
+  }, [hoverHandlers, panZoom]);
 
   const handleClick = useCallback(() => {
-    if (dragRef.current.dragging) return;
+    if (panZoom.isDragging()) return;
 
     if (hover) {
       const { node } = hover;
@@ -378,16 +159,14 @@ export function useConstellationController({
     spawnParticles,
     onUnlock,
     onSelectedChange,
+    panZoom,
   ]);
 
   const handleWheel = useCallback(
-    (event: React.WheelEvent<HTMLCanvasElement>) => {
-      event.preventDefault();
-      const zoomFactor = event.deltaY > 0 ? 0.92 : 1.08;
-      const newZoom = clampZoom(latestZoomRef.current * zoomFactor);
-      zoomTo(newZoom, { animate: true });
+    (event: ReactWheelEvent<HTMLCanvasElement>) => {
+      panZoom.handleWheel(event);
     },
-    [zoomTo],
+    [panZoom],
   );
 
   return useMemo(
@@ -398,11 +177,11 @@ export function useConstellationController({
       onMouseLeave: handleMouseLeave,
       onClick: handleClick,
       onWheel: handleWheel,
-      zoomIn,
-      zoomOut,
-      resetZoom,
-      fitToView,
-      zoomTo,
+      zoomIn: panZoom.zoomIn,
+      zoomOut: panZoom.zoomOut,
+      resetZoom: panZoom.resetZoom,
+      fitToView: panZoom.fitToView,
+      zoomTo: panZoom.zoomTo,
     }),
     [
       handleMouseMove,
@@ -411,11 +190,11 @@ export function useConstellationController({
       handleMouseLeave,
       handleClick,
       handleWheel,
-      zoomIn,
-      zoomOut,
-      resetZoom,
-      fitToView,
-      zoomTo,
+      panZoom.fitToView,
+      panZoom.resetZoom,
+      panZoom.zoomIn,
+      panZoom.zoomOut,
+      panZoom.zoomTo,
     ],
   );
 }
