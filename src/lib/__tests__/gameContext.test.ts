@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildGameContext } from '../gameContext'
-import { generateSkillTree } from '../../components/game/skills/generate'
-import { accumulateEffects } from '../../components/game/skills/progression'
+import { generateSkillTree } from '@engine/skills/generate'
+import { deriveSkillEffects } from '@engine/skills/modifiers'
 
 describe('buildGameContext', () => {
   it('summarizes buildings, routes, terrain and skills', () => {
@@ -41,7 +41,7 @@ describe('buildGameContext', () => {
     const unlocked = tree.nodes.slice(0, 2)
     const state = { skills: unlocked.map(n => n.id), skill_tree_seed: seed }
     const ctx = buildGameContext(state)
-    const expected = accumulateEffects(unlocked)
+    const expected = deriveSkillEffects(unlocked.map(n => n.id), { tree })
     expect(ctx.skill_modifiers).toEqual({
       resource_multipliers: expected.resMul,
       building_multipliers: expected.bldMul,
