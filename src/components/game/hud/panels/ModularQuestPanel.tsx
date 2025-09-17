@@ -77,6 +77,93 @@ const QUEST_BLUEPRINTS: QuestChapterBlueprint[] = [
       { id: 'unlock-first-skill', label: 'Unlock your first skill', hint: 'Spend coin, mana, or favor on a lasting boon.', target: 1 },
     ],
   },
+  {
+    id: 'command-trade-empire',
+    title: 'Command the Trade Empire',
+    summary: 'Scale caravans, fortify patrols, and amass the coin reserves needed for dominion-wide commerce.',
+    theme: 'Trade Empire',
+    lore: 'Quartermasters weave a lattice of caravans while brokers negotiate tariffs with iron resolve.',
+    objectives: [
+      {
+        id: 'trade-network-dominance',
+        label: 'Operate four concurrent trade routes',
+        hint: 'Grow beyond a local loop—link distant trade posts to expand your reach.',
+        target: 4,
+      },
+      {
+        id: 'trade-hub-anchor',
+        label: 'Anchor a hub with three connections',
+        hint: 'Designate one trade post as the beating heart of your network—patrols keep caravans safe.',
+        target: 3,
+      },
+      {
+        id: 'coin-stockpile',
+        label: 'Stockpile 600 coin reserves',
+        hint: 'Tune tariffs and exports until the treasury is ready for expansion.',
+        target: 600,
+      },
+    ],
+  },
+  {
+    id: 'master-the-leylines',
+    title: 'Master the Leylines',
+    summary: 'Bind distant mana wells, stabilize the flows, and keep channels thrumming in unison.',
+    theme: 'Leyline Mastery',
+    lore: 'Arcanists trace sigils through the air, coaxing luminous rivers beneath the streets.',
+    objectives: [
+      {
+        id: 'chart-leylines',
+        label: 'Weave two leylines across the city',
+        hint: 'Use the leyline tools to bridge sources and districts.',
+        target: 2,
+      },
+      {
+        id: 'attune-leylines',
+        label: 'Maintain two active leyline channels',
+        hint: 'Stabilize their anchors and toggle flows online.',
+        target: 2,
+      },
+      {
+        id: 'leyline-flow-surge',
+        label: 'Reach 150 total leyline flow',
+        hint: 'Upgrade conduits and balance capacity to push more mana.',
+        target: 150,
+      },
+    ],
+  },
+  {
+    id: 'ascension-prelude',
+    title: 'Prepare the Ascension',
+    summary: 'Lock in arcane mastery, weather looming crises, and chart omens before the final rite.',
+    theme: 'Ascension Prep',
+    lore: 'The council gathers relics, transcripts, and stellar charts to ensure the ritual does not fail.',
+    objectives: [
+      {
+        id: 'unlock-advanced-skills',
+        label: 'Unlock six council skills',
+        hint: 'Invest in talents that bind infrastructure, mysticism, and trade.',
+        target: 6,
+      },
+      {
+        id: 'weather-crises',
+        label: 'Endure two crises',
+        hint: 'Hold firm through unrest or threat spikes without toppling the city.',
+        target: 2,
+      },
+      {
+        id: 'catalog-omens',
+        label: 'Document three seasonal events',
+        hint: 'Record omens from the Omenarium or seasonal reports.',
+        target: 3,
+      },
+      {
+        id: 'mana-stockpile',
+        label: 'Bank 400 mana for the rite',
+        hint: 'Channel leylines and shrines until the ritual stores brim.',
+        target: 400,
+      },
+    ],
+  },
 ];
 
 const QUEST_BLUEPRINT_MAP = QUEST_BLUEPRINTS.reduce<Record<string, QuestChapterBlueprint>>((acc, chapter) => {
