@@ -11,105 +11,37 @@ import type {
   SystemState,
   EventImpact
 } from './types';
+import {
+  DEFAULT_SYSTEM_STATE,
+  computeSystemState,
+  type SimulationSnapshot
+} from './systemState';
+import { buildEventIndicator, generateEventCandidates, type EventCandidate } from './eventGeneration';
 
 export class EventManager {
   private activeEvents: Map<string, ActiveEvent> = new Map();
   private eventHistory: ActiveEvent[] = [];
   private visualIndicators: Map<string, VisualIndicator> = new Map();
-  private systemState: SystemState = {
-    population: 0,
-    happiness: 50,
-    economicHealth: 50,
-    infrastructure: 50,
-    resources: 50,
-    stability: 50
-  };
+  private systemState: SystemState = { ...DEFAULT_SYSTEM_STATE };
   private eventIdCounter = 0;
 
   // Update events system each cycle
-  updateEvents(
-    gameTime: GameTime,
-    gameState: {
-      buildings: SimulatedBuilding[];
-      citizens: Citizen[];
-      workers: WorkerProfile[];
-      resources: SimResources;
-    }
-  ): void {
-    // Update system state
-    this.updateSystemState(gameState);
+  updateEvents(gameTime: GameTime, gameState: SimulationSnapshot): void {
+    this.systemState = computeSystemState(gameState);
 
-    // Process active events
     this.processActiveEvents(gameTime);
 
-    // Check for new events
-    this.checkForNewEvents(gameTime);
+    const candidates = generateEventCandidates({
+      systemState: this.systemState,
+      activeEvents: this.activeEvents.values(),
+      eventDefinitions: EVENT_DEFINITIONS
+    });
 
-    // Update visual indicators
+    for (const candidate of candidates) {
+      this.activateCandidate(candidate, gameTime);
+    }
+
     this.updateVisualIndicators();
-
-    // Check for interconnected effects
-    this.processInterconnectedEffects(gameTime);
-  }
-
-  // Update system state based on game conditions
-  private updateSystemState(gameState: {
-    buildings: SimulatedBuilding[];
-    citizens: Citizen[];
-    workers: WorkerProfile[];
-    resources: SimResources;
-  }): void {
-    // Population
-    this.systemState.population = gameState.citizens.length;
-
-    // Happiness (average citizen mood)
-    const totalHappiness = gameState.citizens.reduce(
-      (sum, c) => sum + c.mood.happiness,
-      0
-    );
-    this.systemState.happiness =
-      gameState.citizens.length > 0
-        ? totalHappiness / gameState.citizens.length
-        : 50;
-
-    // Economic health (based on resources and worker satisfaction)
-    const resourceScore = Math.min(100, (gameState.resources.coin || 0) / 2);
-    const workerSatisfaction =
-      gameState.workers.length > 0
-        ?
-            gameState.workers.reduce((sum, w) => sum + w.jobSatisfaction, 0) /
-            gameState.workers.length
-        : 50;
-    this.systemState.economicHealth = (resourceScore + workerSatisfaction) / 2;
-
-    // Infrastructure (average building condition)
-    const conditionValues = { excellent: 100, good: 80, fair: 60, poor: 40, critical: 20 };
-    const avgCondition =
-      gameState.buildings.length > 0
-        ?
-            gameState.buildings.reduce(
-              (sum, b) => sum + conditionValues[b.condition],
-              0
-            ) / gameState.buildings.length
-        : 50;
-    this.systemState.infrastructure = avgCondition;
-
-    // Resources (normalized resource availability)
-    const totalResources =
-      (gameState.resources.coin || 0) +
-      (gameState.resources.grain || 0) +
-      (gameState.resources.planks || 0) +
-      (gameState.resources.mana || 0);
-    this.systemState.resources = Math.min(100, totalResources / 5);
-
-    // Stability (inverse of stress and unrest)
-    const avgStress =
-      gameState.citizens.length > 0
-        ?
-            gameState.citizens.reduce((sum, c) => sum + c.mood.stress, 0) /
-            gameState.citizens.length
-        : 30;
-    this.systemState.stability = Math.max(0, 100 - avgStress);
   }
 
   // Process currently active events
@@ -141,97 +73,39 @@ export class EventManager {
     }
   }
 
-  // Check for new random events
-  private checkForNewEvents(gameTime: GameTime): void {
-    for (const [eventType, eventDef] of Object.entries(EVENT_DEFINITIONS)) {
-      // Adjust probability based on system state
-      let adjustedProbability = eventDef.impact.probability;
-
-      // System state influences event probability
-      switch (eventType as EventType) {
-        case 'social_unrest':
-          if (this.systemState.happiness < 40) adjustedProbability *= 2;
-          if (this.systemState.stability < 30) adjustedProbability *= 1.5;
-          break;
-        case 'plague_outbreak':
-          if (this.systemState.population > 50) adjustedProbability *= 1.3;
-          if (this.systemState.infrastructure < 40) adjustedProbability *= 1.2;
-          break;
-        case 'economic_boom':
-          if (this.systemState.economicHealth > 70) adjustedProbability *= 1.5;
-          break;
-        case 'technological_breakthrough':
-          if (this.systemState.resources > 60) adjustedProbability *= 1.2;
-          break;
-      }
-
-      // Check if event should trigger
-      if (Math.random() < adjustedProbability) {
-        this.triggerEvent(eventType as EventType, gameTime);
-      }
-    }
-  }
-
-  // Trigger a specific event
-  triggerEvent(eventType: EventType, gameTime: GameTime): string {
-    const currentCycle = Math.floor(gameTime.totalMinutes / 60); // Convert GameTime to cycle
-    const eventDef = EVENT_DEFINITIONS[eventType];
+  private activateCandidate(candidate: EventCandidate, gameTime: GameTime): string {
+    const currentCycle = Math.floor(gameTime.totalMinutes / 60);
     const eventId = `event_${this.eventIdCounter++}`;
 
     const event: ActiveEvent = {
       id: eventId,
-      ...eventDef,
+      ...candidate.definition,
       startCycle: currentCycle,
-      endCycle: currentCycle + eventDef.impact.duration,
+      endCycle: currentCycle + candidate.definition.impact.duration,
       isActive: true
     };
 
     this.activeEvents.set(eventId, event);
-
-    // Create visual indicator
-    this.createVisualIndicator({
-      type: 'event_impact',
-      position: { x: 0, y: 0 },
-      value: this.getEventImpactScore(event),
-      change: 1,
-      color: event.color,
-      icon: event.type,
-      animation: event.animationType,
-      duration: 5,
-      priority: event.severity === 'critical' ? 'critical' : event.severity === 'major' ? 'high' : 'medium'
-    });
+    this.createVisualIndicator(candidate.indicator);
 
     return eventId;
   }
 
-  // Process interconnected effects between systems
-  private processInterconnectedEffects(gameTime: GameTime): void {
-    for (const event of this.activeEvents.values()) {
-      if (event.triggers) {
-        for (const trigger of event.triggers) {
-          if (
-            this.checkTriggerCondition(trigger.condition) &&
-            Math.random() < trigger.probability
-          ) {
-            this.triggerEvent(trigger.eventType, gameTime);
-          }
-        }
-      }
+  // Trigger a specific event
+  triggerEvent(eventType: EventType, gameTime: GameTime): string {
+    const eventDef = EVENT_DEFINITIONS[eventType];
+    if (!eventDef) {
+      throw new Error(`Unknown event type: ${eventType}`);
     }
-  }
 
-  // Check if trigger condition is met
-  private checkTriggerCondition(condition: string): boolean {
-    switch (condition) {
-      case 'low_infrastructure':
-        return this.systemState.infrastructure < 40;
-      case 'high_trade':
-        return this.systemState.economicHealth > 70;
-      case 'high_population_density':
-        return this.systemState.population > 40;
-      default:
-        return false;
-    }
+    const candidate: EventCandidate = {
+      type: eventType,
+      definition: eventDef,
+      reason: 'manual',
+      indicator: buildEventIndicator(eventDef, 'manual')
+    };
+
+    return this.activateCandidate(candidate, gameTime);
   }
 
   // Update visual indicators
@@ -254,21 +128,6 @@ export class EventManager {
     const indicator: VisualIndicator = { id, ...params };
     this.visualIndicators.set(id, indicator);
     return id;
-  }
-
-  // Calculate event impact score for visual feedback
-  private getEventImpactScore(event: ActiveEvent): number {
-    const resourceImpact = Object.values(event.impact.resources).reduce(
-      (sum, val) => sum + Math.abs(val || 0),
-      0
-    );
-    const moodImpact =
-      Math.abs(event.impact.citizenMood.happiness) +
-      Math.abs(event.impact.citizenMood.stress) +
-      Math.abs(event.impact.citizenMood.motivation);
-    const economicImpact = Math.abs((event.impact.economicEffects.growthRate || 0) * 2);
-
-    return Math.min(100, resourceImpact / 10 + moodImpact + economicImpact);
   }
 
   // Apply event effects to game state
