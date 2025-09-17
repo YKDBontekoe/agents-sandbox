@@ -54,6 +54,7 @@ export function useChunkStreaming({
   const worldContainerRef = useRef<PIXI.Container | null>(null);
   const loadedChunksRef = useRef<Map<string, LoadedChunk>>(new Map());
   const loadingChunksRef = useRef<Set<string>>(new Set());
+  const chunkCacheRef = useRef<Map<string, ChunkApiResponse>>(new Map());
   const lastViewportUpdateRef = useRef<{ x: number; y: number; scale: number }>({ x: 0, y: 0, scale: 1 });
   const memoryCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const lastMemoryCleanupRef = useRef<number>(0);
@@ -61,21 +62,37 @@ export function useChunkStreaming({
   const renderStatsRef = useRef<RenderStats>({ chunksLoaded: 0, chunksUnloaded: 0, spritesCreated: 0, spritesDestroyed: 0 });
   const [isInitialized, setIsInitialized] = useState(false);
 
-  const loadChunkData = useCallback(async (chunkX: number, chunkY: number): Promise<ChunkApiResponse | null> => {
-    try {
-      const response = await fetch(
-        `/api/map/chunk?chunkX=${chunkX}&chunkY=${chunkY}&chunkSize=${chunkSize}&seed=${worldSeed}`,
-      );
-      if (!response.ok) {
-        throw new Error(`Failed to load chunk (${chunkX}, ${chunkY}): ${response.statusText}`);
+  const loadChunkData = useCallback(
+    async (chunkX: number, chunkY: number): Promise<ChunkApiResponse | null> => {
+      const chunkKey = `${chunkX},${chunkY}`;
+      const cachedChunk = chunkCacheRef.current.get(chunkKey);
+
+      if (cachedChunk) {
+        if (cachedChunk.chunkSize === chunkSize && cachedChunk.seed === worldSeed) {
+          logger.debug(`[CACHE] Using cached chunk payload for ${chunkKey}`);
+          return cachedChunk;
+        }
+
+        chunkCacheRef.current.delete(chunkKey);
       }
-      const payload = (await response.json()) as ChunkApiResponse;
-      return payload;
-    } catch (error) {
-      logger.error(`Error loading chunk (${chunkX}, ${chunkY}):`, error);
-      return null;
-    }
-  }, [chunkSize, worldSeed]);
+
+      try {
+        const response = await fetch(
+          `/api/map/chunk?chunkX=${chunkX}&chunkY=${chunkY}&chunkSize=${chunkSize}&seed=${worldSeed}`,
+        );
+        if (!response.ok) {
+          throw new Error(`Failed to load chunk (${chunkX}, ${chunkY}): ${response.statusText}`);
+        }
+        const payload = (await response.json()) as ChunkApiResponse;
+        chunkCacheRef.current.set(chunkKey, payload);
+        return payload;
+      } catch (error) {
+        logger.error(`Error loading chunk (${chunkX}, ${chunkY}):`, error);
+        return null;
+      }
+    },
+    [chunkSize, worldSeed],
+  );
 
   const loadChunk = useCallback(async (chunkX: number, chunkY: number) => {
     const chunkKey = `${chunkX},${chunkY}`;
@@ -188,6 +205,16 @@ export function useChunkStreaming({
       logger.info(`[MEMORY] Unloaded chunk ${chunkKey} in ${unloadTime.toFixed(2)}ms. Disposed ${disposedCount}/${tileCount} tiles. New stats: sprites=${memoryAfter.totalSprites}, containers=${memoryAfter.totalContainers}`);
     }
   }, []);
+
+  const resetStreamingState = useCallback(() => {
+    const loadedChunks = loadedChunksRef.current;
+    const chunkKeys = Array.from(loadedChunks.keys());
+    chunkKeys.forEach((chunkKey) => {
+      unloadChunk(chunkKey);
+    });
+    loadingChunksRef.current.clear();
+    chunkCacheRef.current.clear();
+  }, [unloadChunk]);
 
   const getVisibleChunks = useCallback(() => {
     if (!viewport) return [] as Array<{ chunkX: number; chunkY: number }>;
@@ -330,6 +357,8 @@ export function useChunkStreaming({
       }
     }, 30000);
 
+    const chunkCache = chunkCacheRef.current;
+
     return () => {
       if (memoryCheckIntervalRef.current) {
         clearInterval(memoryCheckIntervalRef.current);
@@ -352,8 +381,19 @@ export function useChunkStreaming({
       });
       loadedChunks.clear();
       loadingChunks.clear();
+      chunkCache.clear();
     };
   }, [viewport, unloadChunk]);
+
+  useEffect(() => {
+    if (!isInitialized) {
+      return;
+    }
+
+    resetStreamingState();
+
+    void updateChunks();
+  }, [worldSeed, chunkSize, resetStreamingState, updateChunks, isInitialized]);
 
   useEffect(() => {
     if (!viewport || !isInitialized) return;
