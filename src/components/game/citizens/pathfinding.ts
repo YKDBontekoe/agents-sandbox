@@ -1,3 +1,4 @@
+import { MinHeap } from "./minHeap";
 import { BuildingRef, Citizen, CitizenActivity } from "./types";
 
 const inBounds = (x: number, y: number, tileTypes: string[][]) =>
@@ -38,26 +39,35 @@ export const pathfind = (
   const key = (x: number, y: number) => `${x},${y}`;
   const dist = new Map<string, number>();
   const prev = new Map<string, { x: number; y: number }>();
-  const pq: Array<{ x: number; y: number; d: number }> = [{
-    x: sx,
-    y: sy,
-    d: 0,
-  }];
-  dist.set(key(sx, sy), 0);
+  const heap = new MinHeap<{
+    x: number;
+    y: number;
+    g: number;
+    f: number;
+  }>((a, b) => a.f - b.f);
+  const startKey = key(sx, sy);
+  dist.set(startKey, 0);
+  heap.push({ x: sx, y: sy, g: 0, f: Math.abs(tx - sx) + Math.abs(ty - sy) });
 
   const h = (x: number, y: number) => Math.abs(tx - x) + Math.abs(ty - y);
 
-  while (pq.length) {
-    pq.sort((a, b) => a.d - b.d);
-    const cur = pq.shift()!;
+  while (!heap.isEmpty()) {
+    const cur = heap.pop()!;
+    const curKey = key(cur.x, cur.y);
+    if (cur.g > (dist.get(curKey) ?? Infinity)) continue;
     if (cur.x === tx && cur.y === ty) break;
     for (const n of neighbors(cur.x, cur.y, roadSet, tileTypes)) {
-      const nd = cur.d + n.cost + h(n.x, n.y);
-      const k = key(n.x, n.y);
-      if (nd < (dist.get(k) ?? Infinity)) {
-        dist.set(k, nd);
-        prev.set(k, { x: cur.x, y: cur.y });
-        pq.push({ x: n.x, y: n.y, d: nd });
+      const tentativeG = cur.g + n.cost;
+      const neighborKey = key(n.x, n.y);
+      if (tentativeG < (dist.get(neighborKey) ?? Infinity)) {
+        dist.set(neighborKey, tentativeG);
+        prev.set(neighborKey, { x: cur.x, y: cur.y });
+        heap.push({
+          x: n.x,
+          y: n.y,
+          g: tentativeG,
+          f: tentativeG + h(n.x, n.y),
+        });
       }
     }
   }
