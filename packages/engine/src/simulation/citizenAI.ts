@@ -69,6 +69,10 @@ export class CitizenAI {
     return this.profiles.get(citizenId);
   }
 
+  getCitizenState(citizenId: string): CitizenProfile | undefined {
+    return this.getProfile(citizenId);
+  }
+
   makeDecision(
     citizen: Citizen,
     gameTimeOrCycle: GameTime | number,
