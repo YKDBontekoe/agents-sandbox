@@ -48,6 +48,45 @@ export interface RouteData {
   length?: number;
 }
 
+export interface CharterMapReveal {
+  center: { x: number; y: number };
+  radius: number;
+}
+
+export interface CharterPerks {
+  /** Instant resource bonuses granted when the charter is sworn. */
+  startingResources?: Partial<Record<string, number>>;
+  /** Unique structures granted at game start. */
+  startingBuildings?: BuildingData[];
+  /** Multipliers applied to resource outputs produced by buildings. */
+  resourceOutputMultipliers?: Record<string, number>;
+  /** Multipliers applied to specific building types. */
+  buildingOutputMultipliers?: Record<string, number>;
+  /** Global multiplier applied to all building outputs. */
+  globalBuildingOutputMultiplier?: number;
+  /** Global multiplier applied to all non-worker resources. */
+  globalResourceOutputMultiplier?: number;
+  /** Multiplier applied to trade-route generated coin. */
+  routeCoinOutputMultiplier?: number;
+  /** Multiplier applied to patrol upkeep costs. */
+  patrolCoinUpkeepMultiplier?: number;
+  /** Multiplier applied to all building input consumption. */
+  buildingInputMultiplier?: number;
+  /** Per-cycle adjustments applied after production/upkeep. */
+  tickResourceAdjustments?: Record<string, number>;
+  /** Additional delta applied to the per-worker grain upkeep. */
+  upkeepGrainPerWorkerDelta?: number;
+  /** Reveals part of the world map when the charter is chosen. */
+  mapReveal?: CharterMapReveal;
+}
+
+export interface FoundingCharter {
+  id: string;
+  name: string;
+  description: string;
+  perks: CharterPerks;
+}
+
 export interface GameState {
   id: string;
   cycle: number;
@@ -65,10 +104,131 @@ export interface GameState {
   max_cycle?: number;
   updated_at?: string;
   map_size?: number;
+  founding_charter?: FoundingCharter | null;
   // Real-time clock
   auto_ticking?: boolean;
   last_tick_at?: string; // ISO timestamp
   tick_interval_ms?: number;
+}
+
+export interface CharterEffects {
+  resMul: Record<string, number>;
+  bldMul: Record<string, number>;
+  globalBuildingMultiplier: number;
+  globalResourceMultiplier: number;
+  routeCoinMultiplier: number;
+  patrolCoinUpkeepMultiplier: number;
+  buildingInputMultiplier: number;
+  upkeepDelta: number;
+  tickAdjustments: Record<string, number>;
+}
+
+export const FOUNDING_CHARTERS: FoundingCharter[] = [
+  {
+    id: 'verdant_accord',
+    name: 'Verdant Accord',
+    description: 'Ancient irrigation rights swell the granaries and calm the farmers.',
+    perks: {
+      startingResources: { grain: 180, wood: 40 },
+      resourceOutputMultipliers: { grain: 1.1 },
+      buildingOutputMultipliers: { farm: 1.25 },
+      globalResourceOutputMultiplier: 1.02,
+      upkeepGrainPerWorkerDelta: -0.02,
+      mapReveal: { center: { x: 16, y: 16 }, radius: 6 },
+    },
+  },
+  {
+    id: 'arcane_sanctum',
+    name: 'Arcane Sanctum',
+    description: 'Leyline wards empower rituals and unveil the surrounding wilds.',
+    perks: {
+      startingResources: { mana: 120, favor: 25 },
+      globalResourceOutputMultiplier: 1.05,
+      tickResourceAdjustments: { mana: 3 },
+      routeCoinOutputMultiplier: 1.1,
+      mapReveal: { center: { x: 20, y: 12 }, radius: 8 },
+    },
+  },
+  {
+    id: 'architects_legacy',
+    name: "Architect's Legacy",
+    description: 'Blueprint vaults grant sturdy workshops and efficient logistics.',
+    perks: {
+      startingResources: { planks: 40, coin: 80 },
+      buildingOutputMultipliers: { sawmill: 1.2, storehouse: 1.05 },
+      buildingInputMultiplier: 0.9,
+      patrolCoinUpkeepMultiplier: 0.85,
+      startingBuildings: [
+        { typeId: 'storehouse', x: 14, y: 14, level: 1, workers: 0 },
+        { typeId: 'sawmill', x: 17, y: 15, level: 1, workers: 0 },
+      ],
+    },
+  },
+];
+
+export function findCharterById(id: string): FoundingCharter | undefined {
+  return FOUNDING_CHARTERS.find(charter => charter.id === id);
+}
+
+export function deriveCharterEffects(charter?: FoundingCharter | null): CharterEffects {
+  const base: CharterEffects = {
+    resMul: {},
+    bldMul: {},
+    globalBuildingMultiplier: 1,
+    globalResourceMultiplier: 1,
+    routeCoinMultiplier: 1,
+    patrolCoinUpkeepMultiplier: 1,
+    buildingInputMultiplier: 1,
+    upkeepDelta: 0,
+    tickAdjustments: {},
+  };
+  if (!charter || !charter.perks) {
+    return base;
+  }
+  const { perks } = charter;
+  if (perks.resourceOutputMultipliers) {
+    for (const [key, value] of Object.entries(perks.resourceOutputMultipliers)) {
+      const multiplier = Number(value);
+      if (Number.isFinite(multiplier) && multiplier > 0) {
+        base.resMul[key] = multiplier;
+      }
+    }
+  }
+  if (perks.buildingOutputMultipliers) {
+    for (const [key, value] of Object.entries(perks.buildingOutputMultipliers)) {
+      const multiplier = Number(value);
+      if (Number.isFinite(multiplier) && multiplier > 0) {
+        base.bldMul[key] = multiplier;
+      }
+    }
+  }
+  if (typeof perks.globalBuildingOutputMultiplier === 'number' && perks.globalBuildingOutputMultiplier > 0) {
+    base.globalBuildingMultiplier = perks.globalBuildingOutputMultiplier;
+  }
+  if (typeof perks.globalResourceOutputMultiplier === 'number' && perks.globalResourceOutputMultiplier > 0) {
+    base.globalResourceMultiplier = perks.globalResourceOutputMultiplier;
+  }
+  if (typeof perks.routeCoinOutputMultiplier === 'number' && perks.routeCoinOutputMultiplier > 0) {
+    base.routeCoinMultiplier = perks.routeCoinOutputMultiplier;
+  }
+  if (typeof perks.patrolCoinUpkeepMultiplier === 'number' && perks.patrolCoinUpkeepMultiplier > 0) {
+    base.patrolCoinUpkeepMultiplier = perks.patrolCoinUpkeepMultiplier;
+  }
+  if (typeof perks.buildingInputMultiplier === 'number' && perks.buildingInputMultiplier > 0) {
+    base.buildingInputMultiplier = perks.buildingInputMultiplier;
+  }
+  if (typeof perks.upkeepGrainPerWorkerDelta === 'number') {
+    base.upkeepDelta = perks.upkeepGrainPerWorkerDelta;
+  }
+  if (perks.tickResourceAdjustments) {
+    for (const [key, value] of Object.entries(perks.tickResourceAdjustments)) {
+      const adjustment = Number(value);
+      if (Number.isFinite(adjustment) && adjustment !== 0) {
+        base.tickAdjustments[key] = adjustment;
+      }
+    }
+  }
+  return base;
 }
 
 export interface TickCrisis {
@@ -104,20 +264,33 @@ export function produceBuildings(
   const edicts: Record<string, number> = state.edicts ?? {};
   const routes: RouteData[] = Array.isArray(state.routes) ? state.routes : [];
   const tariffValue = Math.max(0, Math.min(100, Number(edicts['tariffs'] ?? 50)));
-  const routeCoinMultiplier = 0.8 + (tariffValue * 0.006);
   const patrolsEnabled = Number(edicts['patrols'] ?? 0) === 1;
   const skillEffects = deriveSkillEffects(state.skills, {
     seed: typeof state.skill_tree_seed === 'number' ? state.skill_tree_seed : undefined,
   });
+  const charterEffects = deriveCharterEffects(state.founding_charter);
   const {
     resMul,
     bldMul,
-    globalBuildingMultiplier,
-    globalResourceMultiplier,
+    globalBuildingMultiplier: skillGlobalBuildingMultiplier,
+    globalResourceMultiplier: skillGlobalResourceMultiplier,
     routeCoinMultiplier: skillRouteCoinMultiplier,
-    patrolCoinUpkeepMultiplier,
-    buildingInputMultiplier,
+    patrolCoinUpkeepMultiplier: skillPatrolCoinUpkeepMultiplier,
+    buildingInputMultiplier: skillBuildingInputMultiplier,
   } = skillEffects;
+  const combinedResMul: Record<string, number> = { ...resMul };
+  for (const [key, value] of Object.entries(charterEffects.resMul)) {
+    combinedResMul[key] = (combinedResMul[key] ?? 1) * value;
+  }
+  const combinedBldMul: Record<string, number> = { ...bldMul };
+  for (const [key, value] of Object.entries(charterEffects.bldMul)) {
+    combinedBldMul[key] = (combinedBldMul[key] ?? 1) * value;
+  }
+  const globalBuildingMultiplier = skillGlobalBuildingMultiplier * charterEffects.globalBuildingMultiplier;
+  const globalResourceMultiplier = skillGlobalResourceMultiplier * charterEffects.globalResourceMultiplier;
+  const routeCoinMultiplier = (0.8 + (tariffValue * 0.006)) * skillRouteCoinMultiplier * charterEffects.routeCoinMultiplier;
+  const patrolCoinUpkeepMultiplier = skillPatrolCoinUpkeepMultiplier * charterEffects.patrolCoinUpkeepMultiplier;
+  const buildingInputMultiplier = skillBuildingInputMultiplier * charterEffects.buildingInputMultiplier;
   const byId = new Map<string, BuildingData>(buildings.map(b => [String(b.id), b]));
   const connectedToStorehouse = new Set<string>();
   if (routes.length > 0) {
@@ -171,7 +344,7 @@ export function produceBuildings(
     if (workerNeed > 0) {
       workers = Math.max(0, workers - workerNeed);
     }
-    const buildingOutputMultiplier = globalBuildingMultiplier * (bldMul[typeId] ?? 1);
+    const buildingOutputMultiplier = globalBuildingMultiplier * (combinedBldMul[typeId] ?? 1);
     for (const [k, v] of Object.entries(def.outputs)) {
       let out = Number(v ?? 0) * ratio * levelOutScale;
       if (typeId === 'trade_post' && k === 'coin') {
@@ -199,7 +372,7 @@ export function produceBuildings(
       out *= buildingOutputMultiplier;
       if (k !== 'workers') {
         out *= globalResourceMultiplier;
-        out *= resMul[k] ?? 1;
+        out *= combinedResMul[k] ?? 1;
       }
       out = Math.max(0, Math.round(out));
       if (k === 'workers') {
@@ -220,7 +393,7 @@ export function produceBuildings(
       const length = Math.min(MAX_ROUTE_LEN, Number(r.length ?? dist));
       let coinGain = length * 0.5 * routeCoinMultiplier * skillRouteCoinMultiplier;
       coinGain *= globalResourceMultiplier;
-      coinGain *= resMul.coin ?? 1;
+      coinGain *= combinedResMul.coin ?? 1;
       const finalGain = Math.max(1, Math.round(coinGain));
       resources.coin = Math.max(0, Number(resources.coin ?? 0) + finalGain);
     }
@@ -239,14 +412,22 @@ export function produceBuildings(
 export function processTick(state: GameState, proposals: Proposal[], catalog: Record<string, SimBuildingType>): TickResult {
   const afterProps = applyProposals(state, proposals);
   const { resources, workers, skillEffects } = produceBuildings(afterProps, catalog);
+  const charterEffects = deriveCharterEffects(state.founding_charter);
   const unrestThreatDecay = 1 + Math.floor(afterProps.cycle / 10);
   resources.mana = Math.max(0, Number(resources.mana ?? 0) - 5);
   resources.unrest = Math.max(0, Number(resources.unrest ?? 0) + unrestThreatDecay);
   resources.threat = Math.max(0, Number(resources.threat ?? 0) + unrestThreatDecay);
-  const upkeepRate = Math.max(0, 0.2 + skillEffects.upkeepDelta);
+  const upkeepRate = Math.max(0, 0.2 + skillEffects.upkeepDelta + charterEffects.upkeepDelta);
   const upkeep = Math.max(0, Math.round(workers * upkeepRate));
   if (upkeep > 0) {
     resources.grain = Math.max(0, Number(resources.grain ?? 0) - upkeep);
+  }
+  if (Object.keys(charterEffects.tickAdjustments).length > 0) {
+    for (const [key, delta] of Object.entries(charterEffects.tickAdjustments)) {
+      const current = Number(resources[key] ?? 0);
+      const next = current + Number(delta ?? 0);
+      resources[key] = Math.max(0, Math.round(next));
+    }
   }
   let crisis: TickCrisis | null = null;
   if (Number(resources.unrest ?? 0) >= 80) {

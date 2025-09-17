@@ -36,6 +36,37 @@ const RouteDataSchema: z.ZodType<RouteData> = z
   })
   .passthrough()
 
+const CharterPerksSchema = z
+  .object({
+    startingResources: z.record(z.string(), z.number()).optional(),
+    startingBuildings: z.array(BuildingDataSchema).optional(),
+    resourceOutputMultipliers: z.record(z.string(), z.number()).optional(),
+    buildingOutputMultipliers: z.record(z.string(), z.number()).optional(),
+    globalBuildingOutputMultiplier: z.number().positive().optional(),
+    globalResourceOutputMultiplier: z.number().positive().optional(),
+    routeCoinOutputMultiplier: z.number().positive().optional(),
+    patrolCoinUpkeepMultiplier: z.number().positive().optional(),
+    buildingInputMultiplier: z.number().positive().optional(),
+    tickResourceAdjustments: z.record(z.string(), z.number()).optional(),
+    upkeepGrainPerWorkerDelta: z.number().optional(),
+    mapReveal: z
+      .object({
+        center: z.object({ x: z.number().int(), y: z.number().int() }),
+        radius: z.number().nonnegative(),
+      })
+      .optional(),
+  })
+  .strict()
+
+const FoundingCharterSchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    description: z.string(),
+    perks: CharterPerksSchema,
+  })
+  .strict()
+
 export async function GET() {
   try {
     const supabase = createSupabaseServerClient(config)
@@ -49,6 +80,7 @@ export async function GET() {
         auto_ticking: true,
         tick_interval_ms: 60000,
         last_tick_at: new Date().toISOString(),
+        founding_charter: null,
       })
       return NextResponse.json(state)
     }
@@ -100,6 +132,7 @@ const UpdateSchema = z.object({
   tick_interval_ms: z.number().int().positive().optional(),
   last_tick_at: z.string().optional(),
   map_size: z.number().int().positive().optional(),
+  founding_charter: FoundingCharterSchema.nullable().optional(),
 })
 
 export async function PATCH(req: NextRequest) {
@@ -109,7 +142,7 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.message }, { status: 400 })
   }
 
-  const { id, resources, workers, buildings, routes, roads, citizens_seed, citizens_count, edicts, skills, skill_tree_seed, pinned_skill_targets, auto_ticking, tick_interval_ms, last_tick_at, map_size } = parsed.data
+  const { id, resources, workers, buildings, routes, roads, citizens_seed, citizens_count, edicts, skills, skill_tree_seed, pinned_skill_targets, auto_ticking, tick_interval_ms, last_tick_at, map_size, founding_charter } = parsed.data
   const updates: Partial<GameState> = {}
   setOptionalField(updates, 'updated_at', new Date().toISOString())
 
@@ -128,6 +161,9 @@ export async function PATCH(req: NextRequest) {
   if (typeof tick_interval_ms === 'number') setOptionalField(updates, 'tick_interval_ms', tick_interval_ms)
   if (typeof last_tick_at === 'string') setOptionalField(updates, 'last_tick_at', last_tick_at)
   if (typeof map_size === 'number') setOptionalField(updates, 'map_size', map_size)
+  if (Object.prototype.hasOwnProperty.call(parsed.data, 'founding_charter')) {
+    updates.founding_charter = founding_charter ?? null
+  }
 
   const supabase = createSupabaseServerClient(config)
   const uow = new SupabaseUnitOfWork(supabase)
