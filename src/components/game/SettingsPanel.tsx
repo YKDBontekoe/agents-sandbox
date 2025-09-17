@@ -1,13 +1,22 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faTimes, faCog, faInfoCircle, faUndo, faSave } from '@/lib/icons';
 import '../../styles/design-tokens.css';
 import '../../styles/animations.css';
 
-import { ActionButton, SettingsSearchBar, SettingCategory, createSettingsConfig } from '@arcane/ui';
-import type { LayoutPreset, SettingCategory as UISettingCategory } from '@arcane/ui/settings/config';
+import {
+  ActionButton,
+  SettingsSearchBar,
+  SettingCategory,
+  createSettingsConfig,
+} from '@arcane/ui';
+import type {
+  LayoutPreset,
+  SettingCategory as UISettingCategory,
+  WorldCategoryOptions,
+} from '@arcane/ui/settings/config';
 
 export interface SettingsPanelProps {
   isOpen: boolean;
@@ -115,48 +124,91 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(['display', 'gameplay', 'time']));
   const [hasChanges, setHasChanges] = useState(false);
 
-  const categories: UISettingCategory[] = useMemo(
-    () =>
-      createSettingsConfig({
+  const handleAnyChange = useCallback(() => setHasChanges(true), []);
+
+  const categories: UISettingCategory[] = useMemo(() => {
+    const worldOptions: WorldCategoryOptions = {};
+
+    if (typeof onToggleRoads === 'function') {
+      worldOptions.showRoads = {
+        value: Boolean(showRoads),
+        onChange: onToggleRoads,
+      };
+    }
+
+    if (typeof onToggleCitizens === 'function') {
+      worldOptions.showCitizens = {
+        value: Boolean(showCitizens),
+        onChange: onToggleCitizens,
+      };
+    }
+
+    if (typeof onToggleAutoAssignWorkers === 'function') {
+      worldOptions.autoAssignWorkers = {
+        value: Boolean(autoAssignWorkers),
+        onChange: onToggleAutoAssignWorkers,
+      };
+    }
+
+    if (typeof onToggleEdgeScroll === 'function') {
+      worldOptions.edgeScrollEnabled = {
+        value: Boolean(edgeScrollEnabled),
+        onChange: onToggleEdgeScroll,
+      };
+    }
+
+    if (typeof onToggleRoadConfirm === 'function') {
+      worldOptions.requireRoadConfirm = {
+        value: Boolean(requireRoadConfirm),
+        onChange: onToggleRoadConfirm,
+      };
+    }
+
+    if (typeof onChangeCitizensCount === 'function') {
+      worldOptions.citizensCount = {
+        value: typeof citizensCount === 'number' ? citizensCount : 8,
+        onChange: onChangeCitizensCount,
+      };
+    }
+
+    if (typeof onChangeCitizensSeed === 'function') {
+      worldOptions.citizensSeed = {
+        value: typeof citizensSeed === 'number' ? citizensSeed : 0,
+        onChange: onChangeCitizensSeed,
+      };
+    }
+
+    const hasWorldSettings = Object.keys(worldOptions).length > 0;
+
+    return createSettingsConfig({
+      onAnyChange: handleAnyChange,
+      display: {
         layoutPresets,
         currentPreset,
         onPresetChange,
-        onAnyChange: () => setHasChanges(true),
-        showRoads,
-        onToggleRoads,
-        showCitizens,
-        onToggleCitizens,
-        autoAssignWorkers,
-        onToggleAutoAssignWorkers,
-        edgeScrollEnabled,
-        onToggleEdgeScroll,
-        requireRoadConfirm,
-        onToggleRoadConfirm,
-        citizensCount,
-        onChangeCitizensCount,
-        citizensSeed,
-        onChangeCitizensSeed,
-      }),
-    [
-      layoutPresets,
-      currentPreset,
-      onPresetChange,
-      showRoads,
-      onToggleRoads,
-      showCitizens,
-      onToggleCitizens,
-      autoAssignWorkers,
-      onToggleAutoAssignWorkers,
-      edgeScrollEnabled,
-      onToggleEdgeScroll,
-      requireRoadConfirm,
-      onToggleRoadConfirm,
-      citizensCount,
-      onChangeCitizensCount,
-      citizensSeed,
-      onChangeCitizensSeed,
-    ],
-  );
+      },
+      world: hasWorldSettings ? worldOptions : undefined,
+    });
+  }, [
+    autoAssignWorkers,
+    citizensCount,
+    citizensSeed,
+    currentPreset,
+    edgeScrollEnabled,
+    handleAnyChange,
+    layoutPresets,
+    onChangeCitizensCount,
+    onChangeCitizensSeed,
+    onPresetChange,
+    onToggleAutoAssignWorkers,
+    onToggleCitizens,
+    onToggleEdgeScroll,
+    onToggleRoadConfirm,
+    onToggleRoads,
+    requireRoadConfirm,
+    showCitizens,
+    showRoads,
+  ]);
 
   const toggleCategory = (categoryId: string) => {
     setExpandedCategories(prev => {
