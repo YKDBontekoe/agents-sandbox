@@ -3,8 +3,8 @@ import type { HUDPanelConfig } from '../panelRegistryStore';
 
 export interface HUDLayoutPresetIconPath {
   d: string;
-  strokeLinecap?: 'butt' | 'round' | 'square';
-  strokeLinejoin?: 'arcs' | 'bevel' | 'miter' | 'miter-clip' | 'round';
+  strokeLinecap?: 'butt' | 'round' | 'square' | 'inherit';
+  strokeLinejoin?: 'round' | 'bevel' | 'miter' | 'inherit';
   strokeWidth?: number;
 }
 

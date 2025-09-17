@@ -9,6 +9,7 @@ export type {
   SelectChangeHandler,
   SelectOption,
   SelectSettingItem,
+  SettingCategory,
   SettingItem,
   SettingType,
   SettingValue,

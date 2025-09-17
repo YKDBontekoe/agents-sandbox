@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { SimulatedBuilding } from '../buildingSimulation';
+import type { SimulatedBuilding } from '../buildings/catalog';
 import { initializeDemand } from '../zoning/demand';
 import type { ZoneCell } from '../zoning/types';
 import { areZonesCompatible } from '../zoning/zoneRules';
