@@ -1,6 +1,6 @@
 import type { SimResources } from '../index';
 import type { GameTime } from '../types/gameTime';
-import { performMaintenance, type SimulatedBuilding } from './buildingSimulation';
+import { performMaintenance, type SimulatedBuilding } from './buildings';
 import { CitizenBehaviorSystem } from './citizenBehavior';
 import type { Citizen } from './citizens/citizen';
 import type { ActiveEvent, VisualIndicator } from './events/types';

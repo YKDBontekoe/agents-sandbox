@@ -1,5 +1,5 @@
 import type { GameTime } from '../../types/gameTime';
-import type { SimulatedBuilding } from '../buildingSimulation';
+import type { SimulatedBuilding } from '../buildings';
 import { ZoneGrid } from './grid';
 import type { ZoneCell, ZoneDemand, ZoneStats, ZoneType } from './types';
 import { initializeDemand, updateDemand, type GlobalFactors } from './demand';

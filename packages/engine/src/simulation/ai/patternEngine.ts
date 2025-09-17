@@ -1,5 +1,5 @@
 import type { Citizen } from '../citizens/citizen';
-import type { SimulatedBuilding } from '../buildingSimulation';
+import type { SimulatedBuilding } from '../buildings';
 import type { SimResources } from '../../index';
 import type { AIBehaviorPattern } from './types';
 import type { BehaviorHistoryEntry } from './stores/behaviorHistoryStore';

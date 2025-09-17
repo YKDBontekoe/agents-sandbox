@@ -10,7 +10,7 @@ import type {
 } from './effects/types';
 import { WeatherEffectsManager } from './effects/weatherEffectsManager';
 import { TrafficEffectsManager } from './effects/trafficEffectsManager';
-import type { SimulatedBuilding } from './buildingSimulation';
+import type { SimulatedBuilding } from './buildings';
 import type { Citizen } from './citizens/citizen';
 import type { SimResources } from '../index';
 import type { WorkerProfile } from './workers/types';

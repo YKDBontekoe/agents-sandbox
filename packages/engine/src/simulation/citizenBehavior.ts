@@ -1,6 +1,6 @@
 import type { SimResources } from '../index';
 import type { GameTime } from '../types/gameTime';
-import type { SimulatedBuilding } from './buildingSimulation';
+import type { SimulatedBuilding } from './buildings';
 import { citizenAI } from './citizenAI';
 import { planActivityForGoal } from './activityPlanner';
 import type { Citizen } from './citizens/citizen';

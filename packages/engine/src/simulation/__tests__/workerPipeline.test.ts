@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createGameTime } from '../../types/gameTime';
 import type { SimResources } from '../../index';
-import type { SimulatedBuilding } from '../buildingSimulation';
+import type { SimulatedBuilding } from '../buildings';
 import { CitizenBehaviorSystem } from '../citizenBehavior';
 import { WorkerSimulationSystem } from '../workerSimulation';
 import type { JobRole } from '../workers/types';

@@ -1,7 +1,7 @@
 import type { SimResources } from '../index';
 import type { GameTime } from '../types/gameTime';
 import type { Citizen } from './citizens/citizen';
-import type { SimulatedBuilding } from './buildingSimulation';
+import type { SimulatedBuilding } from './buildings';
 import { WorkerSimulationSystem } from './workerSimulation';
 import type { LaborMarket } from './workerSimulation';
 import type { WorkerProfile } from './workers/types';
