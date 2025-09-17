@@ -25,6 +25,8 @@ const MAX_CACHED_TEXTURES = 100;
 
 const ANIMATED_TILE_TYPES = new Set(["water", "forest", "river"]);
 
+const polygonCache = new Map<string, PIXI.Polygon>();
+
 // Clean up texture cache when it gets too large
 function cleanupTextureCache() {
   if (textureCache.size > MAX_CACHED_TEXTURES) {
@@ -36,6 +38,24 @@ function cleanupTextureCache() {
       textureCache.delete(key);
     });
   }
+}
+
+function getPolygonCacheKey(tileWidth: number, tileHeight: number) {
+  return `${tileWidth}x${tileHeight}`;
+}
+
+function getSharedDiamondHitArea(tileWidth: number, tileHeight: number): PIXI.Polygon {
+  const cacheKey = getPolygonCacheKey(tileWidth, tileHeight);
+  const cached = polygonCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const hx = (tileWidth / 2) * 0.95;
+  const hy = (tileHeight / 2) * 0.95;
+  const polygon = new PIXI.Polygon([0, -hy, hx, 0, 0, hy, -hx, 0]);
+  polygonCache.set(cacheKey, polygon);
+  return polygon;
 }
 
 function shade(hex: number, factor: number): number {
@@ -193,9 +213,7 @@ export function createTileSprite(
   sprite.position.set(worldX, worldY);
   sprite.zIndex = 2;
   (sprite as unknown as { eventMode: string }).eventMode = "static";
-  const hx = (tileWidth / 2) * 0.95;
-  const hy = (tileHeight / 2) * 0.95;
-  sprite.hitArea = new PIXI.Polygon([0, -hy, hx, 0, 0, hy, -hx, 0]);
+  sprite.hitArea = getSharedDiamondHitArea(tileWidth, tileHeight);
   sprite.cursor = "pointer";
 
   logger.debug(`[TILE_GRAPHICS] Created sprite for ${tileKey} using cached texture`);
@@ -246,6 +264,7 @@ export function createTileSprite(
       }
 
       if (!sprite.destroyed) {
+        sprite.hitArea = null;
         sprite.destroy({ children: true });
         disposedObjects++;
         logger.debug(`[TILE_DISPOSE] Destroyed main sprite for tile ${tileKey}`);
