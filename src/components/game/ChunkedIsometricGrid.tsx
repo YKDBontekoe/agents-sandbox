@@ -100,15 +100,38 @@ export default function ChunkedIsometricGrid({
 
       loadedChunks.forEach((chunk) => {
         chunk.tiles.forEach((tile) => {
-          const isInViewport = tile.worldX >= visibleLeft &&
-                             tile.worldX <= visibleRight &&
-                             tile.worldY >= visibleTop &&
-                             tile.worldY <= visibleBottom;
+          const isInViewport =
+            tile.worldX >= visibleLeft &&
+            tile.worldX <= visibleRight &&
+            tile.worldY >= visibleTop &&
+            tile.worldY <= visibleBottom;
 
           const shouldShowTile = scale > 0.1 && isInViewport;
 
           if (tile.sprite.visible !== shouldShowTile) {
             tile.sprite.visible = shouldShowTile;
+          }
+
+          const overlay = tile.overlay;
+          if (overlay?.destroyed) {
+            tile.overlay = undefined;
+            return;
+          }
+
+          if (overlay) {
+            if (overlay.visible !== shouldShowTile) {
+              overlay.visible = shouldShowTile;
+              if (!shouldShowTile) {
+                overlay.clear();
+              }
+            }
+
+            if (shouldShowTile) {
+              const { x: overlayX, y: overlayY } = overlay.position;
+              if (overlayX !== tile.worldX || overlayY !== tile.worldY) {
+                overlay.position.set(tile.worldX, tile.worldY);
+              }
+            }
           }
         });
       });
