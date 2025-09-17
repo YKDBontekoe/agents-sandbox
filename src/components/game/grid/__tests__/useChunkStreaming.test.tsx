@@ -283,4 +283,92 @@ describe("useChunkStreaming", () => {
       expect(fetchMock.mock.calls.length).toBeGreaterThan(initialCalls);
     });
   });
+
+  it("reuses cached chunk payloads when revisiting a chunk", async () => {
+    const viewport = new ViewportMock();
+    const options = makeOptions({
+      viewport: viewport as unknown as import("pixi-viewport").Viewport,
+      maxLoadedChunks: 1,
+    });
+
+    await renderHarness(options);
+
+    await waitForExpect(() => {
+      expect(lastResult?.loadedChunks.size).toBe(1);
+    });
+
+    const initialChunkKey = lastResult?.loadedChunks.keys().next().value as string;
+    expect(initialChunkKey).toBeTruthy();
+    const initialFetchCount = fetchMock.mock.calls.length;
+
+    await act(async () => {
+      viewport.moveCenter(2048, 2048);
+      viewport.emit("moved");
+      await new Promise((resolve) => setTimeout(resolve, 400));
+    });
+
+    await waitForExpect(() => {
+      expect(lastResult?.loadedChunks.size).toBe(1);
+      expect(lastResult?.loadedChunks.has(initialChunkKey)).toBe(false);
+      expect(fetchMock.mock.calls.length).toBeGreaterThan(initialFetchCount);
+    });
+
+    const callsAfterSecondLoad = fetchMock.mock.calls.length;
+    const secondChunkKey = lastResult?.loadedChunks.keys().next().value as string;
+    expect(secondChunkKey).not.toBe(initialChunkKey);
+
+    await act(async () => {
+      viewport.moveCenter(0, 0);
+      viewport.emit("moved");
+      await new Promise((resolve) => setTimeout(resolve, 400));
+    });
+
+    await waitForExpect(() => {
+      expect(lastResult?.loadedChunks.size).toBe(1);
+      expect(fetchMock.mock.calls.length).toBe(callsAfterSecondLoad);
+    });
+
+    const revisitedChunkKey = lastResult?.loadedChunks.keys().next().value as string;
+    expect(revisitedChunkKey).toBe(initialChunkKey);
+  });
+
+  it("invalidates the chunk cache when world parameters change", async () => {
+    const viewport = new ViewportMock();
+    const baseOptions = makeOptions({
+      viewport: viewport as unknown as import("pixi-viewport").Viewport,
+      chunkSize: 1,
+      worldSeed: 1,
+    });
+
+    await renderHarness(baseOptions);
+
+    await waitForExpect(() => {
+      expect(lastResult?.loadedChunks.size).toBeGreaterThan(0);
+    });
+
+    const initialFetchCount = fetchMock.mock.calls.length;
+
+    const updatedOptions = { ...baseOptions, worldSeed: 2 } satisfies UseChunkStreamingOptions;
+
+    await act(async () => {
+      root!.render(
+        <HookHarness
+          options={updatedOptions}
+          onUpdate={(value) => {
+            lastResult = value;
+          }}
+        />,
+      );
+    });
+
+    await waitForExpect(() => {
+      expect(fetchMock.mock.calls.length).toBeGreaterThan(initialFetchCount);
+    });
+
+    const lastCall = fetchMock.mock.calls.at(-1)?.[0];
+    if (typeof lastCall === "string") {
+      const parsed = new URL(lastCall, "http://localhost");
+      expect(parsed.searchParams.get("seed")).toBe("2");
+    }
+  });
 });
