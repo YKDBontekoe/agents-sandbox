@@ -1,5 +1,6 @@
 import type { IconDefinition } from '@fortawesome/fontawesome-svg-core';
 import { ICONS, COLORS, type ResourceType } from '@arcane/ui';
+import type { BuildingPassiveEffects, AggregatedBuildingPassives } from '@engine';
 
 export type { ResourceType } from '@arcane/ui';
 
@@ -12,7 +13,7 @@ export function getResourceColor(resource: ResourceType): string {
 }
 
 // Simulation resource helpers
-export type SimResourceKey = 'grain' | 'coin' | 'mana' | 'favor' | 'workers' | 'wood' | 'planks';
+export type SimResourceKey = 'grain' | 'coin' | 'mana' | 'favor' | 'workers' | 'wood' | 'planks' | 'defense';
 
 export interface SimResources {
   grain: number;
@@ -22,6 +23,7 @@ export interface SimResources {
   workers: number;
   wood: number;
   planks: number;
+  defense: number;
 }
 
 export interface SimBuildingDef {
@@ -29,6 +31,7 @@ export interface SimBuildingDef {
   outputs: Partial<SimResources>;
   /** Maximum number of workers that can staff this building */
   workCapacity?: number;
+  passiveEffects?: BuildingPassiveEffects;
 }
 
 export interface ApplyProductionResult {
@@ -105,13 +108,74 @@ export function projectCycleDeltas(
   const edicts = opts?.edicts || {};
   const tariffValue = Math.max(0, Math.min(100, Number(edicts['tariffs'] ?? 50)));
   const mods = opts?.modifiers || {};
-  const resMul = mods.resourceOutputMultiplier || {};
-  const bldMul = mods.buildingOutputMultiplier || {};
-  const globalBuildingMultiplier = Math.max(0, mods.globalBuildingOutputMultiplier ?? 1);
-  const globalResourceMultiplier = Math.max(0, mods.globalResourceOutputMultiplier ?? 1);
-  const routeCoinMultiplier = (0.8 + (tariffValue * 0.006)) * Math.max(0, mods.routeCoinOutputMultiplier ?? 1);
-  const patrolCoinUpkeepMultiplier = Math.max(0, mods.patrolCoinUpkeepMultiplier ?? 1);
-  const inputMultiplier = Math.max(0, mods.buildingInputMultiplier ?? 1);
+  const passive: AggregatedBuildingPassives = {
+    resMul: {},
+    bldMul: {},
+    globalBuildingMultiplier: 1,
+    globalResourceMultiplier: 1,
+    routeCoinMultiplier: 1,
+    patrolCoinUpkeepMultiplier: 1,
+    buildingInputMultiplier: 1,
+    tickAdjustments: {},
+    upkeepDelta: 0,
+  };
+  buildings.forEach((b) => {
+    const def = catalog[b.typeId];
+    if (!def?.passiveEffects) return;
+    const pass = def.passiveEffects;
+    if (pass.resourceMultipliers) {
+      Object.entries(pass.resourceMultipliers).forEach(([key, value]) => {
+        const factor = Number(value);
+        if (!Number.isFinite(factor) || factor <= 0) return;
+        passive.resMul[key] = (passive.resMul[key] ?? 1) * factor;
+      });
+    }
+    if (pass.buildingMultipliers) {
+      Object.entries(pass.buildingMultipliers).forEach(([key, value]) => {
+        const factor = Number(value);
+        if (!Number.isFinite(factor) || factor <= 0) return;
+        passive.bldMul[key] = (passive.bldMul[key] ?? 1) * factor;
+      });
+    }
+    if (typeof pass.globalBuildingMultiplier === 'number' && Number.isFinite(pass.globalBuildingMultiplier) && pass.globalBuildingMultiplier > 0) {
+      passive.globalBuildingMultiplier *= pass.globalBuildingMultiplier;
+    }
+    if (typeof pass.globalResourceMultiplier === 'number' && Number.isFinite(pass.globalResourceMultiplier) && pass.globalResourceMultiplier > 0) {
+      passive.globalResourceMultiplier *= pass.globalResourceMultiplier;
+    }
+    if (typeof pass.routeCoinMultiplier === 'number' && Number.isFinite(pass.routeCoinMultiplier) && pass.routeCoinMultiplier > 0) {
+      passive.routeCoinMultiplier *= pass.routeCoinMultiplier;
+    }
+    if (typeof pass.patrolCoinUpkeepMultiplier === 'number' && Number.isFinite(pass.patrolCoinUpkeepMultiplier) && pass.patrolCoinUpkeepMultiplier > 0) {
+      passive.patrolCoinUpkeepMultiplier *= pass.patrolCoinUpkeepMultiplier;
+    }
+    if (typeof pass.buildingInputMultiplier === 'number' && Number.isFinite(pass.buildingInputMultiplier) && pass.buildingInputMultiplier > 0) {
+      passive.buildingInputMultiplier *= pass.buildingInputMultiplier;
+    }
+    if (typeof pass.upkeepDelta === 'number' && Number.isFinite(pass.upkeepDelta)) {
+      passive.upkeepDelta += pass.upkeepDelta;
+    }
+    if (pass.tickResourceAdjustments) {
+      Object.entries(pass.tickResourceAdjustments).forEach(([key, delta]) => {
+        const amount = Number(delta);
+        if (!Number.isFinite(amount) || amount === 0) return;
+        passive.tickAdjustments[key] = (passive.tickAdjustments[key] ?? 0) + amount;
+      });
+    }
+  });
+  const resMul = { ...(mods.resourceOutputMultiplier || {}) } as Record<string, number>;
+  const bldMul = { ...(mods.buildingOutputMultiplier || {}) } as Record<string, number>;
+  Object.entries(passive.resMul).forEach(([key, value]) => {
+    resMul[key] = (resMul[key] ?? 1) * value;
+  });
+  Object.entries(passive.bldMul).forEach(([key, value]) => {
+    bldMul[key] = (bldMul[key] ?? 1) * value;
+  });
+  const globalBuildingMultiplier = Math.max(0, mods.globalBuildingOutputMultiplier ?? 1) * passive.globalBuildingMultiplier;
+  const globalResourceMultiplier = Math.max(0, mods.globalResourceOutputMultiplier ?? 1) * passive.globalResourceMultiplier;
+  const routeCoinMultiplier = (0.8 + (tariffValue * 0.006)) * Math.max(0, mods.routeCoinOutputMultiplier ?? 1) * passive.routeCoinMultiplier;
+  const patrolCoinUpkeepMultiplier = Math.max(0, mods.patrolCoinUpkeepMultiplier ?? 1) * passive.patrolCoinUpkeepMultiplier;
+  const inputMultiplier = Math.max(0, mods.buildingInputMultiplier ?? 1) * passive.buildingInputMultiplier;
   const patrolsEnabled = Number(edicts['patrols'] ?? 0) === 1;
 
   // Build quick lookup by id for route effects
@@ -214,9 +278,19 @@ export function projectCycleDeltas(
   }
   // Worker upkeep on total workers, not just idle
   const totalWorkers = Math.max(0, Number(opts?.totalWorkers ?? 0));
-  const perWorker = 0.2 + (mods.upkeepGrainPerWorkerDelta ?? 0);
+  const perWorker = 0.2 + (mods.upkeepGrainPerWorkerDelta ?? 0) + passive.upkeepDelta;
   const upkeep = Math.round(totalWorkers * Math.max(0, perWorker));
   if (upkeep > 0) next.grain = Math.max(0, (next.grain ?? 0) - upkeep);
+
+  if (Object.keys(passive.tickAdjustments).length > 0) {
+    Object.entries(passive.tickAdjustments).forEach(([key, delta]) => {
+      const amount = Number(delta ?? 0);
+      if (!Number.isFinite(amount) || amount === 0) return;
+      const current = Number((next as unknown as Record<string, number>)[key] ?? 0);
+      const updated = current + amount;
+      (next as unknown as Record<string, number>)[key] = Math.max(0, Math.round(updated));
+    });
+  }
 
   return { updated: next, shortages };
 }

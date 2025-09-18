@@ -1,8 +1,12 @@
 import React from 'react';
-import { SIM_BUILDINGS, BUILDABLE_TILES } from '../simCatalog';
+import {
+  SIM_BUILDINGS,
+  BUILDABLE_TILES,
+  BUILD_MENU_GROUPS,
+  type BuildTypeId,
+  type BuildingAvailability,
+} from '../simCatalog';
 import { canAfford, type SimResources } from '../resourceUtils';
-
-export type BuildTypeId = keyof typeof SIM_BUILDINGS;
 
 interface StoredBuilding {
   id: string;
@@ -42,6 +46,7 @@ export interface TileInfoPanelProps {
   onTutorialProgress: (evt: { type: 'built' | 'openedCouncil' }) => void;
   allowFineSawmill: boolean;
   onSetRecipe: (buildingId: string, recipe: 'basic' | 'fine' | 'premium') => void;
+  buildingAvailability: Record<BuildTypeId, BuildingAvailability>;
 }
 
 const TileInfoPanel: React.FC<TileInfoPanelProps> = ({
@@ -64,14 +69,11 @@ const TileInfoPanel: React.FC<TileInfoPanelProps> = ({
   onTutorialProgress,
   allowFineSawmill,
   onSetRecipe,
+  buildingAvailability,
 }) => {
   const { x, y, tileType } = selected;
   const occupied = placedBuildings.find(b => b.x === x && b.y === y) || null;
   const hasCouncil = placedBuildings.some(b => b.typeId === 'council_hall');
-
-  const candidates: BuildTypeId[] = hasCouncil
-    ? ['farm', 'house', 'lumber_camp', 'sawmill', 'storehouse', 'trade_post', 'automation_workshop', 'shrine']
-    : ['farm', 'house', 'lumber_camp', 'sawmill', 'council_hall'];
 
   const canPlaceOnTile = (typeId: BuildTypeId) => {
       const allowed = (BUILDABLE_TILES as Record<string, string[]>)[typeId];
@@ -80,9 +82,9 @@ const TileInfoPanel: React.FC<TileInfoPanelProps> = ({
     return allowed.includes(tileType);
   };
 
-  const canAffordBuild = (typeId: BuildTypeId) => {
+  const canAffordBuild = (typeId: BuildTypeId, allowWhenFree: boolean) => {
     if (!simResources) return false;
-    if ((tutorialFree[typeId] || 0) > 0) return true;
+    if (allowWhenFree && (tutorialFree[typeId] || 0) > 0) return true;
     return canAfford(SIM_BUILDINGS[typeId].cost, simResources);
   };
 
@@ -93,6 +95,38 @@ const TileInfoPanel: React.FC<TileInfoPanelProps> = ({
         .map(([k, v]) => `${k} -${v}`);
     return parts.length ? parts.join('  ') : 'Free';
   };
+
+  const renderRequirements = (availability: BuildingAvailability) => {
+    if (!availability.requirementSummaries.length) return null;
+    return (
+      <ul className="mt-1 space-y-0.5 text-[11px] text-slate-500">
+        {availability.requirementSummaries.map(req => (
+          <li key={req} className="flex items-start gap-1">
+            <span className="mt-0.5 inline-block h-1.5 w-1.5 rounded-full bg-slate-400" aria-hidden />
+            <span>{req}</span>
+          </li>
+        ))}
+      </ul>
+    );
+  };
+
+  const renderLockedReasons = (reasons: string[]) => {
+    if (!reasons.length) return null;
+    return (
+      <div className="mt-1 text-[11px] text-rose-500">
+        <div className="font-medium text-rose-600">Locked</div>
+        <ul className="list-disc list-inside space-y-0.5">
+          {reasons.map(reason => (
+            <li key={reason}>{reason}</li>
+          ))}
+        </ul>
+      </div>
+    );
+  };
+
+  const buildGroups = BUILD_MENU_GROUPS.filter(group =>
+    group.types.some(typeId => SIM_BUILDINGS[typeId as BuildTypeId]),
+  );
 
   return (
     <div className="absolute bottom-56 left-4 bg-white/95 border border-slate-200 text-slate-800 px-3 py-2 rounded-md text-sm shadow-sm pointer-events-auto w-[320px]">
@@ -210,34 +244,64 @@ const TileInfoPanel: React.FC<TileInfoPanelProps> = ({
             )}
           </div>
         ) : (
-          <div className="space-y-2">
-            <div className="text-xs text-slate-600">Available builds</div>
-            {candidates.map((typeId) => {
-              const placeable = canPlaceOnTile(typeId);
-              const affordable = canAffordBuild(typeId);
-              const disabled = !placeable || !affordable;
-              return (
-                <div key={typeId} className="flex items-center justify-between gap-2">
-                  <div>
-                    <div className="font-medium text-slate-800 text-sm">{SIM_BUILDINGS[typeId].name}</div>
-                    <div className="text-[11px] text-slate-500">{renderCost(typeId)}{!placeable ? ' • cannot build on this terrain' : ''}</div>
-                  </div>
-                  <button
-                    onMouseEnter={() => onPreviewType(typeId)}
-                    onMouseLeave={() => onPreviewType(null)}
-                    onClick={() => {
-                      onBuild(typeId);
-                      if ((tutorialFree[typeId] || 0) > 0) onConsumeTutorialFree(typeId);
-                      onTutorialProgress({ type: 'built' });
-                    }}
-                    disabled={disabled}
-                    className={`px-2 py-1 rounded text-xs border ${disabled ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-700'}`}
-                  >
-                    Build
-                  </button>
+          <div className="space-y-3">
+            {buildGroups.map(group => (
+              <div key={group.id} className="border border-slate-200 rounded-md p-2">
+                <div className="text-[11px] uppercase tracking-wide text-slate-500 font-semibold mb-2">{group.label}</div>
+                <div className="space-y-2">
+                  {group.types.map(typeId => {
+                    const def = SIM_BUILDINGS[typeId];
+                    if (!def) return null;
+                    const placeable = canPlaceOnTile(typeId);
+                    const availability = buildingAvailability[typeId];
+                    const locked = availability ? !availability.meetsPrerequisites : false;
+                    const tutorialAllowance = tutorialFree[typeId] || 0;
+                    const affordable = canAffordBuild(typeId, !locked);
+                    const disabled = locked || !placeable || (!affordable && tutorialAllowance <= 0);
+                    const reasons = locked ? availability?.reasons ?? [] : [];
+                    const requirementList = availability ? renderRequirements(availability) : null;
+                    return (
+                      <div
+                        key={typeId}
+                        className={`rounded border px-2 py-1.5 ${disabled ? 'border-slate-200 bg-slate-50' : 'border-slate-300 bg-white'} shadow-sm`}
+                        onMouseEnter={() => onPreviewType(typeId)}
+                        onMouseLeave={() => onPreviewType(null)}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div>
+                            <div className="font-medium text-slate-800 text-sm flex items-center gap-2">
+                              {def.name}
+                              {def.unique && (
+                                <span className="text-[10px] uppercase tracking-wide text-indigo-600 bg-indigo-100 border border-indigo-200 px-1 py-0.5 rounded">
+                                  Unique
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[11px] text-slate-500">
+                              {renderCost(typeId)}{!placeable ? ' • invalid terrain' : ''}{tutorialAllowance > 0 ? ` • ${tutorialAllowance} free` : ''}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => {
+                              if (disabled) return;
+                              onBuild(typeId);
+                              if (tutorialAllowance > 0) onConsumeTutorialFree(typeId);
+                              onTutorialProgress({ type: 'built' });
+                            }}
+                            disabled={disabled}
+                            className={`px-2 py-1 rounded text-xs border ${disabled ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-700'}`}
+                          >
+                            Build
+                          </button>
+                        </div>
+                        {requirementList}
+                        {renderLockedReasons(reasons)}
+                      </div>
+                    );
+                  })}
                 </div>
-              );
-            })}
+              </div>
+            ))}
           </div>
         )}
       </div>

@@ -12,7 +12,8 @@ const baselineResources: SimResources = {
   favor: 10,
   workers: 25,
   wood: 35,
-  planks: 15
+  planks: 15,
+  defense: 0,
 };
 
 describe('runCitizenPipeline', () => {

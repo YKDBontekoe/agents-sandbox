@@ -56,6 +56,7 @@ describe('skill modifiers integration', () => {
         workers: 50,
         wood: 30,
         planks: 0,
+        defense: 0,
         unrest: 0,
         threat: 0,
       },
