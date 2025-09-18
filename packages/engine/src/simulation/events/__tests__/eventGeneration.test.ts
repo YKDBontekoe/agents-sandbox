@@ -178,4 +178,40 @@ describe('eventGeneration utilities', () => {
     expect(withEra).toHaveLength(1);
     expect(withEra[0].type).toBe('void_rift');
   });
+
+  it('requires matching era ids when prerequisites specify allowed eras', () => {
+    const foundingOnly = createEventDefinition('market_day', {
+      eraPrerequisites: { allowedEraIds: ['founding_age'] },
+      impact: {
+        probability: 0.5,
+        resources: { coin: 10 },
+        citizenMood: { happiness: 2, stress: -1, motivation: 1 }
+      }
+    });
+
+    const defs: Record<EventType, EventDefinition> = {
+      market_day: foundingOnly
+    };
+
+    const blocked = generateEventCandidates({
+      systemState: baseSystemState,
+      activeEvents: [],
+      eventDefinitions: defs,
+      random: () => 0.01,
+      eraContext: { id: 'expansion_age', stageIndex: 1 }
+    });
+
+    expect(blocked).toHaveLength(0);
+
+    const allowed = generateEventCandidates({
+      systemState: baseSystemState,
+      activeEvents: [],
+      eventDefinitions: defs,
+      random: () => 0.01,
+      eraContext: { id: 'founding_age', stageIndex: 0 }
+    });
+
+    expect(allowed).toHaveLength(1);
+    expect(allowed[0].type).toBe('market_day');
+  });
 });

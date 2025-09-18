@@ -16,6 +16,7 @@ const naturalDisaster: EventDefinition = {
   iconType: 'critical',
   color: '#ff4444',
   animationType: 'shake',
+  eraPrerequisites: { maxStage: 1 },
   responses: [
     {
       id: 'emergency_response',
@@ -38,6 +39,11 @@ const naturalDisaster: EventDefinition = {
       description: 'Invest heavily in rapid reconstruction'
     }
   ],
+  resolution: {
+    description: 'Neighborhood patrols learn from the devastation, hardening their routes against unrest.',
+    unlockMitigationId: 'militia_watch',
+    pressureAdjustments: { unrest: -0.5, threat: -0.5 }
+  },
   triggers: [
     {
       condition: 'low_infrastructure',

@@ -16,6 +16,7 @@ const constructionBoom: EventDefinition = {
   iconType: 'positive',
   color: '#ff8800',
   animationType: 'bounce',
+  eraPrerequisites: { allowedEraIds: ['founding_age', 'expansion_age', 'unrest_age'] },
   responses: [
     {
       id: 'accelerate_construction',
@@ -28,7 +29,11 @@ const constructionBoom: EventDefinition = {
       },
       description: 'Invest more resources to speed up construction'
     }
-  ]
+  ],
+  resolution: {
+    description: 'Architects codify fortified blueprints that lower long-term threat pressure.',
+    pressureAdjustments: { threat: -0.5 }
+  }
 };
 
 export default constructionBoom;

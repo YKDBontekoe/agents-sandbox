@@ -16,6 +16,7 @@ const infrastructureUpgrade: EventDefinition = {
   iconType: 'positive',
   color: '#4488ff',
   animationType: 'glow',
+  eraPrerequisites: { minStage: 2 },
   responses: [
     {
       id: 'comprehensive_upgrade',
@@ -28,7 +29,12 @@ const infrastructureUpgrade: EventDefinition = {
       },
       description: 'Invest heavily in city-wide improvements'
     }
-  ]
+  ],
+  resolution: {
+    description: 'Engineers integrate astral bulwarks into the grid, unlocking the Astral Bastion mitigation.',
+    unlockMitigationId: 'astral_bastion',
+    pressureAdjustments: { threat: -1 }
+  }
 };
 
 export default infrastructureUpgrade;

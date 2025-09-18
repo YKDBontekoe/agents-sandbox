@@ -16,6 +16,9 @@ const ConfigSchema = z.object({
 
 export type Config = z.infer<typeof ConfigSchema>;
 
+const isVitest = process.env.VITEST === 'true';
+const isTestEnv = process.env.NODE_ENV === 'test' || isVitest;
+
 const defaults: Partial<Config> = {
   nodeEnv: 'development',
   vercelEnv: 'local',
@@ -23,6 +26,16 @@ const defaults: Partial<Config> = {
   nextPublicOfflineMode: false,
   nextPublicDisableRealtime: false
 };
+
+const testFallbacks: Partial<Config> = isTestEnv
+  ? {
+      nextPublicSupabaseUrl: 'https://example.supabase.co',
+      nextPublicSupabaseAnonKey: 'test-anon-key',
+      supabaseUrl: 'https://example.supabase.co',
+      supabaseServiceRoleKey: 'test-service-role-key',
+      supabaseJwtSecret: 'test-jwt-secret'
+    }
+  : {};
 
 const fromEnv: Partial<Config> = {
   nodeEnv: process.env.NODE_ENV as Config['nodeEnv'],
@@ -46,7 +59,7 @@ const ClientSchema = ConfigSchema.partial({
 });
 
 export function loadConfig(overrides: Partial<Config> = {}): Config {
-  const base: Partial<Config> = { ...defaults, ...fromEnv, ...overrides };
+  const base: Partial<Config> = { ...defaults, ...testFallbacks, ...fromEnv, ...overrides };
   const isBrowser = typeof window !== 'undefined';
   const parsed = isBrowser ? ClientSchema.parse(base) : ConfigSchema.parse(base);
   return parsed as Config;

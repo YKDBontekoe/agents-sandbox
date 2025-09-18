@@ -16,6 +16,7 @@ const migrationWave: EventDefinition = {
   iconType: 'neutral',
   color: '#44aa88',
   animationType: 'bounce',
+  eraPrerequisites: { maxStage: 1 },
   responses: [
     {
       id: 'welcome_migrants',
@@ -39,7 +40,12 @@ const migrationWave: EventDefinition = {
       },
       description: 'Limit new arrivals to reduce strain'
     }
-  ]
+  ],
+  resolution: {
+    description: 'New arrivals are organized into neighborhood councils that unlock district governance mitigations.',
+    unlockMitigationId: 'district_councils',
+    pressureAdjustments: { unrest: -0.5 }
+  }
 };
 
 export default migrationWave;

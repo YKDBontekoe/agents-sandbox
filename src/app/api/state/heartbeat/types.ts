@@ -1,8 +1,8 @@
-import type { GameState, TickResult } from '@engine'
+import type { GameState, TickResult } from '@engine';
 
-export type HeartbeatState = GameState
+export type HeartbeatState = GameState;
 
-export type HeartbeatTickResult = TickResult
+export type HeartbeatTickResult = TickResult;
 
 export interface HeartbeatUpdatePayload
   extends Pick<
@@ -18,6 +18,6 @@ export interface HeartbeatUpdatePayload
     | 'milestones'
     | 'era'
   > {
-  updated_at: string
-  last_tick_at: string
+  updated_at: string;
+  last_tick_at: string;
 }
