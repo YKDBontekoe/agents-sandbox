@@ -1,4 +1,4 @@
-import type { SimResources } from '../index';
+import type { MilestoneSnapshot, EraStatus, SimResources } from '../index';
 import type { GameTime } from '../types/gameTime';
 import { performMaintenance, type SimulatedBuilding } from './buildings';
 import { CitizenBehaviorSystem } from './citizenBehavior';
@@ -31,6 +31,8 @@ export interface EnhancedGameState {
   }>;
   resources: SimResources;
   gameTime: GameTime;
+  era?: EraStatus;
+  milestones?: MilestoneSnapshot;
 
   // Enhanced simulation data
   simulatedBuildings: SimulatedBuilding[];
@@ -73,6 +75,8 @@ export class SimulationIntegrationSystem {
   private latestCommunityMood = { happiness: 50, stress: 50, satisfaction: 50 };
   private latestLaborMarket: LaborMarket | null = null;
   private latestSystemHealth: SystemHealthSnapshot = this.eventManager.getSystemHealth();
+  private latestEra: EraStatus | null = null;
+  private latestMilestones: MilestoneSnapshot | null = null;
 
   private visualConfig: VisualFeedbackConfig;
   private performanceMetrics: PerformanceMetrics;
@@ -108,6 +112,8 @@ export class SimulationIntegrationSystem {
     }>;
     resources: SimResources;
     gameTime: GameTime;
+    era?: EraStatus;
+    milestones?: MilestoneSnapshot;
   }, _deltaTime: number): EnhancedGameState {
     void _deltaTime;
     const startTime = performance.now();
@@ -140,7 +146,8 @@ export class SimulationIntegrationSystem {
         buildings: buildingResult.simulatedBuildings,
         citizens: citizenResult.citizens,
         workers: workerResult.workers,
-        resources: gameState.resources
+        resources: gameState.resources,
+        era: gameState.era
       });
 
       this.previousSimulatedBuildings = buildingResult.simulatedBuildings.map(building => ({
@@ -150,6 +157,8 @@ export class SimulationIntegrationSystem {
       this.latestCommunityMood = citizenResult.communityMood;
       this.latestLaborMarket = workerResult.laborMarket;
       this.latestSystemHealth = eventResult.systemHealth;
+      if (gameState.era) this.latestEra = gameState.era;
+      if (gameState.milestones) this.latestMilestones = gameState.milestones;
 
       this.updatePerformanceMetrics(startTime);
 
@@ -157,6 +166,8 @@ export class SimulationIntegrationSystem {
         buildings: gameState.buildings,
         resources: gameState.resources,
         gameTime: gameState.gameTime,
+        era: gameState.era ?? this.latestEra ?? undefined,
+        milestones: gameState.milestones ?? this.latestMilestones ?? undefined,
         simulatedBuildings: buildingResult.simulatedBuildings,
         maintenanceActions: buildingResult.maintenanceActions,
         citizens: citizenResult.citizens,
@@ -174,6 +185,8 @@ export class SimulationIntegrationSystem {
         buildings: gameState.buildings,
         resources: gameState.resources,
         gameTime: gameState.gameTime,
+        era: gameState.era ?? this.latestEra ?? undefined,
+        milestones: gameState.milestones ?? this.latestMilestones ?? undefined,
         simulatedBuildings: [...this.previousSimulatedBuildings],
         maintenanceActions: [...this.latestMaintenanceActions],
         citizens: this.citizenSystem.getAllCitizens(),

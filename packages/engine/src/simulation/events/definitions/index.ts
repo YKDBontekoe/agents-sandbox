@@ -14,6 +14,9 @@ import constructionBoom from './constructionBoom';
 import marketDay from './marketDay';
 import culturalEvent from './culturalEvent';
 import infrastructureUpgrade from './infrastructureUpgrade';
+import voidRift from './voidRift';
+import astralAlignment from './astralAlignment';
+import councilSchism from './councilSchism';
 
 export const EVENT_DEFINITIONS: Record<EventType, EventDefinition> = {
   natural_disaster: naturalDisaster,
@@ -29,5 +32,8 @@ export const EVENT_DEFINITIONS: Record<EventType, EventDefinition> = {
   construction_boom: constructionBoom,
   market_day: marketDay,
   cultural_event: culturalEvent,
-  infrastructure_upgrade: infrastructureUpgrade
+  infrastructure_upgrade: infrastructureUpgrade,
+  void_rift: voidRift,
+  astral_alignment: astralAlignment,
+  council_schism: councilSchism
 };

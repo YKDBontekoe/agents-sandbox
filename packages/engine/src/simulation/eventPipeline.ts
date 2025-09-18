@@ -1,4 +1,5 @@
 import type { SimResources } from '../index';
+import type { EraStatus } from '../progression/eraSystem';
 import type { GameTime } from '../types/gameTime';
 import type { SimulatedBuilding } from './buildings';
 import type { Citizen } from './citizens/citizen';
@@ -12,6 +13,7 @@ export interface EventPipelineInput {
   citizens: Citizen[];
   workers: WorkerProfile[];
   resources: SimResources;
+  era?: EraStatus;
 }
 
 export interface EventPipelineResult {
@@ -29,7 +31,7 @@ export function runEventPipeline(
     citizens: input.citizens,
     workers: input.workers,
     resources: input.resources
-  });
+  }, { era: input.era });
 
   return {
     activeEvents: eventManager.getActiveEvents(),

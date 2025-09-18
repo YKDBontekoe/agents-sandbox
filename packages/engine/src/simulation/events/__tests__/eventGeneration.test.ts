@@ -58,7 +58,9 @@ function createEventDefinition(
     color: rest.color ?? '#abcdef',
     animationType: rest.animationType ?? 'pulse',
     responses: rest.responses,
-    triggers: rest.triggers
+    triggers: rest.triggers,
+    eraPrerequisites: rest.eraPrerequisites,
+    resolution: rest.resolution
   };
 }
 
@@ -140,5 +142,40 @@ describe('eventGeneration utilities', () => {
       'social_unrest',
       'economic_boom'
     ]);
+  });
+
+  it('respects era prerequisites when generating candidates', () => {
+    const lateEraEvent = createEventDefinition('void_rift', {
+      eraPrerequisites: { minStage: 2 },
+      impact: {
+        probability: 0.6,
+        resources: { mana: -10 },
+        citizenMood: { happiness: -4, stress: 6, motivation: -3 }
+      }
+    });
+
+    const definitions: Record<EventType, EventDefinition> = {
+      void_rift: lateEraEvent
+    };
+
+    const withoutEra = generateEventCandidates({
+      systemState: baseSystemState,
+      activeEvents: [],
+      eventDefinitions: definitions,
+      random: () => 0.01
+    });
+
+    expect(withoutEra).toHaveLength(0);
+
+    const withEra = generateEventCandidates({
+      systemState: baseSystemState,
+      activeEvents: [],
+      eventDefinitions: definitions,
+      random: () => 0.01,
+      eraContext: { id: 'unrest_age', stageIndex: 2 }
+    });
+
+    expect(withEra).toHaveLength(1);
+    expect(withEra[0].type).toBe('void_rift');
   });
 });

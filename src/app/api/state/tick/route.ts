@@ -25,6 +25,9 @@ export async function POST() {
     buildings: nextState.buildings ?? [],
     routes: nextState.routes ?? [],
     edicts: nextState.edicts ?? undefined,
+    quests_completed: nextState.quests_completed ?? undefined,
+    milestones: nextState.milestones ?? undefined,
+    era: nextState.era ?? undefined,
     updated_at: isoNow,
     last_tick_at: isoNow,
   }
