@@ -31,6 +31,8 @@ import {
 import WorkerPanel from '@/components/game/hud/WorkerPanel';
 import { CouncilPanel, CouncilProposal } from '@/components/game/hud/CouncilPanel';
 import { EdictsPanel, EdictSetting } from '@/components/game/hud/EdictsPanel';
+import { OmenPanel } from '@/components/game/OmenPanel';
+import type { SeasonalEvent, OmenReading } from '@/components/game/omen/types';
 import type { District } from '@/components/game/districts';
 import type { Leyline } from '../../../apps/web/features/leylines';
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
@@ -225,20 +227,6 @@ interface Proposal {
   predicted_delta: Record<string, number>;
 }
 
-interface SeasonalEvent {
-  id: string;
-  name: string;
-  description: string;
-  cycle: number;
-}
-
-interface OmenReading {
-  id: string;
-  text: string;
-  type: string;
-  cycle: number;
-}
-
 interface PlayPageProps {
   initialState?: GameState | null;
   initialProposals?: Proposal[];
@@ -392,6 +380,186 @@ const loadEventLogFromStorage = (): QuestEventLogEntry[] => {
     logger.warn('Failed to read event log from storage', error);
     return [];
   }
+};
+
+const OMEN_READING_COST = 15;
+const SEASONS: SeasonalEvent['season'][] = ['spring', 'summer', 'autumn', 'winter'];
+
+const cycleToSeason = (cycle: number): SeasonalEvent['season'] => {
+  const index = ((cycle % SEASONS.length) + SEASONS.length) % SEASONS.length;
+  return SEASONS[index];
+};
+
+const sanitizeSeason = (value: string | null | undefined): SeasonalEvent['season'] => {
+  if (!value) {
+    return SEASONS[0];
+  }
+  const normalized = value.toLowerCase();
+  return (SEASONS.find(season => season === normalized) ?? SEASONS[0]);
+};
+
+const mapSeverityToOmenType = (severity: 'minor' | 'moderate' | 'major' | 'critical'): SeasonalEvent['type'] => {
+  switch (severity) {
+    case 'minor':
+      return 'blessing';
+    case 'moderate':
+      return 'neutral';
+    case 'major':
+      return 'curse';
+    case 'critical':
+    default:
+      return 'crisis';
+  }
+};
+
+const summarizeResourceImpact = (resources: Partial<Record<string, number>>): SeasonalEvent['effects'] => {
+  const entries = Object.entries(resources);
+  if (!entries.length) {
+    return [{ resource: 'Outlook', impact: 'Shifts in the leylines are uncertain.' }];
+  }
+
+  return entries.map(([resource, delta]) => {
+    const numericDelta = Number(delta ?? 0);
+    const prefix = Number.isFinite(numericDelta) && numericDelta > 0 ? '+' : '';
+    const rounded = Number.isFinite(numericDelta) ? Math.round(numericDelta * 10) / 10 : 0;
+    return {
+      resource,
+      impact: `${prefix}${rounded}`,
+    };
+  });
+};
+
+const buildFallbackEvents = (cycle: number): SeasonalEvent[] => [
+  {
+    id: 'fallback-eclipse-of-glass',
+    name: 'Eclipse of Glass',
+    description: 'A prismatic veil forms above the council hall, distorting mana flows.',
+    type: 'crisis',
+    season: cycleToSeason(cycle + 2),
+    cycleOffset: 2,
+    probability: 72,
+    duration: 3,
+    effects: [
+      { resource: 'Mana', impact: '-5 each cycle while the veil holds.' },
+      { resource: 'Threat', impact: '+2 if the veil shatters.' },
+    ],
+    isRevealed: false,
+  },
+  {
+    id: 'fallback-harvest-bloom',
+    name: 'Harvest Bloom',
+    description: 'The orchards glow with gentle aurora, promising a lush yield.',
+    type: 'blessing',
+    season: cycleToSeason(cycle + 3),
+    cycleOffset: 3,
+    probability: 64,
+    duration: 2,
+    effects: [
+      { resource: 'Grain', impact: '+8 at the bloom\'s peak.' },
+      { resource: 'Unrest', impact: '-1 as spirits lift.' },
+    ],
+    isRevealed: false,
+  },
+];
+
+const buildFallbackReadings = (cycle: number): OmenReading[] => [
+  {
+    id: `fallback-reading-${cycle}-1`,
+    title: 'Silver Veil Tremor',
+    description: 'Crystalline wards along the eastern ridge resonate with worry.',
+    confidence: 58,
+    revealedAt: Math.max(0, cycle - 1),
+    events: ['fallback-eclipse-of-glass'],
+  },
+  {
+    id: `fallback-reading-${cycle}-2`,
+    title: 'Leyline Chorus',
+    description: 'Choirs of mana whisper of a harvest yet to come.',
+    confidence: 74,
+    revealedAt: Math.max(0, cycle - 2),
+    events: ['fallback-harvest-bloom'],
+  },
+];
+
+const deriveUpcomingEvents = (
+  enhancedState: EnhancedGameState | null,
+  history: QuestEventLogEntry[],
+  cycle: number,
+): SeasonalEvent[] => {
+  const derived: SeasonalEvent[] = [];
+
+  if (enhancedState?.activeEvents?.length) {
+    for (const event of enhancedState.activeEvents) {
+      const offset = Math.max(0, (event.startCycle ?? cycle) - cycle);
+      const probability = Number(event.impact?.probability ?? 1);
+      const formattedProbability = Number.isFinite(probability)
+        ? Math.max(0, Math.min(100, probability <= 1 ? Math.round(probability * 100) : Math.round(probability)))
+        : 50;
+      derived.push({
+        id: event.id,
+        name: event.title,
+        description: event.description,
+        type: mapSeverityToOmenType(event.severity),
+        season: cycleToSeason(cycle + offset),
+        cycleOffset: offset,
+        probability: formattedProbability,
+        duration: Math.max(1, Math.round((event.endCycle ?? cycle) - (event.startCycle ?? cycle))),
+        effects: summarizeResourceImpact(event.impact?.resources ?? {}),
+        isRevealed: true,
+      });
+    }
+  }
+
+  if (history.length) {
+    const recentHistory = [...history].slice(-3);
+    recentHistory.forEach((entry, index) => {
+      const offset = Math.max(1, entry.occurredAt > cycle ? entry.occurredAt - cycle : index + 1);
+      derived.push({
+        id: `forecast-${entry.id}-${entry.occurredAt}`,
+        name: `${entry.name} (Echo)`,
+        description: entry.summary || 'Scribes note repeating patterns in the auguries.',
+        type: entry.type === 'crisis' ? 'crisis' : 'neutral',
+        season: cycleToSeason(cycle + offset),
+        cycleOffset: offset,
+        probability: Math.min(90, 55 + index * 10),
+        duration: 1,
+        effects: [
+          { resource: 'Insight', impact: 'Historical omen resurfacing.' },
+        ],
+        isRevealed: Boolean(entry.summary),
+      });
+    });
+  }
+
+  if (!derived.length) {
+    return buildFallbackEvents(cycle);
+  }
+
+  const seen = new Map<string, SeasonalEvent>();
+  for (const event of derived) {
+    if (!seen.has(event.id)) {
+      seen.set(event.id, event);
+    }
+  }
+  return Array.from(seen.values());
+};
+
+const deriveOmenReadings = (history: QuestEventLogEntry[], cycle: number): OmenReading[] => {
+  if (!history.length) {
+    return buildFallbackReadings(cycle);
+  }
+
+  return [...history]
+    .sort((a, b) => b.occurredAt - a.occurredAt)
+    .slice(0, 5)
+    .map((entry, index) => ({
+      id: `reading-${entry.id}-${entry.occurredAt}`,
+      title: entry.name,
+      description: entry.summary || 'The omenarium preserved only fragments of this portent.',
+      confidence: Math.max(30, Math.min(95, 80 - index * 8)),
+      revealedAt: entry.occurredAt,
+      events: [entry.id],
+    }));
 };
 
 interface QuestComputationContext {
@@ -1015,7 +1183,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   }, []);
   const [tutorialFree, setTutorialFree] = useState<Partial<Record<BuildTypeId, number>>>({ farm: 1, house: 1, council_hall: 1 });
   const [isEdictsOpen, setIsEdictsOpen] = useState(false);
-  const [, setIsOmensOpen] = useState(false);
+  const [isOmensOpen, setIsOmensOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [dismissedGuide, setDismissedGuide] = useState(false);
   const [acceptedNotice, setAcceptedNotice] = useState<{ title: string; delta: Record<string, number> } | null>(null);
@@ -1039,6 +1207,9 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   const [roads, setRoads] = useState<Array<{x:number;y:number}>>([]);
   const [crisisStats, setCrisisStats] = useState<CrisisStats>(() => loadCrisisStatsFromStorage());
   const [eventHistory, setEventHistory] = useState<QuestEventLogEntry[]>(() => loadEventLogFromStorage());
+  const [upcomingEvents, setUpcomingEvents] = useState<SeasonalEvent[]>([]);
+  const [omenReadings, setOmenReadings] = useState<OmenReading[]>([]);
+  const lastOmenReadingCycleRef = useRef<number | null>(null);
 
   const appendEvents = useCallback((raw: unknown, fallbackCycle: number) => {
     const sanitized = sanitizeEventLog(raw, fallbackCycle);
@@ -1967,9 +2138,6 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
       ],
     },
   ]), [edicts]);
-  const [upcomingEvents, _setUpcomingEvents] = useState<SeasonalEvent[]>([]);
-  const [omenReadings, _setOmenReadings] = useState<OmenReading[]>([]);
-
   useEffect(() => {
     const onStartRoute = (e: any) => {
       const id = e?.detail?.buildingId as string | undefined;
@@ -2711,6 +2879,22 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
       : 'spring',
     timeRemaining,
   };
+  const derivedUpcomingEvents = useMemo(
+    () => deriveUpcomingEvents(enhancedGameState, eventHistory, gameTime.cycle),
+    [enhancedGameState, eventHistory, gameTime.cycle]
+  );
+  const derivedOmenReadings = useMemo(
+    () => deriveOmenReadings(eventHistory, gameTime.cycle),
+    [eventHistory, gameTime.cycle]
+  );
+
+  useEffect(() => {
+    setUpcomingEvents(derivedUpcomingEvents);
+  }, [derivedUpcomingEvents]);
+
+  useEffect(() => {
+    setOmenReadings(derivedOmenReadings);
+  }, [derivedOmenReadings]);
   const totalAssigned = placedBuildings.reduce((sum, b) => sum + b.workers, 0);
   const totalWorkers = totalAssigned + (simResources?.workers ?? 0);
   const idleWorkers = simResources?.workers ?? 0;
@@ -2799,6 +2983,49 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     state?.founding_charter,
     totalWorkers,
   ]);
+
+  const canRequestOmenReading = resources.mana >= OMEN_READING_COST
+    && (lastOmenReadingCycleRef.current === null || gameTime.cycle > lastOmenReadingCycleRef.current);
+
+  const handleRequestOmenReading = useCallback(() => {
+    if (!state) {
+      notify({ type: 'warning', title: 'Syncing game data', message: 'Please wait for the council ledgers to hydrate.' });
+      return;
+    }
+    if (resources.mana < OMEN_READING_COST) {
+      notify({ type: 'warning', title: 'Insufficient Mana', message: 'Gather more mana before invoking the omenarium.' });
+      return;
+    }
+
+    const manaInState = Number(state.resources?.mana ?? 0);
+    const nextMana = Math.max(0, manaInState - OMEN_READING_COST);
+    const updatedResources = { ...state.resources, mana: nextMana } as Record<string, number>;
+    setState(prev => (prev ? { ...prev, resources: updatedResources } : prev));
+    setSimResources(prev => (prev ? { ...prev, mana: nextMana } : prev));
+    lastOmenReadingCycleRef.current = gameTime.cycle;
+    saveState({ resources: updatedResources }).catch(() => {});
+
+    const surplus = resources.mana - OMEN_READING_COST;
+    const relatedEvents = upcomingEvents.slice(0, 2).map(event => event.id);
+    const reading: OmenReading = {
+      id: `reading-${generateId()}`,
+      title: surplus > 40 ? 'Radiant Convergence' : 'Whispered Warning',
+      description: surplus > 40
+        ? 'Leylines blaze bright enough to steady the wards.'
+        : 'Faint tremors ripple through the wards, urging caution.',
+      confidence: Math.max(45, Math.min(95, 60 + Math.round(surplus / 3))),
+      revealedAt: gameTime.cycle,
+      events: relatedEvents.length ? relatedEvents : ['fallback-eclipse-of-glass'],
+    };
+    setOmenReadings(prev => [reading, ...prev]);
+    notify({ type: 'info', title: 'Omen Scribed', message: 'The augurs inscribe the latest reading into the ledger.' });
+  }, [state, resources.mana, gameTime.cycle, upcomingEvents, notify, saveState, generateId]);
+
+  const handleCloseOmens = useCallback(() => {
+    setIsOmensOpen(false);
+    setUpcomingEvents(derivedUpcomingEvents);
+    setOmenReadings(derivedOmenReadings);
+  }, [derivedUpcomingEvents, derivedOmenReadings]);
 
   const charterOptions = FOUNDING_CHARTERS;
   const pendingCharter = selectedCharterId
@@ -3440,7 +3667,18 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
               }
               if (action === 'open-council') setIsCouncilOpen(true);
               if (action === 'open-edicts') setIsEdictsOpen(true);
-              if (action === 'open-omens') setIsOmensOpen(true);
+              if (action === 'open-omens') {
+                if (isOmensOpen) {
+                  handleCloseOmens();
+                } else {
+                  setUpcomingEvents(derivedUpcomingEvents);
+                  setOmenReadings(derivedOmenReadings);
+                  setIsOmensOpen(true);
+                }
+              }
+              if (action === 'close-omens' || action === 'toggle-omens') {
+                handleCloseOmens();
+              }
               if (action === 'open-settings') setIsSettingsOpen(true);
             }}
             className="absolute inset-0"
@@ -3734,6 +3972,18 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
 
 
       {/* Edicts Panel */}
+      <OmenPanel
+        isOpen={isOmensOpen}
+        onClose={handleCloseOmens}
+        upcomingEvents={upcomingEvents}
+        omenReadings={omenReadings}
+        currentCycle={gameTime.cycle}
+        currentSeason={sanitizeSeason(gameTime.season)}
+        onRequestReading={handleRequestOmenReading}
+        canRequestReading={canRequestOmenReading}
+        readingCost={OMEN_READING_COST}
+        currentMana={resources.mana}
+      />
       <EdictsPanel
         isOpen={isEdictsOpen}
         onClose={() => setIsEdictsOpen(false)}
