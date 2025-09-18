@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { BUILDABLE_TILES, SIM_BUILDINGS } from '../simCatalog';
 import { canAfford } from '../resourceUtils';
 import type { BuildPlacementHintsResult, BuildPlacementInput, BuildPlacementHint } from './types';
+import type { BuildingAvailability } from '../simCatalog';
 
 function buildInsufficientReason(previewTypeId: keyof typeof SIM_BUILDINGS, simResources: BuildPlacementInput['simResources']) {
   if (!simResources) return undefined;
@@ -21,6 +22,26 @@ function buildInsufficientReason(previewTypeId: keyof typeof SIM_BUILDINGS, simR
   return `Insufficient: ${lacking.slice(0, 3).join(', ')}`;
 }
 
+function fallbackPrerequisiteReason(status: BuildingAvailability['status'], uniqueLocked: boolean): string {
+  if (uniqueLocked) {
+    return 'Already constructed';
+  }
+  const parts: string[] = [];
+  if (status.missingSkills.length > 0) {
+    parts.push(`Skills: ${status.missingSkills.join(', ')}`);
+  }
+  if (status.missingQuests.length > 0) {
+    parts.push(`Quests: ${status.missingQuests.join(', ')}`);
+  }
+  if (status.missingEra) {
+    parts.push(`Era: ${status.missingEra}`);
+  }
+  if (parts.length === 0) {
+    return 'Locked';
+  }
+  return `Requires ${parts.join(' • ')}`;
+}
+
 export function useBuildPlacementHints({
   previewTypeId,
   hoverTile,
@@ -28,9 +49,12 @@ export function useBuildPlacementHints({
   placedBuildings,
   tutorialFree,
   simResources,
+  buildingAvailability,
 }: BuildPlacementInput): BuildPlacementHintsResult {
   return useMemo<BuildPlacementHintsResult>(() => {
-    const highlightAllPlaceable = Boolean(previewTypeId);
+    const highlightAllPlaceable = Boolean(
+      previewTypeId && (buildingAvailability[previewTypeId]?.meetsPrerequisites ?? true),
+    );
     const hasCouncil = placedBuildings.some(b => b.typeId === 'council_hall');
     const buildHint: BuildPlacementHint | undefined = (() => {
       if (!previewTypeId) return undefined;
@@ -43,6 +67,13 @@ export function useBuildPlacementHints({
       const allowed = BUILDABLE_TILES[previewTypeId];
       if (allowed && tile.tileType && !allowed.includes(tile.tileType)) {
         return { valid: false, reason: 'Invalid terrain' };
+      }
+
+      const availability = buildingAvailability[previewTypeId];
+      if (availability && !availability.meetsPrerequisites) {
+        const reason = availability.reasons[0]
+          ?? fallbackPrerequisiteReason(availability.status, availability.uniqueLocked);
+        return { valid: false, reason };
       }
 
       const needsCouncil = previewTypeId === 'trade_post' || previewTypeId === 'automation_workshop';
@@ -62,8 +93,9 @@ export function useBuildPlacementHints({
     })();
 
     const isFreeBuild = previewTypeId ? (tutorialFree[previewTypeId] || 0) > 0 : false;
+    const meetsRequirements = previewTypeId ? (buildingAvailability[previewTypeId]?.meetsPrerequisites ?? true) : true;
     const affordable = previewTypeId
-      ? isFreeBuild || (simResources ? canAfford(SIM_BUILDINGS[previewTypeId].cost, simResources) : false)
+      ? meetsRequirements && (isFreeBuild || (simResources ? canAfford(SIM_BUILDINGS[previewTypeId].cost, simResources) : false))
       : false;
 
     return {
@@ -80,6 +112,7 @@ export function useBuildPlacementHints({
     selectedTile,
     simResources,
     tutorialFree,
+    buildingAvailability,
   ]);
 }
 

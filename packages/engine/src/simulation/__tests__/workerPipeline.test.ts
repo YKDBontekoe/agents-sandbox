@@ -14,7 +14,8 @@ const workerResources: SimResources = {
   favor: 8,
   workers: 40,
   wood: 45,
-  planks: 18
+  planks: 18,
+  defense: 0,
 };
 
 describe('runWorkerPipeline', () => {

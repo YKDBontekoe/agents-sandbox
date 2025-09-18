@@ -14,7 +14,8 @@ const baseResources = (): SimResources => ({
   favor: 20,
   workers: 40,
   wood: 80,
-  planks: 40
+  planks: 40,
+  defense: 0,
 });
 
 describe('building production adjustments', () => {

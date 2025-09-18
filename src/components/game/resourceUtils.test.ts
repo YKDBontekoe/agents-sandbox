@@ -32,7 +32,7 @@ describe('applyProduction', () => {
   };
 
   it('produces outputs when inputs are available', () => {
-    const res: SimResources = { grain: 5, coin: 0, mana: 0, favor: 0, workers: 0, wood: 0, planks: 0 };
+    const res: SimResources = { grain: 5, coin: 0, mana: 0, favor: 0, workers: 0, wood: 0, planks: 0, defense: 0 };
     const { updated, shortages } = applyProduction(res, [{ typeId: 'mill', workers: 1 }], catalog);
     expect(updated.grain).toBe(3);
     expect(updated.coin).toBe(1);
@@ -40,7 +40,7 @@ describe('applyProduction', () => {
   });
 
   it('records shortages when inputs are missing', () => {
-    const res: SimResources = { grain: 1, coin: 0, mana: 0, favor: 0, workers: 0, wood: 0, planks: 0 };
+    const res: SimResources = { grain: 1, coin: 0, mana: 0, favor: 0, workers: 0, wood: 0, planks: 0, defense: 0 };
     const { updated, shortages } = applyProduction(res, [{ typeId: 'mill', workers: 1 }], catalog);
     expect(updated.grain).toBe(1);
     expect(updated.coin).toBe(0);
@@ -49,7 +49,7 @@ describe('applyProduction', () => {
 });
 
 describe('canAfford and applyCost', () => {
-  const base: SimResources = { grain: 5, coin: 5, mana: 5, favor: 5, workers: 0, wood: 0, planks: 0 };
+  const base: SimResources = { grain: 5, coin: 5, mana: 5, favor: 5, workers: 0, wood: 0, planks: 0, defense: 0 };
 
   it('determines affordability correctly', () => {
     expect(canAfford({ grain: 3, coin: 2 }, base)).toBe(true);
@@ -174,7 +174,7 @@ function serverSim(
 
 describe('server tick production parity', () => {
   it('matches projectCycleDeltas for sample scenario', () => {
-    const base: SimResources = { grain: 20, coin: 20, mana: 10, favor: 0, workers: 9, wood: 20, planks: 0 };
+    const base: SimResources = { grain: 20, coin: 20, mana: 10, favor: 0, workers: 9, wood: 20, planks: 0, defense: 0 };
     const buildings = [
       { id: 's1', typeId: 'storehouse' },
       { id: 'f1', typeId: 'farm', workers: 5, traits: { waterAdj: 2 } },
@@ -195,7 +195,7 @@ describe('server tick production parity', () => {
 
 describe('projectCycleDeltas modifiers', () => {
   it('scales route coin output by multiplier', () => {
-    const base: SimResources = { grain: 0, coin: 0, mana: 0, favor: 0, workers: 0, wood: 0, planks: 0 };
+    const base: SimResources = { grain: 0, coin: 0, mana: 0, favor: 0, workers: 0, wood: 0, planks: 0, defense: 0 };
     const buildings = [
       { id: 'hub', typeId: 'storehouse' },
       { id: 'farm', typeId: 'farm', workers: 0 },
@@ -211,7 +211,7 @@ describe('projectCycleDeltas modifiers', () => {
   });
 
   it('reduces building input consumption when multiplier is below 1', () => {
-    const base: SimResources = { grain: 0, coin: 10, mana: 0, favor: 0, workers: 5, wood: 0, planks: 0 };
+    const base: SimResources = { grain: 0, coin: 10, mana: 0, favor: 0, workers: 5, wood: 0, planks: 0, defense: 0 };
     const buildings = [{ typeId: 'farm', workers: 5 }];
     const normal = projectCycleDeltas(base, buildings as any, [], SIM_BUILDINGS, { totalWorkers: 5 });
     const reduced = projectCycleDeltas(base, buildings as any, [], SIM_BUILDINGS, {
@@ -223,7 +223,7 @@ describe('projectCycleDeltas modifiers', () => {
   });
 
   it('applies global building and resource multipliers to outputs', () => {
-    const base: SimResources = { grain: 0, coin: 10, mana: 0, favor: 0, workers: 5, wood: 0, planks: 0 };
+    const base: SimResources = { grain: 0, coin: 10, mana: 0, favor: 0, workers: 5, wood: 0, planks: 0, defense: 0 };
     const buildings = [{ typeId: 'farm', workers: 5 }];
     const normal = projectCycleDeltas(base, buildings as any, [], SIM_BUILDINGS, { totalWorkers: 5 });
     const boosted = projectCycleDeltas(base, buildings as any, [], SIM_BUILDINGS, {

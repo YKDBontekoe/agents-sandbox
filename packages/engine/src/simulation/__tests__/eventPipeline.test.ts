@@ -15,7 +15,8 @@ const eventResources: SimResources = {
   favor: 12,
   workers: 45,
   wood: 55,
-  planks: 22
+  planks: 22,
+  defense: 0,
 };
 
 afterEach(() => {

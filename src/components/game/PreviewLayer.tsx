@@ -4,8 +4,7 @@ import { useEffect, useRef } from "react";
 import * as PIXI from "pixi.js";
 import { useGameContext } from "./GameContext";
 import { gridToWorld } from "@/lib/isometric";
-import { SIM_BUILDINGS } from "./simCatalog";
-type BuildTypeId = keyof typeof SIM_BUILDINGS;
+import { SIM_BUILDINGS, BUILDABLE_TILES, type BuildTypeId } from "./simCatalog";
 
 interface PreviewLayerProps {
   hoverTile: { x: number; y: number; tileType?: string } | null;
@@ -46,17 +45,7 @@ export default function PreviewLayer({ hoverTile, selectedTile, tileTypes, build
 
     // Optional: highlight all placeable tiles for current preview type
     if (previewTypeId && highlightAllPlaceable) {
-      const allowedTerrain: Record<BuildTypeId, string[]> = {
-        council_hall: ['grass','mountain'],
-        trade_post: ['grass'],
-        automation_workshop: ['grass'],
-        farm: ['grass'],
-        lumber_camp: ['forest'],
-        sawmill: ['grass'],
-        storehouse: ['grass'],
-        house: ['grass'],
-        shrine: ['grass']
-      };
+      const allowedTerrain = BUILDABLE_TILES;
       const needsCouncil = (previewTypeId === 'trade_post' || previewTypeId === 'automation_workshop');
       const councilOk = !needsCouncil || !!hasCouncil;
       const globallyOk = councilOk && (affordable !== false);
@@ -97,17 +86,7 @@ export default function PreviewLayer({ hoverTile, selectedTile, tileTypes, build
     const occupied = buildings.some(b => b.x === x && b.y === y);
 
     // Terrain validity for current preview type
-    const allowedTerrain: Record<BuildTypeId, string[]> = {
-      council_hall: ['grass','mountain'],
-      trade_post: ['grass'],
-      automation_workshop: ['grass'],
-      farm: ['grass'],
-      lumber_camp: ['forest'],
-      sawmill: ['grass'],
-      storehouse: ['grass'],
-      house: ['grass'],
-      shrine: ['grass']
-    };
+    const allowedTerrain = BUILDABLE_TILES;
     let terrainOk = true;
     if (previewTypeId && tile.tileType) {
       terrainOk = (allowedTerrain[previewTypeId] || []).includes(tile.tileType);

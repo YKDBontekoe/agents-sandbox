@@ -20,7 +20,14 @@ const IntegratedHUDSystem = dynamic(
   { ssr: false }
 );
 import { SimResources, canAfford, applyCost, projectCycleDeltas } from '@/components/game/resourceUtils';
-import { SIM_BUILDINGS, BUILDABLE_TILES } from '@/components/game/simCatalog';
+import {
+  SIM_BUILDINGS,
+  BUILDABLE_TILES,
+  evaluateBuildingAvailability,
+  type BuildingAvailability,
+  type BuildingAvailabilityContext,
+  type BuildTypeId,
+} from '@/components/game/simCatalog';
 import WorkerPanel from '@/components/game/hud/WorkerPanel';
 import { CouncilPanel, CouncilProposal } from '@/components/game/hud/CouncilPanel';
 import { EdictsPanel, EdictSetting } from '@/components/game/hud/EdictsPanel';
@@ -38,6 +45,7 @@ import type { PathHint } from '@/components/game/PathHintsLayer';
 import type { Pulse } from '@/components/game/BuildingPulseLayer';
 import TileInfoPanel from '@/components/game/panels/TileInfoPanel';
 import GameLayers from '@/components/game/GameLayers';
+import { useBuildPlacementHints } from '@/components/game/layers/useBuildPlacementHints';
 import type { CrisisData } from '@/components/game/CrisisModal';
 import GoalBanner from '@/components/game/GoalBanner';
 import OnboardingGuide from '@/components/game/OnboardingGuide';
@@ -59,14 +67,11 @@ import type { CityStats, ManagementTool, ZoneType, ServiceType } from '@/compone
 // layout preferences not used on this page
 import type { GameResources, GameTime } from '@/components/game/hud/types';
 import type { CategoryType } from '@arcane/ui';
-import { simulationSystem, EnhancedGameState, VisualIndicator, FOUNDING_CHARTERS, deriveCharterEffects, type FoundingCharter,   type EraStatus,
+import { simulationSystem, EnhancedGameState, VisualIndicator, FOUNDING_CHARTERS, deriveCharterEffects, ERA_DEFINITIONS, type FoundingCharter, type EraStatus,
   type MilestoneSnapshot } from '@engine';
 import { pauseSimulation, resumeSimulation } from './simulationControls';
 import { TimeSystem, timeSystem, TIME_SPEEDS, GameTime as SystemGameTime, type TimeSpeed } from '@engine';
 import { intervalMsToTimeSpeed, sanitizeIntervalMs } from './timeSpeedUtils';
-
-type BuildTypeId = keyof typeof SIM_BUILDINGS;
-
 const ISO_TILE_WIDTH = 64;
 const ISO_TILE_HEIGHT = 32;
 const LEYLINE_STORAGE_KEY = 'ad_leylines';
@@ -1577,6 +1582,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
         workers: availableWorkers,
         wood: Number((updatedResources as any).wood ?? 0),
         planks: Number((updatedResources as any).planks ?? 0),
+        defense: Number((updatedResources as any).defense ?? 0),
       });
 
       if (charter.perks.mapReveal) {
@@ -2128,6 +2134,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
       workers: (state.workers || 0) - assigned,
       wood: (state.resources as any).wood || 0,
       planks: (state.resources as any).planks || 0,
+      defense: (state.resources as any).defense || 0,
     });
   }, [state]);
 
@@ -2368,6 +2375,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
         workers: (serverState.workers || 0) - assigned,
         wood: (serverState.resources as any).wood || 0,
         planks: (serverState.resources as any).planks || 0,
+        defense: (serverState.resources as any).defense || 0,
       };
       setSimResources(simRes);
       setPlacedBuildings(serverState.buildings);
@@ -2562,6 +2570,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
             wood: next.resources.wood || 0,
             planks: next.resources.planks || 0,
             workers: (next.workers || 0) - assigned,
+            defense: (next.resources as any).defense || 0,
           });
           try { setRoads(((next as any).roads as Array<{x:number;y:number}>) ?? []); } catch {}
           try { if ((next as any).citizens_count) setCitizensCount((next as any).citizens_count as any); } catch {}
@@ -2608,6 +2617,85 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   };
 
   const skillTreeSeed = typeof state?.skill_tree_seed === 'number' ? state.skill_tree_seed : 12345;
+  const skillTree = useMemo(() => generateSkillTree(skillTreeSeed), [skillTreeSeed]);
+  const unlockedSkillNodes = useMemo(
+    () => skillTree.nodes.filter(node => unlockedSkillIds.includes(node.id)),
+    [skillTree, unlockedSkillIds],
+  );
+  const accumulatedSkillEffects = useMemo(
+    () => accumulateEffects(unlockedSkillNodes),
+    [unlockedSkillNodes],
+  );
+  const skillNameMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    skillTree.nodes.forEach(node => {
+      map[node.id] = node.title;
+    });
+    return map;
+  }, [skillTree]);
+  const questTitleMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    QUEST_BLUEPRINTS.forEach(chapter => { map[chapter.id] = chapter.title; });
+    return map;
+  }, []);
+  const eraNameMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    ERA_DEFINITIONS.forEach(era => { map[era.id] = era.name; });
+    return map;
+  }, []);
+  const completedQuestIds = useMemo(() => {
+    const ids: string[] = [];
+    const seen = new Set<string>();
+    if (questState?.chapterOrder) {
+      questState.chapterOrder.forEach(chapterId => {
+        if (seen.has(chapterId)) return;
+        const chapter = questState.chapters?.[chapterId];
+        if (chapter?.status === 'complete') {
+          seen.add(chapterId);
+          ids.push(chapterId);
+        }
+      });
+    }
+    return ids;
+  }, [questState]);
+  const existingBuildingRefs = useMemo(
+    () => placedBuildings.map(b => ({ typeId: b.typeId })),
+    [placedBuildings],
+  );
+  const currentEraId = state?.era?.id ?? null;
+  const buildingAvailability = useMemo<Record<BuildTypeId, BuildingAvailability>>(() => {
+    const ctx: BuildingAvailabilityContext = {
+      unlockedSkills: unlockedSkillIds,
+      completedQuests: completedQuestIds,
+      currentEraId,
+      existingBuildings: existingBuildingRefs,
+      skillLabels: skillNameMap,
+      questLabels: questTitleMap,
+      eraLabels: eraNameMap,
+    };
+    const result = {} as Record<BuildTypeId, BuildingAvailability>;
+    (Object.keys(SIM_BUILDINGS) as BuildTypeId[]).forEach(typeId => {
+      result[typeId] = evaluateBuildingAvailability(typeId, ctx);
+    });
+    return result;
+  }, [
+    completedQuestIds,
+    currentEraId,
+    eraNameMap,
+    existingBuildingRefs,
+    questTitleMap,
+    skillNameMap,
+    unlockedSkillIds,
+  ]);
+  const placementHints = useBuildPlacementHints({
+    previewTypeId,
+    hoverTile,
+    selectedTile,
+    placedBuildings,
+    tutorialFree,
+    simResources,
+    buildingAvailability,
+  });
 
   const currentTime = timeSystem.getCurrentTime();
   const hudCycleFromState = typeof state?.cycle === 'number' && Number.isFinite(state.cycle)
@@ -2658,29 +2746,26 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
 
   const resourceChanges = useMemo(() => {
     if (!simResources) {
-      return { grain: 0, wood: 0, planks: 0, coin: 0, mana: 0, favor: 0, unrest: 0, threat: 0 } as any;
+      return { grain: 0, wood: 0, planks: 0, coin: 0, mana: 0, favor: 0, defense: 0, unrest: 0, threat: 0 } as any;
     }
-    const tree = generateSkillTree(skillTreeSeed);
-    const unlocked = tree.nodes.filter(n => unlockedSkillIds.includes(n.id));
-    const acc = accumulateEffects(unlocked);
     const charterEffects = deriveCharterEffects(state?.founding_charter);
-    const combinedResMul: Record<string, number> = { ...acc.resMul };
+    const combinedResMul: Record<string, number> = { ...accumulatedSkillEffects.resMul };
     for (const [key, value] of Object.entries(charterEffects.resMul)) {
       combinedResMul[key] = (combinedResMul[key] ?? 1) * value;
     }
-    const combinedBldMul: Record<string, number> = { ...acc.bldMul };
+    const combinedBldMul: Record<string, number> = { ...accumulatedSkillEffects.bldMul };
     for (const [key, value] of Object.entries(charterEffects.bldMul)) {
       combinedBldMul[key] = (combinedBldMul[key] ?? 1) * value;
     }
     const modifiers = {
       resourceOutputMultiplier: combinedResMul as any,
       buildingOutputMultiplier: combinedBldMul,
-      upkeepGrainPerWorkerDelta: acc.upkeepDelta + charterEffects.upkeepDelta,
-      globalBuildingOutputMultiplier: acc.globalBuildingMultiplier * charterEffects.globalBuildingMultiplier,
-      globalResourceOutputMultiplier: acc.globalResourceMultiplier * charterEffects.globalResourceMultiplier,
-      routeCoinOutputMultiplier: acc.routeCoinMultiplier * charterEffects.routeCoinMultiplier,
-      patrolCoinUpkeepMultiplier: acc.patrolCoinUpkeepMultiplier * charterEffects.patrolCoinUpkeepMultiplier,
-      buildingInputMultiplier: acc.buildingInputMultiplier * charterEffects.buildingInputMultiplier,
+      upkeepGrainPerWorkerDelta: accumulatedSkillEffects.upkeepDelta + charterEffects.upkeepDelta,
+      globalBuildingOutputMultiplier: accumulatedSkillEffects.globalBuildingMultiplier * charterEffects.globalBuildingMultiplier,
+      globalResourceOutputMultiplier: accumulatedSkillEffects.globalResourceMultiplier * charterEffects.globalResourceMultiplier,
+      routeCoinOutputMultiplier: accumulatedSkillEffects.routeCoinMultiplier * charterEffects.routeCoinMultiplier,
+      patrolCoinUpkeepMultiplier: accumulatedSkillEffects.patrolCoinUpkeepMultiplier * charterEffects.patrolCoinUpkeepMultiplier,
+      buildingInputMultiplier: accumulatedSkillEffects.buildingInputMultiplier * charterEffects.buildingInputMultiplier,
     } as const;
     const { updated } = projectCycleDeltas(simResources, placedBuildings, routes, SIM_BUILDINGS, {
       totalWorkers: totalWorkers,
@@ -2701,10 +2786,19 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
       coin: adjustedUpdated.coin - simResources.coin,
       mana: adjustedUpdated.mana - simResources.mana,
       favor: adjustedUpdated.favor - simResources.favor,
+      defense: adjustedUpdated.defense - simResources.defense,
       unrest: 0,
       threat: 0,
     } as any;
-  }, [simResources, placedBuildings, routes, totalWorkers, edicts, unlockedSkillIds, skillTreeSeed, state?.founding_charter]);
+  }, [
+    accumulatedSkillEffects,
+    edicts,
+    placedBuildings,
+    routes,
+    simResources,
+    state?.founding_charter,
+    totalWorkers,
+  ]);
 
   const charterOptions = FOUNDING_CHARTERS;
   const pendingCharter = selectedCharterId
@@ -2946,22 +3040,23 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
                   favor: 10,
                   workers: 5,
                   wood: 0,
-                  planks: 0
+                  planks: 0,
+                  defense: 0,
                 });
                 // Reset time system
-                 if (timeSystemRef.current) {
-                   timeSystemRef.current.setTime({
-                     year: 2024,
-                     month: 1,
-                     day: 1,
-                     hour: 8,
-                     minute: 0,
-                     totalMinutes: 0
-                   });
-                 }
+                if (timeSystemRef.current) {
+                  timeSystemRef.current.setTime({
+                    year: 2024,
+                    month: 1,
+                    day: 1,
+                    hour: 8,
+                    minute: 0,
+                    totalMinutes: 0,
+                  });
+                }
                 // Save reset state
                 saveState({
-                  resources: { grain: 100, coin: 50, mana: 25, favor: 10, wood: 0, planks: 0, unrest: 0, threat: 0 },
+                  resources: { grain: 100, coin: 50, mana: 25, favor: 10, wood: 0, planks: 0, defense: 0, unrest: 0, threat: 0 },
                   workers: 5,
                   buildings: [],
                   routes: [],
@@ -3003,6 +3098,8 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
               resources={resources}
               cycle={state.cycle ?? 0}
               constructionEvents={constructionEvents}
+              buildingAvailability={buildingAvailability}
+              placementHints={placementHints}
             />
       </GameRenderer>
 
@@ -3244,6 +3341,8 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
             buildings={placedBuildings}
             locked={tooltipLocked}
             onUnlock={() => setTooltipLocked(false)}
+            buildingAvailability={buildingAvailability}
+            buildHint={placementHints.buildHint}
           />
 
           {/* Register modular panels in the right sidebar */}
@@ -3411,6 +3510,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
               placedBuildings={placedBuildings}
               routes={routes || []}
               onPreviewType={(t)=> setPreviewTypeId(t)}
+              buildingAvailability={buildingAvailability}
               onBuild={async (typeId) => {
                 if (!simResources) return;
                 const gx = selectedTile.x, gy = selectedTile.y;
@@ -3420,6 +3520,12 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
                 if (occupied) return;
                 const def = SIM_BUILDINGS[typeId];
                 if (!def) return;
+                const availability = buildingAvailability[typeId];
+                if (availability && !availability.meetsPrerequisites) {
+                  const message = availability.reasons[0] ?? 'Prerequisites not met.';
+                  try { notify({ type: 'error', title: 'Cannot Build', message }); } catch {}
+                  return;
+                }
                 const allowed = (BUILDABLE_TILES as any)[typeId] as string[] | undefined;
                 if (allowed && tt && !allowed.includes(tt)) return;
                 // Enforce Council Hall prerequisite for advanced builds
@@ -3603,7 +3709,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
               tutorialFree={tutorialFree}
               onConsumeTutorialFree={(typeId) => setTutorialFree(prev => ({ ...prev, [typeId]: Math.max(0, (prev[typeId] || 0) - 1) }))}
               onTutorialProgress={(evt) => { if (evt.type === 'openedCouncil' && onboardingStep === 4) setOnboardingStep(5); }}
-              allowFineSawmill={(accumulateEffects(generateSkillTree(skillTreeSeed).nodes.filter(n => unlockedSkillIds.includes(n.id))).bldMul['sawmill'] ?? 1) > 1}
+              allowFineSawmill={(accumulatedSkillEffects.bldMul['sawmill'] ?? 1) > 1}
               onSetRecipe={async (buildingId, recipe) => {
                 const idx = placedBuildings.findIndex(b => b.id === buildingId);
                 if (idx === -1) return;

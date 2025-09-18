@@ -30,7 +30,8 @@ export function createMockResources(overrides: Partial<SimResources> = {}): SimR
     favor: 10,
     workers: 50,
     wood: 80,
-    planks: 40
+    planks: 40,
+    defense: 0,
   };
 
   return { ...base, ...overrides };

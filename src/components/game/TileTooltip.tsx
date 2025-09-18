@@ -4,8 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import * as PIXI from "pixi.js";
 import { useGameContext } from "./GameContext";
 import { gridToWorld } from "@/lib/isometric";
-import { SIM_BUILDINGS } from "./simCatalog";
-type BuildTypeId = keyof typeof SIM_BUILDINGS;
+import { SIM_BUILDINGS, BUILDABLE_TILES, type BuildTypeId, type BuildingAvailability } from "./simCatalog";
+import type { BuildPlacementHint } from "./layers/types";
 
 interface TileTooltipProps {
   hoverTile: { x: number; y: number; tileType?: string } | null;
@@ -17,9 +17,23 @@ interface TileTooltipProps {
   onUnlock: () => void;
   tileWidth?: number;
   tileHeight?: number;
+  buildingAvailability: Record<BuildTypeId, BuildingAvailability>;
+  buildHint?: BuildPlacementHint;
 }
 
-export default function TileTooltip({ hoverTile, selectedTile, previewTypeId, tileTypes, buildings, locked, onUnlock, tileWidth = 64, tileHeight = 32 }: TileTooltipProps) {
+export default function TileTooltip({
+  hoverTile,
+  selectedTile,
+  previewTypeId,
+  tileTypes,
+  buildings,
+  locked,
+  onUnlock,
+  tileWidth = 64,
+  tileHeight = 32,
+  buildingAvailability,
+  buildHint,
+}: TileTooltipProps) {
   const { viewport } = useGameContext();
   const target = useMemo(() => (locked ? selectedTile : (hoverTile || selectedTile)), [locked, hoverTile, selectedTile]);
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
@@ -36,10 +50,12 @@ export default function TileTooltip({ hoverTile, selectedTile, previewTypeId, ti
 
   const occupied = buildings.some(b => b.x === target.x && b.y === target.y);
   const tt = target.tileType ?? tileTypes[target.y]?.[target.x];
-  const validTerrain: Record<BuildTypeId, string[]> = {
-    council_hall: ['grass','mountain'], trade_post: ['grass'], automation_workshop: ['grass'], farm: ['grass'], lumber_camp: ['forest'], sawmill: ['grass'], storehouse: ['grass'], house: ['grass'], shrine: ['grass']
-  };
-  const placeable = previewTypeId ? (!!tt && (validTerrain[previewTypeId] || []).includes(tt)) : !occupied;
+  const placeableTerrain = previewTypeId ? (!!tt && (BUILDABLE_TILES[previewTypeId] || []).includes(tt)) : !occupied;
+  const availability = previewTypeId ? buildingAvailability[previewTypeId] : undefined;
+  const prerequisitesMet = previewTypeId ? (availability?.meetsPrerequisites ?? true) : true;
+  const placeable = previewTypeId ? placeableTerrain && prerequisitesMet && !occupied : !occupied;
+  const reasons = availability?.reasons ?? [];
+  const primaryReason = buildHint?.valid === false ? buildHint.reason : reasons[0];
 
   return (
     <div
@@ -63,7 +79,21 @@ export default function TileTooltip({ hoverTile, selectedTile, previewTypeId, ti
         {previewTypeId && (
           <div className="mt-1 flex items-center gap-2">
             <span>Preview:</span>
-            <span className={`px-1 rounded ${placeable && !occupied ? 'bg-emerald-900/30 text-emerald-300' : 'bg-rose-900/30 text-rose-300'}`}>{placeable && !occupied ? 'Placeable' : 'Blocked'}</span>
+            <span className={`px-1 rounded ${placeable ? 'bg-emerald-900/30 text-emerald-300' : 'bg-rose-900/30 text-rose-300'}`}>
+              {placeable ? 'Placeable' : 'Blocked'}
+            </span>
+          </div>
+        )}
+        {!placeable && (primaryReason || reasons.length > 0) && (
+          <div className="mt-1 text-[11px] text-rose-300">
+            {primaryReason}
+            {reasons.length > 1 && (
+              <ul className="mt-0.5 list-disc list-inside space-y-0.5 text-rose-200">
+                {reasons.slice(primaryReason ? 1 : 0).map(reason => (
+                  <li key={reason}>{reason}</li>
+                ))}
+              </ul>
+            )}
           </div>
         )}
       </div>

@@ -72,6 +72,7 @@ describe('WorkerSimulationSystem integration', () => {
       workers: 1,
       wood: 50,
       planks: 20,
+      defense: 0,
     };
 
     system.updateSystem(

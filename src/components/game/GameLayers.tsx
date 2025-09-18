@@ -20,12 +20,11 @@ import type { GameResources } from './hud/types';
 
 import type { VisualIndicator } from '@engine';
 
-import type { BuildTypeId } from './panels/TileInfoPanel';
+import type { BuildTypeId, BuildingAvailability } from './simCatalog';
 
 import ConnectedBuildingsLayer from './layers/ConnectedBuildingsLayer';
-import { useBuildPlacementHints } from './layers/useBuildPlacementHints';
 import { useLayerDatasets } from './layers/useLayerDatasets';
-import type { Marker, StoredBuilding, TileSelection, TradeRoute } from './layers/types';
+import type { Marker, StoredBuilding, TileSelection, TradeRoute, BuildPlacementHintsResult } from './layers/types';
 
 export interface GameLayersProps {
   tileTypes: string[][];
@@ -66,6 +65,8 @@ export interface GameLayersProps {
     type: 'building' | 'upgrading' | 'demolishing';
     timestamp: number;
   }>;
+  buildingAvailability: Record<BuildTypeId, BuildingAvailability>;
+  placementHints: BuildPlacementHintsResult;
 }
 
 const GameLayers: React.FC<GameLayersProps> = ({
@@ -101,15 +102,9 @@ const GameLayers: React.FC<GameLayersProps> = ({
   resources,
   cycle,
   constructionEvents,
+  buildingAvailability,
+  placementHints,
 }) => {
-  const placementHints = useBuildPlacementHints({
-    previewTypeId,
-    hoverTile,
-    selectedTile,
-    placedBuildings,
-    tutorialFree,
-    simResources,
-  });
 
   const { buildings, storeConnectedIds, routeDefs, routeBuildings, workingCitizens } = useLayerDatasets({
     placedBuildings,

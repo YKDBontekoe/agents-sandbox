@@ -16,7 +16,8 @@ const ampleResources: SimResources = {
   favor: 50,
   workers: 50,
   wood: 200,
-  planks: 200
+  planks: 200,
+  defense: 0,
 };
 
 describe('building maintenance calculations', () => {

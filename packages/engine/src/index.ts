@@ -1,25 +1,6 @@
 import { deriveSkillEffects, type AccumulatedSkillEffects } from './skills/modifiers';
 import { evaluateEra, type EraStatus, type EraProgressMetrics } from './progression/eraSystem';
-
-export interface SimResources {
-  grain: number;
-  coin: number;
-  mana: number;
-  favor: number;
-  workers: number;
-  wood: number;
-  planks: number;
-}
-
-export interface SimBuildingType {
-  id: string;
-  name: string;
-  cost: Partial<SimResources>;
-  inputs: Partial<SimResources>;
-  outputs: Partial<SimResources>;
-  workCapacity?: number;
-  maxLevel?: number;
-}
+import type { AggregatedBuildingPassives, SimBuildingType } from './simulation/buildingCatalog';
 
 export interface Proposal {
   id: string;
@@ -262,7 +243,7 @@ export function applyProposals(state: GameState, proposals: Proposal[]): GameSta
 export function produceBuildings(
   state: GameState,
   catalog: Record<string, SimBuildingType>,
-): { resources: Record<string, number>; workers: number; skillEffects: AccumulatedSkillEffects } {
+): { resources: Record<string, number>; workers: number; skillEffects: AccumulatedSkillEffects; passiveEffects: AggregatedBuildingPassives } {
   const resources: Record<string, number> = { ...state.resources };
   let workers = Number(state.workers ?? 0);
   const buildings: BuildingData[] = Array.isArray(state.buildings) ? state.buildings : [];
@@ -274,6 +255,62 @@ export function produceBuildings(
     seed: typeof state.skill_tree_seed === 'number' ? state.skill_tree_seed : undefined,
   });
   const charterEffects = deriveCharterEffects(state.founding_charter);
+  const passiveEffects: AggregatedBuildingPassives = {
+    resMul: {},
+    bldMul: {},
+    globalBuildingMultiplier: 1,
+    globalResourceMultiplier: 1,
+    routeCoinMultiplier: 1,
+    patrolCoinUpkeepMultiplier: 1,
+    buildingInputMultiplier: 1,
+    tickAdjustments: {},
+    upkeepDelta: 0,
+  };
+  for (const b of buildings) {
+    const typeId = String(b.typeId || '');
+    const def = catalog[typeId];
+    if (!def?.passiveEffects) continue;
+    const pass = def.passiveEffects;
+    if (pass.resourceMultipliers) {
+      for (const [key, value] of Object.entries(pass.resourceMultipliers)) {
+        const factor = Number(value);
+        if (!Number.isFinite(factor) || factor <= 0) continue;
+        passiveEffects.resMul[key] = (passiveEffects.resMul[key] ?? 1) * factor;
+      }
+    }
+    if (pass.buildingMultipliers) {
+      for (const [key, value] of Object.entries(pass.buildingMultipliers)) {
+        const factor = Number(value);
+        if (!Number.isFinite(factor) || factor <= 0) continue;
+        passiveEffects.bldMul[key] = (passiveEffects.bldMul[key] ?? 1) * factor;
+      }
+    }
+    if (typeof pass.globalBuildingMultiplier === 'number' && Number.isFinite(pass.globalBuildingMultiplier) && pass.globalBuildingMultiplier > 0) {
+      passiveEffects.globalBuildingMultiplier *= pass.globalBuildingMultiplier;
+    }
+    if (typeof pass.globalResourceMultiplier === 'number' && Number.isFinite(pass.globalResourceMultiplier) && pass.globalResourceMultiplier > 0) {
+      passiveEffects.globalResourceMultiplier *= pass.globalResourceMultiplier;
+    }
+    if (typeof pass.routeCoinMultiplier === 'number' && Number.isFinite(pass.routeCoinMultiplier) && pass.routeCoinMultiplier > 0) {
+      passiveEffects.routeCoinMultiplier *= pass.routeCoinMultiplier;
+    }
+    if (typeof pass.patrolCoinUpkeepMultiplier === 'number' && Number.isFinite(pass.patrolCoinUpkeepMultiplier) && pass.patrolCoinUpkeepMultiplier > 0) {
+      passiveEffects.patrolCoinUpkeepMultiplier *= pass.patrolCoinUpkeepMultiplier;
+    }
+    if (typeof pass.buildingInputMultiplier === 'number' && Number.isFinite(pass.buildingInputMultiplier) && pass.buildingInputMultiplier > 0) {
+      passiveEffects.buildingInputMultiplier *= pass.buildingInputMultiplier;
+    }
+    if (typeof pass.upkeepDelta === 'number' && Number.isFinite(pass.upkeepDelta)) {
+      passiveEffects.upkeepDelta += pass.upkeepDelta;
+    }
+    if (pass.tickResourceAdjustments) {
+      for (const [key, delta] of Object.entries(pass.tickResourceAdjustments)) {
+        const amount = Number(delta);
+        if (!Number.isFinite(amount) || amount === 0) continue;
+        passiveEffects.tickAdjustments[key] = (passiveEffects.tickAdjustments[key] ?? 0) + amount;
+      }
+    }
+  }
   const {
     resMul,
     bldMul,
@@ -291,11 +328,17 @@ export function produceBuildings(
   for (const [key, value] of Object.entries(charterEffects.bldMul)) {
     combinedBldMul[key] = (combinedBldMul[key] ?? 1) * value;
   }
-  const globalBuildingMultiplier = skillGlobalBuildingMultiplier * charterEffects.globalBuildingMultiplier;
-  const globalResourceMultiplier = skillGlobalResourceMultiplier * charterEffects.globalResourceMultiplier;
-  const routeCoinMultiplier = (0.8 + (tariffValue * 0.006)) * skillRouteCoinMultiplier * charterEffects.routeCoinMultiplier;
-  const patrolCoinUpkeepMultiplier = skillPatrolCoinUpkeepMultiplier * charterEffects.patrolCoinUpkeepMultiplier;
-  const buildingInputMultiplier = skillBuildingInputMultiplier * charterEffects.buildingInputMultiplier;
+  for (const [key, value] of Object.entries(passiveEffects.resMul)) {
+    combinedResMul[key] = (combinedResMul[key] ?? 1) * value;
+  }
+  for (const [key, value] of Object.entries(passiveEffects.bldMul)) {
+    combinedBldMul[key] = (combinedBldMul[key] ?? 1) * value;
+  }
+  const globalBuildingMultiplier = skillGlobalBuildingMultiplier * charterEffects.globalBuildingMultiplier * passiveEffects.globalBuildingMultiplier;
+  const globalResourceMultiplier = skillGlobalResourceMultiplier * charterEffects.globalResourceMultiplier * passiveEffects.globalResourceMultiplier;
+  const routeCoinMultiplier = (0.8 + (tariffValue * 0.006)) * skillRouteCoinMultiplier * charterEffects.routeCoinMultiplier * passiveEffects.routeCoinMultiplier;
+  const patrolCoinUpkeepMultiplier = skillPatrolCoinUpkeepMultiplier * charterEffects.patrolCoinUpkeepMultiplier * passiveEffects.patrolCoinUpkeepMultiplier;
+  const buildingInputMultiplier = skillBuildingInputMultiplier * charterEffects.buildingInputMultiplier * passiveEffects.buildingInputMultiplier;
   const byId = new Map<string, BuildingData>(buildings.map(b => [String(b.id), b]));
   const connectedToStorehouse = new Set<string>();
   if (routes.length > 0) {
@@ -411,12 +454,19 @@ export function produceBuildings(
       resources.coin = Math.max(0, Number(resources.coin ?? 0) - patrolCost);
     }
   }
-  return { resources, workers, skillEffects };
+  if (Object.keys(passiveEffects.tickAdjustments).length > 0) {
+    for (const [key, delta] of Object.entries(passiveEffects.tickAdjustments)) {
+      const current = Number(resources[key] ?? 0);
+      const next = current + Number(delta ?? 0);
+      resources[key] = Math.max(0, Math.round(next));
+    }
+  }
+  return { resources, workers, skillEffects, passiveEffects };
 }
 
 export function processTick(state: GameState, proposals: Proposal[], catalog: Record<string, SimBuildingType>): TickResult {
   const afterProps = applyProposals(state, proposals);
-  const { resources, workers, skillEffects } = produceBuildings(afterProps, catalog);
+  const { resources, workers, skillEffects, passiveEffects } = produceBuildings(afterProps, catalog);
   const toTwoDecimals = (value: number): number => Math.round(value * 100) / 100;
   const citySize = Array.isArray(afterProps.buildings) ? afterProps.buildings.length : 0;
   const questsCompleted = Math.max(0, Math.round(Number(afterProps.quests_completed ?? 0)));
@@ -441,7 +491,7 @@ export function processTick(state: GameState, proposals: Proposal[], catalog: Re
   resources.unrest = Math.max(0, currentUnrest + unrestDelta);
   resources.threat = Math.max(0, currentThreat + threatDelta);
   const charterEffects = deriveCharterEffects(afterProps.founding_charter ?? state.founding_charter);
-  const upkeepRate = Math.max(0, 0.2 + skillEffects.upkeepDelta + charterEffects.upkeepDelta);
+  const upkeepRate = Math.max(0, 0.2 + skillEffects.upkeepDelta + charterEffects.upkeepDelta + (passiveEffects.upkeepDelta ?? 0));
   const upkeep = Math.max(0, Math.round(workers * upkeepRate));
   if (upkeep > 0) {
     resources.grain = Math.max(0, Number(resources.grain ?? 0) - upkeep);

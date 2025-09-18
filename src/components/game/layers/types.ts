@@ -1,4 +1,4 @@
-import type { BuildTypeId } from '../panels/TileInfoPanel';
+import type { BuildTypeId, BuildingAvailability } from '../simCatalog';
 import type { SimResources } from '../resourceUtils';
 import type { SimpleBuilding } from '../types';
 import type { RouteDef, RouteBuildingRef } from '../../../../apps/web/features/routes';
@@ -50,6 +50,7 @@ export interface BuildPlacementInput {
   placedBuildings: StoredBuilding[];
   tutorialFree: Partial<Record<BuildTypeId, number>>;
   simResources: SimResources | null;
+  buildingAvailability: Record<BuildTypeId, BuildingAvailability>;
 }
 
 export interface LayerBuilding extends SimpleBuilding {
