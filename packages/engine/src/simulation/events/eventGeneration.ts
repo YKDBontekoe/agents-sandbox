@@ -4,7 +4,8 @@ import type {
   EventImpact,
   EventType,
   SystemState,
-  VisualIndicator
+  VisualIndicator,
+  EventEraPrerequisites
 } from './types';
 
 export type RandomFn = () => number;
@@ -20,10 +21,16 @@ export interface EventCandidate {
 
 export type IndicatorPayload = Omit<VisualIndicator, 'id'>;
 
+export interface EraContext {
+  id: string;
+  stageIndex: number;
+}
+
 export function adjustEventProbability(
   eventType: EventType,
   baseProbability: number,
-  state: SystemState
+  state: SystemState,
+  eraContext?: EraContext
 ): number {
   let probability = baseProbability;
 
@@ -42,12 +49,39 @@ export function adjustEventProbability(
     case 'technological_breakthrough':
       if (state.resources > 60) probability *= 1.2;
       break;
+    case 'void_rift':
+      if ((eraContext?.stageIndex ?? 0) >= 2) probability *= 1.4;
+      if (state.stability < 50) probability *= 1.3;
+      break;
+    case 'astral_alignment':
+      if ((eraContext?.stageIndex ?? 0) >= 2) probability *= 1.2;
+      if (state.infrastructure > 60) probability *= 1.1;
+      break;
+    case 'council_schism':
+      if (state.happiness < 35) probability *= 1.4;
+      if ((eraContext?.stageIndex ?? 0) >= 1) probability *= 1.2;
+      break;
     default:
       break;
   }
 
   return Math.min(probability, 1);
 }
+
+const eraAllowsEvent = (prereq: EventEraPrerequisites | undefined, eraContext?: EraContext): boolean => {
+  if (!prereq) return true;
+  if (!eraContext) return false;
+  if (prereq.allowedEraIds && !prereq.allowedEraIds.includes(eraContext.id)) {
+    return false;
+  }
+  if (typeof prereq.minStage === 'number' && eraContext.stageIndex < prereq.minStage) {
+    return false;
+  }
+  if (typeof prereq.maxStage === 'number' && eraContext.stageIndex > prereq.maxStage) {
+    return false;
+  }
+  return true;
+};
 
 export function shouldActivateTrigger(condition: string, state: SystemState): boolean {
   switch (condition) {
@@ -104,12 +138,14 @@ export function generateEventCandidates({
   systemState,
   activeEvents,
   eventDefinitions,
-  random = Math.random
+  random = Math.random,
+  eraContext
 }: {
   systemState: SystemState;
   activeEvents: Iterable<ActiveEvent>;
   eventDefinitions: Record<EventType, EventDefinition>;
   random?: RandomFn;
+  eraContext?: EraContext;
 }): EventCandidate[] {
   const candidates: EventCandidate[] = [];
 
@@ -117,10 +153,14 @@ export function generateEventCandidates({
     EventType,
     EventDefinition
   ]>) {
+    if (!eraAllowsEvent(definition.eraPrerequisites, eraContext)) {
+      continue;
+    }
     const adjustedProbability = adjustEventProbability(
       eventType,
       definition.impact.probability,
-      systemState
+      systemState,
+      eraContext
     );
 
     if (random() < adjustedProbability) {
@@ -142,6 +182,7 @@ export function generateEventCandidates({
 
       const definition = eventDefinitions[trigger.eventType];
       if (!definition) continue;
+      if (!eraAllowsEvent(definition.eraPrerequisites, eraContext)) continue;
 
       candidates.push({
         type: trigger.eventType,

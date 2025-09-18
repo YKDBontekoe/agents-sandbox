@@ -1,4 +1,5 @@
 import { deriveSkillEffects, type AccumulatedSkillEffects } from './skills/modifiers';
+import { evaluateEra, type EraStatus, type EraProgressMetrics } from './progression/eraSystem';
 
 export interface SimResources {
   grain: number;
@@ -48,6 +49,8 @@ export interface RouteData {
   length?: number;
 }
 
+export type MilestoneSnapshot = EraProgressMetrics;
+
 export interface GameState {
   id: string;
   cycle: number;
@@ -69,6 +72,9 @@ export interface GameState {
   auto_ticking?: boolean;
   last_tick_at?: string; // ISO timestamp
   tick_interval_ms?: number;
+  quests_completed?: number;
+  milestones?: MilestoneSnapshot;
+  era?: EraStatus;
 }
 
 export interface TickCrisis {
@@ -239,10 +245,29 @@ export function produceBuildings(
 export function processTick(state: GameState, proposals: Proposal[], catalog: Record<string, SimBuildingType>): TickResult {
   const afterProps = applyProposals(state, proposals);
   const { resources, workers, skillEffects } = produceBuildings(afterProps, catalog);
-  const unrestThreatDecay = 1 + Math.floor(afterProps.cycle / 10);
-  resources.mana = Math.max(0, Number(resources.mana ?? 0) - 5);
-  resources.unrest = Math.max(0, Number(resources.unrest ?? 0) + unrestThreatDecay);
-  resources.threat = Math.max(0, Number(resources.threat ?? 0) + unrestThreatDecay);
+  const toTwoDecimals = (value: number): number => Math.round(value * 100) / 100;
+  const citySize = Array.isArray(afterProps.buildings) ? afterProps.buildings.length : 0;
+  const questsCompleted = Math.max(0, Math.round(Number(afterProps.quests_completed ?? 0)));
+  const currentUnrest = Number(resources.unrest ?? afterProps.resources?.unrest ?? 0);
+  const currentThreat = Number(resources.threat ?? afterProps.resources?.threat ?? 0);
+  const currentMana = Number(resources.mana ?? afterProps.resources?.mana ?? 0);
+  const currentFavor = Number(resources.favor ?? afterProps.resources?.favor ?? 0);
+  const eraStatus = evaluateEra({
+    cycle: Number(afterProps.cycle ?? 0),
+    citySize,
+    questsCompleted,
+    unrest: currentUnrest,
+    threat: currentThreat,
+    manaReserve: currentMana,
+    favor: currentFavor,
+  });
+  const effectivePressures = eraStatus.pressures.effective;
+  const manaDrain = Math.max(0, toTwoDecimals(effectivePressures.manaUpkeep));
+  const unrestPressure = Math.max(0, toTwoDecimals(effectivePressures.unrest));
+  const threatPressure = Math.max(0, toTwoDecimals(effectivePressures.threat));
+  resources.mana = Math.max(0, currentMana - manaDrain);
+  resources.unrest = Math.max(0, currentUnrest + unrestPressure);
+  resources.threat = Math.max(0, currentThreat + threatPressure);
   const upkeepRate = Math.max(0, 0.2 + skillEffects.upkeepDelta);
   const upkeep = Math.max(0, Math.round(workers * upkeepRate));
   if (upkeep > 0) {
@@ -269,9 +294,37 @@ export function processTick(state: GameState, proposals: Proposal[], catalog: Re
   }
   const newCycle = Number(state.cycle) + 1;
   const newMax = Math.max(Number(state.max_cycle ?? 0), newCycle);
-  const nextState: GameState = { ...afterProps, resources, workers, cycle: newCycle, max_cycle: newMax };
+  const milestones: MilestoneSnapshot = {
+    citySize: eraStatus.progress.citySize,
+    questsCompleted: eraStatus.progress.questsCompleted,
+    stability: eraStatus.progress.stability,
+    manaReserve: eraStatus.progress.manaReserve,
+    favor: eraStatus.progress.favor,
+  };
+  const nextState: GameState = {
+    ...afterProps,
+    resources,
+    workers,
+    cycle: newCycle,
+    max_cycle: newMax,
+    quests_completed: questsCompleted,
+    milestones,
+    era: eraStatus,
+  };
   return { state: nextState, crisis };
 }
+
+export { evaluateEra, ERA_DEFINITIONS } from './progression/eraSystem';
+export type {
+  EraStatus,
+  EraDefinition,
+  EraGoalState,
+  EraMitigationState,
+  EraPressuresSummary,
+  EraPressureValues,
+  EraPreview,
+  EraProgressMetrics,
+} from './progression/eraSystem';
 
 // Export shared types
 export * from './types/gameTime';

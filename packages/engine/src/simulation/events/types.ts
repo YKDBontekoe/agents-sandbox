@@ -14,7 +14,10 @@ export type EventType =
   | 'construction_boom'
   | 'market_day'
   | 'cultural_event'
-  | 'infrastructure_upgrade';
+  | 'infrastructure_upgrade'
+  | 'void_rift'
+  | 'astral_alignment'
+  | 'council_schism';
 
 export type EventSeverity = 'minor' | 'moderate' | 'major' | 'critical';
 
@@ -39,6 +42,23 @@ export interface EventImpact {
   probability: number; // chance of occurring per cycle
 }
 
+export interface EventEraPrerequisites {
+  allowedEraIds?: string[];
+  minStage?: number;
+  maxStage?: number;
+}
+
+export interface EventResolutionEffect {
+  description: string;
+  unlockMitigationId?: string;
+  questsCompletedDelta?: number;
+  pressureAdjustments?: {
+    unrest?: number;
+    threat?: number;
+    manaUpkeep?: number;
+  };
+}
+
 export interface ActiveEvent {
   id: string;
   type: EventType;
@@ -49,6 +69,8 @@ export interface ActiveEvent {
   startCycle: number;
   endCycle: number;
   isActive: boolean;
+  eraPrerequisites?: EventEraPrerequisites;
+  resolution?: EventResolutionEffect;
 
   // Visual and UI properties
   iconType: 'warning' | 'positive' | 'neutral' | 'critical';

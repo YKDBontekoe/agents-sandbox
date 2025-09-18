@@ -59,7 +59,12 @@ import type { CityStats, ManagementTool, ZoneType, ServiceType } from '@/compone
 // layout preferences not used on this page
 import type { GameResources, GameTime } from '@/components/game/hud/types';
 import type { CategoryType } from '@arcane/ui';
-import { simulationSystem, EnhancedGameState } from '@engine'
+import {
+  simulationSystem,
+  EnhancedGameState,
+  type EraStatus,
+  type MilestoneSnapshot
+} from '@engine'
 import { VisualIndicator } from '@engine';
 import { pauseSimulation, resumeSimulation } from './simulationControls';
 import { TimeSystem, timeSystem, TIME_SPEEDS, GameTime as SystemGameTime, type TimeSpeed } from '@engine';
@@ -107,6 +112,9 @@ interface GameState {
   skills?: string[];
   skill_tree_seed?: number;
   pinned_skill_targets?: string[];
+  quests_completed?: number;
+  milestones?: MilestoneSnapshot;
+  era?: EraStatus;
 }
 
 interface TradeRoute {
@@ -1761,7 +1769,9 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
         const simulationInput = {
           buildings: serverState.buildings,
           resources: simRes,
-          gameTime: timeSystem.getCurrentTime()
+          gameTime: timeSystem.getCurrentTime(),
+          era: serverState.era,
+          milestones: serverState.milestones,
         };
         const enhancedState = simulationSystem.updateSimulation(simulationInput, 1.0);
         setEnhancedGameState(enhancedState);
@@ -2114,7 +2124,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   return (
     <div className="h-dvh w-full bg-gray-900 overflow-hidden relative">
       <div className="relative flex flex-col min-w-0 h-full">
-        <GoalBanner />
+        <GoalBanner era={state?.era} milestones={state?.milestones} questsCompleted={state?.quests_completed} />
         <div className="flex-1 relative min-h-0">
         {mapSizeModalOpen && (
           <div className="absolute inset-0 z-[20000] bg-black/60 flex items-center justify-center">

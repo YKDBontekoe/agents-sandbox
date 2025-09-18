@@ -1,4 +1,5 @@
 import type { SimResources } from '../../index';
+import type { EraStatus } from '../../progression/eraSystem';
 import type { SimulatedBuilding } from '../buildings';
 import type { Citizen } from '../citizens/citizen';
 import type { WorkerProfile } from '../workers/types';
@@ -16,7 +17,12 @@ import {
   computeSystemState,
   type SimulationSnapshot
 } from './systemState';
-import { buildEventIndicator, generateEventCandidates, type EventCandidate } from './eventGeneration';
+import {
+  buildEventIndicator,
+  generateEventCandidates,
+  type EventCandidate,
+  type EraContext
+} from './eventGeneration';
 
 export class EventManager {
   private activeEvents: Map<string, ActiveEvent> = new Map();
@@ -24,17 +30,28 @@ export class EventManager {
   private visualIndicators: Map<string, VisualIndicator> = new Map();
   private systemState: SystemState = { ...DEFAULT_SYSTEM_STATE };
   private eventIdCounter = 0;
+  private eraContext: EraContext | null = null;
 
   // Update events system each cycle
-  updateEvents(gameTime: GameTime, gameState: SimulationSnapshot): void {
+  updateEvents(
+    gameTime: GameTime,
+    gameState: SimulationSnapshot,
+    options?: { era?: EraStatus }
+  ): void {
     this.systemState = computeSystemState(gameState);
+    if (options?.era) {
+      this.eraContext = { id: options.era.id, stageIndex: options.era.stageIndex };
+    } else {
+      this.eraContext = null;
+    }
 
     this.processActiveEvents(gameTime);
 
     const candidates = generateEventCandidates({
       systemState: this.systemState,
       activeEvents: this.activeEvents.values(),
-      eventDefinitions: EVENT_DEFINITIONS
+      eventDefinitions: EVENT_DEFINITIONS,
+      eraContext: this.eraContext ?? undefined
     });
 
     for (const candidate of candidates) {
