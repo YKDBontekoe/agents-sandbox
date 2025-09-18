@@ -59,13 +59,8 @@ import type { CityStats, ManagementTool, ZoneType, ServiceType } from '@/compone
 // layout preferences not used on this page
 import type { GameResources, GameTime } from '@/components/game/hud/types';
 import type { CategoryType } from '@arcane/ui';
-import {
-  simulationSystem,
-  EnhancedGameState,
-  type EraStatus,
-  type MilestoneSnapshot
-} from '@engine'
-import { VisualIndicator } from '@engine';
+import { simulationSystem, EnhancedGameState, VisualIndicator, FOUNDING_CHARTERS, deriveCharterEffects, type FoundingCharter,   type EraStatus,
+  type MilestoneSnapshot } from '@engine';
 import { pauseSimulation, resumeSimulation } from './simulationControls';
 import { TimeSystem, timeSystem, TIME_SPEEDS, GameTime as SystemGameTime, type TimeSpeed } from '@engine';
 import { intervalMsToTimeSpeed, sanitizeIntervalMs } from './timeSpeedUtils';
@@ -87,6 +82,95 @@ const nowMs = () => (typeof performance !== 'undefined' ? performance.now() : Da
 
 const arraysEqual = (a: string[], b: string[]) =>
   a.length === b.length && a.every((value, index) => value === b[index]);
+
+
+const computeCharterSeed = (id: string): number => {
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) {
+    hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
+  }
+  return hash % 1_000_000_000;
+};
+
+const formatResourceSummary = (resources: Partial<Record<string, number>>): string =>
+  Object.entries(resources)
+    .filter((entry): entry is [string, number] => {
+      const value = entry[1];
+      return typeof value === 'number' && Number.isFinite(value);
+    })
+    .map(([key, value]) => `${key} ${value >= 0 ? '+' : ''}${value}`)
+    .join(', ');
+
+const describeMultiplier = (value: number, label: string): string | null => {
+  if (!Number.isFinite(value) || value === 1) return null;
+  const delta = Math.round((value - 1) * 100);
+  if (delta === 0) return null;
+  return `${label} ${delta > 0 ? '+' : ''}${delta}%`;
+};
+
+const getCharterPerkSummary = (charter: FoundingCharter): string[] => {
+  const lines: string[] = [];
+  const perks = charter.perks;
+  if (perks.startingResources && Object.keys(perks.startingResources).length > 0) {
+    lines.push(`Start with ${formatResourceSummary(perks.startingResources)}`);
+  }
+  if (perks.startingBuildings && perks.startingBuildings.length > 0) {
+    const buildings = perks.startingBuildings
+      .map(b => SIM_BUILDINGS[b.typeId as keyof typeof SIM_BUILDINGS]?.name || b.typeId)
+      .join(', ');
+    lines.push(`Free structures: ${buildings}`);
+  }
+  if (perks.resourceOutputMultipliers) {
+    for (const [resource, multiplier] of Object.entries(perks.resourceOutputMultipliers)) {
+      const summary = describeMultiplier(multiplier, `${resource} yields`);
+      if (summary) lines.push(summary);
+    }
+  }
+  if (perks.buildingOutputMultipliers) {
+    for (const [typeId, multiplier] of Object.entries(perks.buildingOutputMultipliers)) {
+      const name = SIM_BUILDINGS[typeId as keyof typeof SIM_BUILDINGS]?.name || typeId;
+      const summary = describeMultiplier(multiplier, `${name} output`);
+      if (summary) lines.push(summary);
+    }
+  }
+  const globalBuildingSummary = describeMultiplier(perks.globalBuildingOutputMultiplier ?? 1, 'All buildings output');
+  if (globalBuildingSummary) lines.push(globalBuildingSummary);
+  const globalResourceSummary = describeMultiplier(perks.globalResourceOutputMultiplier ?? 1, 'All resource yields');
+  if (globalResourceSummary) lines.push(globalResourceSummary);
+  if (typeof perks.buildingInputMultiplier === 'number' && Number.isFinite(perks.buildingInputMultiplier) && perks.buildingInputMultiplier !== 1) {
+    const delta = Math.round((1 - perks.buildingInputMultiplier) * 100);
+    if (delta > 0) {
+      lines.push(`Input costs reduced ${delta}%`);
+    } else {
+      lines.push(`Input costs increased ${Math.abs(delta)}%`);
+    }
+  }
+  if (typeof perks.routeCoinOutputMultiplier === 'number' && perks.routeCoinOutputMultiplier !== 1) {
+    const summary = describeMultiplier(perks.routeCoinOutputMultiplier, 'Trade route coin');
+    if (summary) lines.push(summary);
+  }
+  if (typeof perks.patrolCoinUpkeepMultiplier === 'number' && perks.patrolCoinUpkeepMultiplier !== 1) {
+    const delta = Math.round((1 - perks.patrolCoinUpkeepMultiplier) * 100);
+    if (delta !== 0) {
+      lines.push(`Patrol upkeep ${delta > 0 ? 'reduced' : 'increased'} ${Math.abs(delta)}%`);
+    }
+  }
+  if (perks.tickResourceAdjustments) {
+    const summary = formatResourceSummary(perks.tickResourceAdjustments);
+    if (summary) lines.push(`Per cycle: ${summary}`);
+  }
+  if (typeof perks.upkeepGrainPerWorkerDelta === 'number' && perks.upkeepGrainPerWorkerDelta !== 0) {
+    const delta = Math.round(perks.upkeepGrainPerWorkerDelta * 100) / 100;
+    lines.push(`Worker upkeep ${delta > 0 ? '+' : ''}${delta} grain`);
+  }
+  if (perks.mapReveal) {
+    lines.push(`Reveals nearby terrain (radius ${perks.mapReveal.radius})`);
+  }
+  if (lines.length === 0) {
+    lines.push('No additional perks');
+  }
+  return lines;
+};
 
 
 
@@ -115,6 +199,9 @@ interface GameState {
   quests_completed?: number;
   milestones?: MilestoneSnapshot;
   era?: EraStatus;
+  founding_charter?: FoundingCharter | null;
+  citizens_seed?: number;
+  citizens_count?: number;
 }
 
 interface TradeRoute {
@@ -157,7 +244,166 @@ type SkillUnlockNotification = Pick<Notification, 'type' | 'title' | 'message'> 
   dedupeMs?: number;
 };
 
+interface CrisisStats {
+  encountered: number;
+  resolved: number;
+}
+
+interface QuestEventLogEntry {
+  id: string;
+  name: string;
+  summary?: string;
+  occurredAt: number;
+  type?: string;
+}
+
 const QUEST_STORAGE_KEY = 'ad_quest_state_v1';
+const CRISIS_STATS_STORAGE_KEY = 'ad_crisis_stats_v1';
+const EVENT_LOG_STORAGE_KEY = 'ad_event_log_v1';
+const MAX_EVENT_HISTORY = 20;
+
+const loadCrisisStatsFromStorage = (): CrisisStats => {
+  if (typeof window === 'undefined') {
+    return { encountered: 0, resolved: 0 };
+  }
+
+  try {
+    const raw = window.localStorage.getItem(CRISIS_STATS_STORAGE_KEY);
+    if (!raw) {
+      return { encountered: 0, resolved: 0 };
+    }
+    const parsed = JSON.parse(raw);
+    const encountered = Number((parsed as Record<string, unknown>).encountered);
+    const resolved = Number((parsed as Record<string, unknown>).resolved);
+
+    return {
+      encountered: Number.isFinite(encountered) && encountered > 0 ? encountered : 0,
+      resolved: Number.isFinite(resolved) && resolved > 0 ? resolved : 0,
+    };
+  } catch (error) {
+    logger.warn('Failed to read crisis stats from storage', error);
+    return { encountered: 0, resolved: 0 };
+  }
+};
+
+const normalizeEventLogEntry = (raw: unknown, fallbackCycle: number): QuestEventLogEntry | null => {
+  if (!raw || typeof raw !== 'object') {
+    return null;
+  }
+
+  const source = raw as Record<string, unknown>;
+  const idSource =
+    typeof source.id === 'string'
+      ? source.id
+      : typeof source.name === 'string'
+      ? source.name
+      : typeof source.title === 'string'
+      ? source.title
+      : null;
+  if (!idSource) {
+    return null;
+  }
+
+  const name =
+    typeof source.name === 'string'
+      ? source.name
+      : typeof source.title === 'string'
+      ? source.title
+      : idSource;
+  const summary =
+    typeof source.summary === 'string'
+      ? source.summary
+      : typeof source.description === 'string'
+      ? source.description
+      : undefined;
+  const occurredAtCandidate =
+    typeof source.occurredAt === 'number'
+      ? source.occurredAt
+      : typeof source.cycle === 'number'
+      ? source.cycle
+      : typeof source.cycleOffset === 'number'
+      ? fallbackCycle + Number(source.cycleOffset)
+      : fallbackCycle;
+  const type = typeof source.type === 'string' ? source.type : undefined;
+
+  const occurredAt = Number.isFinite(occurredAtCandidate) ? Number(occurredAtCandidate) : fallbackCycle;
+
+  return {
+    id: idSource,
+    name,
+    summary,
+    occurredAt,
+    type,
+  };
+};
+
+const sanitizeEventLog = (raw: unknown, fallbackCycle = 0): QuestEventLogEntry[] => {
+  if (!raw) {
+    return [];
+  }
+  if (Array.isArray(raw)) {
+    return raw
+      .map(entry => normalizeEventLogEntry(entry, fallbackCycle))
+      .filter((entry): entry is QuestEventLogEntry => Boolean(entry));
+  }
+
+  const single = normalizeEventLogEntry(raw, fallbackCycle);
+  return single ? [single] : [];
+};
+
+const mergeEventLog = (existing: QuestEventLogEntry[], incoming: QuestEventLogEntry[]): QuestEventLogEntry[] => {
+  if (!incoming.length) {
+    return existing;
+  }
+
+  const seen = new Set(existing.map(entry => `${entry.id}|${entry.occurredAt}`));
+  const merged = [...existing];
+
+  for (const entry of incoming) {
+    const key = `${entry.id}|${entry.occurredAt}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    merged.push(entry);
+  }
+
+  return merged.slice(-MAX_EVENT_HISTORY);
+};
+
+const loadEventLogFromStorage = (): QuestEventLogEntry[] => {
+  if (typeof window === 'undefined') {
+    return [];
+  }
+
+  try {
+    const raw = window.localStorage.getItem(EVENT_LOG_STORAGE_KEY);
+    if (!raw) {
+      return [];
+    }
+    const parsed = JSON.parse(raw);
+    return sanitizeEventLog(parsed, 0);
+  } catch (error) {
+    logger.warn('Failed to read event log from storage', error);
+    return [];
+  }
+};
+
+interface QuestComputationContext {
+  milestoneSnapshot: Record<string, boolean>;
+  routes: TradeRoute[];
+  buildings: StoredBuilding[];
+  proposalsSummoned: boolean;
+  proposalsCount: number;
+  unlockedSkillIds: string[];
+  resources: Record<string, number>;
+  cycle: number;
+  leylines: Leyline[];
+  edicts: Record<string, number>;
+  crisisStats: CrisisStats;
+  currentCrisis: CrisisData | null;
+  eventHistory: QuestEventLogEntry[];
+}
 
 const sanitizeStoredQuestState = (stored: unknown): QuestStateSnapshot => {
   const base = createInitialQuestSnapshot();
@@ -269,6 +515,328 @@ const questStateEquals = (a: QuestStateSnapshot, b: QuestStateSnapshot): boolean
   return true;
 };
 
+export const evaluateQuestProgress = (
+  previous: QuestStateSnapshot,
+  context: QuestComputationContext,
+): QuestStateSnapshot => {
+  const base = createInitialQuestSnapshot();
+  const milestoneSnapshot = context.milestoneSnapshot ?? {};
+  const safeRoutes = Array.isArray(context.routes) ? context.routes : [];
+  const buildingList = Array.isArray(context.buildings) ? context.buildings : [];
+  const buildingById = new Map(buildingList.map(b => [b.id, b]));
+  const farmBuildings = buildingList.filter(b => b.typeId === 'farm');
+  const farmCount = farmBuildings.length;
+  const farmWorkers = farmBuildings.reduce((sum, b) => sum + (b.workers || 0), 0);
+  const tradePostBuildings = buildingList.filter(b => b.typeId === 'trade_post');
+  const tradePostCount = tradePostBuildings.length;
+  const councilCount = buildingList.filter(b => b.typeId === 'council_hall').length;
+  const storehousePresent = buildingList.some(b => b.typeId === 'storehouse');
+  const connectedToStorehouse =
+    storehousePresent &&
+    safeRoutes.some(route => {
+      const from = buildingById.get(route.fromId);
+      const to = buildingById.get(route.toId);
+      return from?.typeId === 'storehouse' || to?.typeId === 'storehouse';
+    });
+  const proposalsSummoned = Boolean(context.proposalsSummoned);
+  const proposalsCount = Number.isFinite(context.proposalsCount) ? context.proposalsCount : 0;
+  const unlockedCount = Array.isArray(context.unlockedSkillIds) ? context.unlockedSkillIds.length : 0;
+  const resources = context.resources ?? {};
+  const grain = Math.round(Number((resources as Record<string, number>).grain ?? 0));
+  const coin = Math.round(Number((resources as Record<string, number>).coin ?? 0));
+  const mana = Math.round(Number((resources as Record<string, number>).mana ?? 0));
+  const cycle = Number.isFinite(context.cycle) ? context.cycle : 0;
+  const leylines = Array.isArray(context.leylines) ? context.leylines : [];
+  const edicts = context.edicts ?? {};
+  const patrolsActive = Number(edicts.patrols ?? 0) > 0;
+  const crisisStats = context.crisisStats ?? { encountered: 0, resolved: 0 };
+  const currentCrisis = context.currentCrisis ?? null;
+  const eventHistory = Array.isArray(context.eventHistory) ? context.eventHistory : [];
+
+  const tradeConnections = new Map<string, number>();
+  const uniqueTradePosts = new Set<string>();
+  for (const route of safeRoutes) {
+    const from = buildingById.get(route.fromId);
+    const to = buildingById.get(route.toId);
+    if (from?.typeId === 'trade_post') {
+      uniqueTradePosts.add(from.id);
+      tradeConnections.set(from.id, (tradeConnections.get(from.id) ?? 0) + 1);
+    }
+    if (to?.typeId === 'trade_post') {
+      uniqueTradePosts.add(to.id);
+      tradeConnections.set(to.id, (tradeConnections.get(to.id) ?? 0) + 1);
+    }
+  }
+  const hubConnections = tradeConnections.size
+    ? Math.max(...tradeConnections.values())
+    : 0;
+
+  const activeLeylines = leylines.filter(leyline => leyline.isActive).length;
+  const totalLeylineFlow = leylines.reduce((sum, leyline) => sum + Math.min(leyline.currentFlow, leyline.capacity), 0);
+
+  const next: QuestStateSnapshot = {
+    activeChapterId: base.activeChapterId,
+    chapterOrder: [...base.chapterOrder],
+    chapters: {},
+  };
+
+  let firstActiveChapter: string | null = null;
+
+  for (const chapter of QUEST_BLUEPRINTS) {
+    const previousChapter = previous.chapters[chapter.id];
+    const objectiveStates: Record<string, QuestObjectiveProgress> = {};
+    let chapterComplete = true;
+
+    for (const objective of chapter.objectives) {
+      const previousObjective = previousChapter?.objectives?.[objective.id];
+      const evaluation = (() => {
+        switch (objective.id) {
+          case 'build-farm': {
+            const complete = Boolean(milestoneSnapshot.m_farm) || farmCount > 0;
+            return {
+              complete,
+              progress: { current: farmCount, target: objective.target ?? 1 },
+              context: `Farms raised: ${farmCount}`,
+            };
+          }
+          case 'assign-farm-worker': {
+            const complete = farmWorkers > 0;
+            return {
+              complete,
+              progress: { current: farmWorkers, target: objective.target ?? 1 },
+              context:
+                farmWorkers > 0
+                  ? `${farmWorkers} worker${farmWorkers === 1 ? '' : 's'} tending fields`
+                  : 'Assign a worker from the Worker panel.',
+            };
+          }
+          case 'secure-grain-cycle': {
+            const target = objective.target ?? 20;
+            const complete = cycle > 1 && grain >= target;
+            return {
+              complete,
+              progress: { current: Math.min(grain, target), target },
+              context: `Cycle ${cycle} • Grain ${Math.max(0, grain)}`,
+            };
+          }
+          case 'raise-trade-post': {
+            const complete = tradePostCount > 0;
+            return {
+              complete,
+              progress: { current: tradePostCount, target: objective.target ?? 1 },
+              context: `Trade posts built: ${tradePostCount}`,
+            };
+          }
+          case 'open-trade-route': {
+            const routeCount = safeRoutes.length;
+            const complete = Boolean(milestoneSnapshot.m_route) || routeCount > 0;
+            return {
+              complete,
+              progress: { current: routeCount, target: objective.target ?? 1 },
+              context: `Routes active: ${routeCount}`,
+            };
+          }
+          case 'storehouse-network': {
+            const complete = Boolean(milestoneSnapshot.m_storehouse) || connectedToStorehouse;
+            return {
+              complete,
+              progress: { current: connectedToStorehouse ? 1 : 0, target: objective.target ?? 1 },
+              context: connectedToStorehouse
+                ? 'Storehouse linked into trade routes.'
+                : 'Link a storehouse via a trade route.',
+            };
+          }
+          case 'build-council-hall': {
+            const complete = councilCount > 0;
+            return {
+              complete,
+              progress: { current: councilCount, target: objective.target ?? 1 },
+              context: complete ? 'Council convened.' : 'Construct a hall to unlock decrees.',
+            };
+          }
+          case 'summon-proposals': {
+            return {
+              complete: proposalsSummoned,
+              progress: { current: proposalsSummoned ? 1 : 0, target: 1 },
+              context: proposalsSummoned
+                ? `Proposals ready: ${proposalsCount}`
+                : 'Call for guidance from the council.',
+            };
+          }
+          case 'unlock-first-skill': {
+            const complete = unlockedCount > 0;
+            return {
+              complete,
+              progress: { current: unlockedCount, target: objective.target ?? 1 },
+              context: complete
+                ? `Skills unlocked: ${unlockedCount}`
+                : 'Spend coin, mana, or favor to unlock a skill.',
+            };
+          }
+          case 'trade-network-dominance': {
+            const target = objective.target ?? 4;
+            const totalRoutes = safeRoutes.length;
+            const complete = totalRoutes >= target;
+            return {
+              complete,
+              progress: { current: Math.min(totalRoutes, target), target },
+              context: `Routes active: ${totalRoutes} • Posts linked: ${uniqueTradePosts.size}`,
+            };
+          }
+          case 'trade-hub-anchor': {
+            const target = objective.target ?? 3;
+            const complete = hubConnections >= target;
+            const hubContext = hubConnections
+              ? `Best hub connections: ${hubConnections}${patrolsActive ? '' : ' • Patrols idle'}`
+              : 'Connect additional routes to form a hub.';
+            return {
+              complete,
+              progress: { current: Math.min(hubConnections, target), target },
+              context: hubContext,
+            };
+          }
+          case 'coin-stockpile': {
+            const target = objective.target ?? 600;
+            const current = Math.max(0, coin);
+            const complete = current >= target;
+            return {
+              complete,
+              progress: { current: Math.min(current, target), target },
+              context: `Coin reserves: ${current}`,
+            };
+          }
+          case 'chart-leylines': {
+            const target = objective.target ?? 2;
+            const totalLeylines = leylines.length;
+            const complete = totalLeylines >= target;
+            return {
+              complete,
+              progress: { current: Math.min(totalLeylines, target), target },
+              context: totalLeylines ? `${totalLeylines} leylines drafted` : 'No leylines woven yet.',
+            };
+          }
+          case 'attune-leylines': {
+            const target = objective.target ?? 2;
+            const complete = activeLeylines >= target;
+            return {
+              complete,
+              progress: { current: Math.min(activeLeylines, target), target },
+              context: activeLeylines
+                ? `${activeLeylines} channel${activeLeylines === 1 ? '' : 's'} stable`
+                : 'Activate your leyline network.',
+            };
+          }
+          case 'leyline-flow-surge': {
+            const target = objective.target ?? 150;
+            const current = Math.round(totalLeylineFlow);
+            const complete = current >= target;
+            return {
+              complete,
+              progress: { current: Math.min(current, target), target },
+              context: `Total flow: ${current}`,
+            };
+          }
+          case 'unlock-advanced-skills': {
+            const target = objective.target ?? 6;
+            const complete = unlockedCount >= target;
+            return {
+              complete,
+              progress: { current: Math.min(unlockedCount, target), target },
+              context: `Skills unlocked: ${unlockedCount}`,
+            };
+          }
+          case 'weather-crises': {
+            const target = objective.target ?? 2;
+            const resolved = Math.max(0, crisisStats.resolved);
+            const complete = resolved >= target;
+            const status = currentCrisis ? `Active crisis: ${currentCrisis.type}` : 'City stable';
+            return {
+              complete,
+              progress: { current: Math.min(resolved, target), target },
+              context: `${status} • Resolved ${resolved}/${target}`,
+            };
+          }
+          case 'catalog-omens': {
+            const target = objective.target ?? 3;
+            const recorded = eventHistory.length;
+            const complete = recorded >= target;
+            const latest = eventHistory[eventHistory.length - 1]?.name;
+            return {
+              complete,
+              progress: { current: Math.min(recorded, target), target },
+              context: recorded > 0 ? `Latest entry: ${latest}` : 'Await omens or seasonal reports.',
+            };
+          }
+          case 'mana-stockpile': {
+            const target = objective.target ?? 400;
+            const current = Math.max(0, mana);
+            const complete = current >= target;
+            return {
+              complete,
+              progress: { current: Math.min(current, target), target },
+              context: `Mana reserves: ${current}`,
+            };
+          }
+          default:
+            return { complete: false };
+        }
+      })();
+
+      const isComplete = previousObjective?.status === 'complete' || evaluation.complete;
+      let progress = evaluation.progress;
+      if (progress && progress.target > 0) {
+        const clampedCurrent = Math.max(0, Math.min(progress.current, progress.target));
+        progress = {
+          current: isComplete ? progress.target : clampedCurrent,
+          target: progress.target,
+        };
+      }
+
+      objectiveStates[objective.id] = {
+        status: isComplete ? 'complete' : 'in-progress',
+        progress,
+        context: evaluation.context,
+      };
+
+      if (!isComplete) {
+        chapterComplete = false;
+      }
+    }
+
+    let chapterStatus: QuestChapterProgress['status'];
+    if (previousChapter?.status === 'complete' || chapterComplete) {
+      chapterStatus = 'complete';
+    } else if (!firstActiveChapter) {
+      chapterStatus = 'active';
+      firstActiveChapter = chapter.id;
+    } else {
+      chapterStatus = 'locked';
+    }
+
+    if (chapterStatus === 'locked') {
+      for (const objectiveId of Object.keys(objectiveStates)) {
+        const objectiveState = objectiveStates[objectiveId];
+        if (objectiveState.status !== 'complete') {
+          objectiveStates[objectiveId] = { ...objectiveState, status: 'locked' };
+        }
+      }
+    }
+
+    next.chapters[chapter.id] = {
+      status: chapterStatus,
+      objectives: objectiveStates,
+    };
+  }
+
+  if (firstActiveChapter) {
+    next.activeChapterId = firstActiveChapter;
+  } else {
+    next.activeChapterId = base.chapterOrder[base.chapterOrder.length - 1] ?? base.activeChapterId;
+  }
+
+  return next;
+};
+
 const loadQuestStateFromStorage = (): QuestStateSnapshot => {
   if (typeof window === 'undefined') {
     return createInitialQuestSnapshot();
@@ -315,6 +883,9 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   const generateId = useIdGenerator();
   const [state, setState] = useState<GameState | null>(initialState);
   const [proposals, setProposals] = useState<Proposal[]>(initialProposals ?? []);
+  const [charterModalOpen, setCharterModalOpen] = useState<boolean>(false);
+  const [selectedCharterId, setSelectedCharterId] = useState<string | null>(initialState?.founding_charter?.id ?? null);
+  const [isApplyingCharter, setIsApplyingCharter] = useState<boolean>(false);
   const [loading, setLoading] = useState(false);
   const [guild, _setGuild] = useState("Wardens");
   const [error, setError] = useState<string | null>(null);
@@ -424,7 +995,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   const [isPaused, setIsPaused] = useState(true);
   const [timeRemaining, setTimeRemaining] = useState(60);
   const [edgeScrollEnabled, setEdgeScrollEnabled] = useState(true);
-  const [, setCrisis] = useState<CrisisData | null>(null);
+  const [currentCrisis, setCrisis] = useState<CrisisData | null>(null);
   const [isCouncilOpen, setIsCouncilOpen] = useState(false);
   const [onboardingStep, setOnboardingStep] = useState<number>(() => {
     if (typeof window === 'undefined') return 1;
@@ -447,6 +1018,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   const [markers, setMarkers] = useState<{ id: string; x: number; y: number; label?: string }[]>([]);
   const [visualIndicators, setVisualIndicators] = useState<VisualIndicator[]>([]);
   const indicatorExpiryRef = useRef<Map<string, number>>(new Map());
+  const crisisActiveRef = useRef(false);
   const [enhancedGameState, setEnhancedGameState] = useState<EnhancedGameState | null>(null);
   const notify = useNotify();
   const lastMemoryToastRef = useRef<{ time: number; lastShownMB: number }>({ time: 0, lastShownMB: 0 });
@@ -460,6 +1032,39 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
   const [placedBuildings, setPlacedBuildings] = useState<StoredBuilding[]>([]);
   const [routes, setRoutes] = useState<TradeRoute[]>([]);
   const [roads, setRoads] = useState<Array<{x:number;y:number}>>([]);
+  const [crisisStats, setCrisisStats] = useState<CrisisStats>(() => loadCrisisStatsFromStorage());
+  const [eventHistory, setEventHistory] = useState<QuestEventLogEntry[]>(() => loadEventLogFromStorage());
+
+  const appendEvents = useCallback((raw: unknown, fallbackCycle: number) => {
+    const sanitized = sanitizeEventLog(raw, fallbackCycle);
+    if (!sanitized.length) {
+      return;
+    }
+    setEventHistory(prev => mergeEventLog(prev, sanitized));
+  }, []);
+
+  const updateCrisisStats = useCallback((crisis: CrisisData | null) => {
+    setCrisisStats(prev => {
+      let encountered = prev.encountered;
+      let resolved = prev.resolved;
+
+      if (crisis) {
+        if (!crisisActiveRef.current) {
+          encountered += 1;
+        }
+        crisisActiveRef.current = true;
+      } else if (crisisActiveRef.current) {
+        resolved += 1;
+        crisisActiveRef.current = false;
+      }
+
+      if (encountered === prev.encountered && resolved === prev.resolved) {
+        return prev;
+      }
+
+      return { encountered, resolved };
+    });
+  }, []);
 
   useEffect(() => {
     const expiryMap = indicatorExpiryRef.current;
@@ -519,6 +1124,38 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
       window.clearInterval(interval);
     };
   }, [visualIndicators.length]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(CRISIS_STATS_STORAGE_KEY, JSON.stringify(crisisStats));
+    } catch (error) {
+      logger.warn('Failed to persist crisis stats', error);
+    }
+  }, [crisisStats]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(EVENT_LOG_STORAGE_KEY, JSON.stringify(eventHistory));
+    } catch (error) {
+      logger.warn('Failed to persist event log', error);
+    }
+  }, [eventHistory]);
+
+  const currentCycle = state?.cycle ?? 0;
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent).detail;
+      appendEvents(detail, currentCycle);
+    };
+
+    window.addEventListener('ad-seasonal-event', handler as EventListener);
+    return () => window.removeEventListener('ad-seasonal-event', handler as EventListener);
+  }, [appendEvents, currentCycle]);
 
   // Initialize TimeSystem
   const timeSystemRef = useRef<TimeSystem | null>(null);
@@ -854,10 +1491,10 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     return () => clearInterval(cleanup);
   }, []);
 
-  const saveState = useCallback(async (partial: { resources?: Record<string, number>; workers?: number; buildings?: StoredBuilding[]; routes?: TradeRoute[]; roads?: Array<{x:number;y:number}>; edicts?: Record<string, number>; map_size?: number; skills?: string[] }) => {
+  const saveState = useCallback(async (partial: { resources?: Record<string, number>; workers?: number; buildings?: StoredBuilding[]; routes?: TradeRoute[]; roads?: Array<{x:number;y:number}>; edicts?: Record<string, number>; map_size?: number; skills?: string[]; citizens_seed?: number; citizens_count?: number; founding_charter?: FoundingCharter | null }) => {
     if (!state) return;
     try {
-      const body: { id: string; resources?: Record<string, number>; workers?: number; buildings?: StoredBuilding[]; routes?: TradeRoute[]; roads?: Array<{x:number;y:number}>; edicts?: Record<string, number>; map_size?: number; skills?: string[] } = { id: state.id };
+      const body: { id: string; resources?: Record<string, number>; workers?: number; buildings?: StoredBuilding[]; routes?: TradeRoute[]; roads?: Array<{x:number;y:number}>; edicts?: Record<string, number>; map_size?: number; skills?: string[]; citizens_seed?: number; citizens_count?: number; founding_charter?: FoundingCharter | null } = { id: state.id };
       if (partial.resources) body.resources = partial.resources;
       if (typeof partial.workers === 'number') body.workers = partial.workers;
       if (partial.buildings) body.buildings = partial.buildings;
@@ -866,6 +1503,9 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
       if (partial.edicts) body.edicts = partial.edicts;
       if (typeof partial.map_size === 'number') body.map_size = partial.map_size;
       if (partial.skills !== undefined) body.skills = partial.skills;
+      if (typeof partial.citizens_seed === 'number') body.citizens_seed = partial.citizens_seed;
+      if (typeof partial.citizens_count === 'number') body.citizens_count = partial.citizens_count;
+      if (partial.founding_charter !== undefined) body.founding_charter = partial.founding_charter;
       const res = await fetch('/api/state', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -876,6 +1516,97 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
       logger.error('Failed to save state:', err);
     }
   }, [state]);
+
+  const applyCharter = useCallback(async (charter: FoundingCharter) => {
+    if (!state) return;
+    setIsApplyingCharter(true);
+    try {
+      const resourceBoosts = charter.perks.startingResources || {};
+      const updatedResources: Record<string, number> = { ...state.resources };
+      for (const [key, value] of Object.entries(resourceBoosts)) {
+        const numeric = Number(value ?? 0);
+        if (!Number.isFinite(numeric) || numeric === 0) continue;
+        const current = Number(updatedResources[key] ?? 0);
+        updatedResources[key] = Math.max(0, Math.round(current + numeric));
+      }
+      const newBuildings: StoredBuilding[] = Array.isArray(state.buildings) ? [...state.buildings] : [];
+      const seen = new Set(newBuildings.map(b => `${b.typeId}:${b.x}:${b.y}`));
+      if (Array.isArray(charter.perks.startingBuildings)) {
+        for (const template of charter.perks.startingBuildings) {
+          if (!template?.typeId) continue;
+          const key = `${template.typeId}:${template.x ?? 0}:${template.y ?? 0}`;
+          if (seen.has(key)) continue;
+          const building: StoredBuilding = {
+            id: template.id ? String(template.id) : generateId(),
+            typeId: template.typeId as BuildTypeId,
+            x: template.x ?? 0,
+            y: template.y ?? 0,
+            level: template.level ?? 1,
+            workers: template.workers ?? 0,
+            traits: template.traits as StoredBuilding['traits'],
+          };
+          newBuildings.push(building);
+          seen.add(key);
+        }
+      }
+
+      const updatedState: GameState = {
+        ...state,
+        resources: updatedResources,
+        buildings: newBuildings,
+        founding_charter: charter,
+      };
+
+      if ((config.nextPublicOfflineMode || state.id === 'local-fallback')) {
+        const seed = computeCharterSeed(charter.id);
+        updatedState.skill_tree_seed = updatedState.skill_tree_seed ?? seed;
+        updatedState.citizens_seed = seed;
+        setCitizensSeed(seed);
+      }
+
+      setState(updatedState);
+      setSelectedCharterId(charter.id);
+      setPlacedBuildings(newBuildings);
+      const assignedWorkers = newBuildings.reduce((sum, b) => sum + (b.workers || 0), 0);
+      const availableWorkers = Math.max(0, (updatedState.workers ?? 0) - assignedWorkers);
+      setSimResources({
+        grain: Number(updatedResources.grain ?? 0),
+        coin: Number(updatedResources.coin ?? 0),
+        mana: Number(updatedResources.mana ?? 0),
+        favor: Number(updatedResources.favor ?? 0),
+        workers: availableWorkers,
+        wood: Number((updatedResources as any).wood ?? 0),
+        planks: Number((updatedResources as any).planks ?? 0),
+      });
+
+      if (charter.perks.mapReveal) {
+        const { center, radius } = charter.perks.mapReveal;
+        ensureCapacityAround(center.x, center.y, radius + 4);
+        revealUnknownTiles(center.x, center.y, radius).catch(() => {});
+      }
+
+      const payload: Parameters<typeof saveState>[0] = {
+        resources: updatedResources,
+        buildings: newBuildings,
+        founding_charter: charter,
+      };
+      if (typeof updatedState.citizens_seed === 'number') payload.citizens_seed = updatedState.citizens_seed;
+      if (typeof updatedState.citizens_count === 'number') payload.citizens_count = updatedState.citizens_count;
+
+      if (!config.nextPublicOfflineMode && state.id !== 'local-fallback') {
+        await saveState(payload);
+      }
+
+      setCharterModalOpen(false);
+      notify({ type: 'success', title: 'Founding Charter sworn', message: charter.name });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      logger.error('Failed to apply charter', err);
+      notify({ type: 'error', title: 'Failed to swear charter', message });
+    } finally {
+      setIsApplyingCharter(false);
+    }
+  }, [state, config.nextPublicOfflineMode, notify, generateId, ensureCapacityAround, revealUnknownTiles, saveState, setCitizensSeed]);
 
   const getMilestones = useCallback(() => {
     if (typeof window === 'undefined') return {} as Record<string, boolean>;
@@ -890,189 +1621,46 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
 
   const computeQuestSnapshot = useCallback(
     (previous: QuestStateSnapshot): QuestStateSnapshot => {
-      const base = createInitialQuestSnapshot();
       const milestoneSnapshot = getMilestones();
       const safeRoutes = routes ?? [];
       const buildingList = placedBuildings;
-      const buildingById = new Map(buildingList.map(b => [b.id, b]));
-      const farmBuildings = buildingList.filter(b => b.typeId === 'farm');
-      const farmCount = farmBuildings.length;
-      const farmWorkers = farmBuildings.reduce((sum, b) => sum + (b.workers || 0), 0);
-      const tradePostCount = buildingList.filter(b => b.typeId === 'trade_post').length;
-      const councilCount = buildingList.filter(b => b.typeId === 'council_hall').length;
-      const storehousePresent = buildingList.some(b => b.typeId === 'storehouse');
-      const connectedToStorehouse =
-        storehousePresent &&
-        safeRoutes.some(route => {
-          const from = buildingById.get(route.fromId);
-          const to = buildingById.get(route.toId);
-          return from?.typeId === 'storehouse' || to?.typeId === 'storehouse';
-        });
       const proposalsCount = proposals.length;
       const proposalsSummoned = guideProgress.generated || proposalsCount > 0;
-      const unlockedCount = unlockedSkillIds.length;
-      const grain = Math.round(state?.resources?.grain ?? 0);
+      const resources = state?.resources ?? {};
       const cycle = state?.cycle ?? 0;
 
-      const next: QuestStateSnapshot = {
-        activeChapterId: base.activeChapterId,
-        chapterOrder: [...base.chapterOrder],
-        chapters: {},
+      const context: QuestComputationContext = {
+        milestoneSnapshot,
+        routes: safeRoutes,
+        buildings: buildingList,
+        proposalsSummoned,
+        proposalsCount,
+        unlockedSkillIds,
+        resources,
+        cycle,
+        leylines,
+        edicts,
+        crisisStats,
+        currentCrisis,
+        eventHistory,
       };
 
-      let firstActiveChapter: string | null = null;
-
-      for (const chapter of QUEST_BLUEPRINTS) {
-        const previousChapter = previous.chapters[chapter.id];
-        const objectiveStates: Record<string, QuestObjectiveProgress> = {};
-        let chapterComplete = true;
-
-        for (const objective of chapter.objectives) {
-          const previousObjective = previousChapter?.objectives?.[objective.id];
-          const evaluation = (() => {
-            switch (objective.id) {
-              case 'build-farm': {
-                const complete = Boolean(milestoneSnapshot.m_farm) || farmCount > 0;
-                return {
-                  complete,
-                  progress: { current: farmCount, target: objective.target ?? 1 },
-                  context: `Farms raised: ${farmCount}`,
-                };
-              }
-              case 'assign-farm-worker': {
-                const complete = farmWorkers > 0;
-                return {
-                  complete,
-                  progress: { current: farmWorkers, target: objective.target ?? 1 },
-                  context:
-                    farmWorkers > 0
-                      ? `${farmWorkers} worker${farmWorkers === 1 ? '' : 's'} tending fields`
-                      : 'Assign a worker from the Worker panel.',
-                };
-              }
-              case 'secure-grain-cycle': {
-                const target = objective.target ?? 20;
-                const complete = cycle > 1 && grain >= target;
-                return {
-                  complete,
-                  progress: { current: Math.min(grain, target), target },
-                  context: `Cycle ${cycle} • Grain ${Math.max(0, grain)}`,
-                };
-              }
-              case 'raise-trade-post': {
-                const complete = tradePostCount > 0;
-                return {
-                  complete,
-                  progress: { current: tradePostCount, target: objective.target ?? 1 },
-                  context: `Trade posts built: ${tradePostCount}`,
-                };
-              }
-              case 'open-trade-route': {
-                const routeCount = safeRoutes.length;
-                const complete = Boolean(milestoneSnapshot.m_route) || routeCount > 0;
-                return {
-                  complete,
-                  progress: { current: routeCount, target: objective.target ?? 1 },
-                  context: `Routes active: ${routeCount}`,
-                };
-              }
-              case 'storehouse-network': {
-                const complete = Boolean(milestoneSnapshot.m_storehouse) || connectedToStorehouse;
-                return {
-                  complete,
-                  progress: { current: connectedToStorehouse ? 1 : 0, target: objective.target ?? 1 },
-                  context: connectedToStorehouse
-                    ? 'Storehouse linked into trade routes.'
-                    : 'Link a storehouse via a trade route.',
-                };
-              }
-              case 'build-council-hall': {
-                const complete = councilCount > 0;
-                return {
-                  complete,
-                  progress: { current: councilCount, target: objective.target ?? 1 },
-                  context: complete ? 'Council convened.' : 'Construct a hall to unlock decrees.',
-                };
-              }
-              case 'summon-proposals': {
-                return {
-                  complete: proposalsSummoned,
-                  progress: { current: proposalsSummoned ? 1 : 0, target: 1 },
-                  context: proposalsSummoned
-                    ? `Proposals ready: ${proposalsCount}`
-                    : 'Call for guidance from the council.',
-                };
-              }
-              case 'unlock-first-skill': {
-                const complete = unlockedCount > 0;
-                return {
-                  complete,
-                  progress: { current: unlockedCount, target: objective.target ?? 1 },
-                  context: complete
-                    ? `Skills unlocked: ${unlockedCount}`
-                    : 'Spend coin, mana, or favor to unlock a skill.',
-                };
-              }
-              default:
-                return { complete: false };
-            }
-          })();
-
-          const isComplete = previousObjective?.status === 'complete' || evaluation.complete;
-          let progress = evaluation.progress;
-          if (progress && progress.target > 0) {
-            const clampedCurrent = Math.max(0, Math.min(progress.current, progress.target));
-            progress = {
-              current: isComplete ? progress.target : clampedCurrent,
-              target: progress.target,
-            };
-          }
-
-          objectiveStates[objective.id] = {
-            status: isComplete ? 'complete' : 'in-progress',
-            progress,
-            context: evaluation.context,
-          };
-
-          if (!isComplete) {
-            chapterComplete = false;
-          }
-        }
-
-        let chapterStatus: QuestChapterProgress['status'];
-        if (previousChapter?.status === 'complete' || chapterComplete) {
-          chapterStatus = 'complete';
-        } else if (!firstActiveChapter) {
-          chapterStatus = 'active';
-          firstActiveChapter = chapter.id;
-        } else {
-          chapterStatus = 'locked';
-        }
-
-        if (chapterStatus === 'locked') {
-          for (const objectiveId of Object.keys(objectiveStates)) {
-            const objectiveState = objectiveStates[objectiveId];
-            if (objectiveState.status !== 'complete') {
-              objectiveStates[objectiveId] = { ...objectiveState, status: 'locked' };
-            }
-          }
-        }
-
-        next.chapters[chapter.id] = {
-          status: chapterStatus,
-          objectives: objectiveStates,
-        };
-      }
-
-      if (firstActiveChapter) {
-        next.activeChapterId = firstActiveChapter;
-      } else {
-        next.activeChapterId = base.chapterOrder[base.chapterOrder.length - 1] ?? base.activeChapterId;
-      }
-
-      return next;
+      return evaluateQuestProgress(previous, context);
     },
-    [state, placedBuildings, routes, unlockedSkillIds, guideProgress, proposals, getMilestones],
+    [
+      getMilestones,
+      routes,
+      placedBuildings,
+      proposals,
+      guideProgress,
+      unlockedSkillIds,
+      state,
+      leylines,
+      edicts,
+      crisisStats,
+      currentCrisis,
+      eventHistory,
+    ],
   );
 
   useEffect(() => {
@@ -1674,6 +2262,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
           resources: { grain: 1000, coin: 500, mana: 200, favor: 10, unrest: 0, threat: 0 },
           workers: 0,
           buildings: [],
+          founding_charter: null,
         });
         return;
       }
@@ -1681,6 +2270,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     }
     const rawSkills = (json as any).skills;
     const sanitizedSkills = Array.isArray(rawSkills) ? sanitizeSkillList(rawSkills) : undefined;
+    const charter = (json as any).founding_charter ?? null;
 
     setState({
       ...json,
@@ -1691,9 +2281,18 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
       citizens_seed: (json as any).citizens_seed,
       citizens_count: (json as any).citizens_count,
       ...(sanitizedSkills !== undefined ? { skills: sanitizedSkills } : {}),
+      founding_charter: charter,
     });
     if (sanitizedSkills !== undefined) {
       syncSkillsFromServer(sanitizedSkills);
+    }
+    const crisisPayload: CrisisData | null = ((json as any).crisis as CrisisData) ?? null;
+    setCrisis(crisisPayload);
+    updateCrisisStats(crisisPayload);
+    const rawEvents = (json as any).event_history ?? (json as any).events;
+    if (rawEvents) {
+      const fallbackCycle = Number((json as any).cycle ?? 0);
+      appendEvents(rawEvents, fallbackCycle);
     }
     try { setIsPaused(!(json as any).auto_ticking); } catch {}
     try { setRoads(((json as any).roads as Array<{x:number;y:number}>) ?? []); } catch {}
@@ -1709,7 +2308,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
         setMapSizeModalOpen(false);
       }
     } catch {}
-  }, [syncSkillsFromServer]);
+  }, [syncSkillsFromServer, appendEvents, updateCrisisStats]);
 
   const fetchProposals = useCallback(async () => {
     const res = await fetch("/api/proposals");
@@ -1728,6 +2327,23 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
       });
     }
   }, [initialState, state, fetchState]);
+
+  useEffect(() => {
+    if (!state) return;
+    if (state.founding_charter) {
+      setCharterModalOpen(false);
+      setSelectedCharterId(state.founding_charter.id);
+    } else {
+      setCharterModalOpen(true);
+    }
+  }, [state]);
+
+  useEffect(() => {
+    if (!state || state.founding_charter || !charterModalOpen) return;
+    if (!selectedCharterId && FOUNDING_CHARTERS.length > 0) {
+      setSelectedCharterId(FOUNDING_CHARTERS[0].id);
+    }
+  }, [state, charterModalOpen, selectedCharterId]);
 
   const tick = useCallback(async () => {
     setLoading(true);
@@ -1758,9 +2374,15 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
       // Reset local countdown based on server interval if present
       const ms = Number((json.state as any)?.tick_interval_ms ?? 60000)
       setTimeRemaining(Math.max(1, Math.round(ms / 1000)));
-      if (json.crisis) {
+      const crisisPayload: CrisisData | null = (json.crisis as CrisisData) ?? null;
+      if (crisisPayload) {
         setIsPaused(true);
-        setCrisis(json.crisis);
+      }
+      setCrisis(crisisPayload);
+      updateCrisisStats(crisisPayload);
+      const tickEvents = (json as any).events ?? (json as any).event_history;
+      if (tickEvents) {
+        appendEvents(tickEvents, serverState.cycle ?? 0);
       }
       await fetchProposals();
       
@@ -1789,7 +2411,7 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     } finally {
       setLoading(false);
     }
-  }, [fetchProposals, syncSkillsFromServer]);
+  }, [fetchProposals, syncSkillsFromServer, appendEvents, updateCrisisStats]);
 
   // Council actions
   const generate = useCallback(async () => {
@@ -2041,31 +2663,53 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     const tree = generateSkillTree(skillTreeSeed);
     const unlocked = tree.nodes.filter(n => unlockedSkillIds.includes(n.id));
     const acc = accumulateEffects(unlocked);
+    const charterEffects = deriveCharterEffects(state?.founding_charter);
+    const combinedResMul: Record<string, number> = { ...acc.resMul };
+    for (const [key, value] of Object.entries(charterEffects.resMul)) {
+      combinedResMul[key] = (combinedResMul[key] ?? 1) * value;
+    }
+    const combinedBldMul: Record<string, number> = { ...acc.bldMul };
+    for (const [key, value] of Object.entries(charterEffects.bldMul)) {
+      combinedBldMul[key] = (combinedBldMul[key] ?? 1) * value;
+    }
+    const modifiers = {
+      resourceOutputMultiplier: combinedResMul as any,
+      buildingOutputMultiplier: combinedBldMul,
+      upkeepGrainPerWorkerDelta: acc.upkeepDelta + charterEffects.upkeepDelta,
+      globalBuildingOutputMultiplier: acc.globalBuildingMultiplier * charterEffects.globalBuildingMultiplier,
+      globalResourceOutputMultiplier: acc.globalResourceMultiplier * charterEffects.globalResourceMultiplier,
+      routeCoinOutputMultiplier: acc.routeCoinMultiplier * charterEffects.routeCoinMultiplier,
+      patrolCoinUpkeepMultiplier: acc.patrolCoinUpkeepMultiplier * charterEffects.patrolCoinUpkeepMultiplier,
+      buildingInputMultiplier: acc.buildingInputMultiplier * charterEffects.buildingInputMultiplier,
+    } as const;
     const { updated } = projectCycleDeltas(simResources, placedBuildings, routes, SIM_BUILDINGS, {
       totalWorkers: totalWorkers,
       edicts,
-      modifiers: {
-        resourceOutputMultiplier: acc.resMul as any,
-        buildingOutputMultiplier: acc.bldMul,
-        upkeepGrainPerWorkerDelta: acc.upkeepDelta,
-        globalBuildingOutputMultiplier: acc.globalBuildingMultiplier,
-        globalResourceOutputMultiplier: acc.globalResourceMultiplier,
-        routeCoinOutputMultiplier: acc.routeCoinMultiplier,
-        patrolCoinUpkeepMultiplier: acc.patrolCoinUpkeepMultiplier,
-        buildingInputMultiplier: acc.buildingInputMultiplier,
-      }
+      modifiers,
     });
+    const adjustedUpdated: SimResources = { ...updated };
+    for (const [key, delta] of Object.entries(charterEffects.tickAdjustments)) {
+      if (key in adjustedUpdated) {
+        const current = Number(adjustedUpdated[key as keyof SimResources] ?? 0);
+        adjustedUpdated[key as keyof SimResources] = Math.max(0, Math.round(current + Number(delta ?? 0)));
+      }
+    }
     return {
-      grain: updated.grain - simResources.grain,
-      wood: updated.wood - simResources.wood,
-      planks: updated.planks - simResources.planks,
-      coin: updated.coin - simResources.coin,
-      mana: updated.mana - simResources.mana,
-      favor: updated.favor - simResources.favor,
+      grain: adjustedUpdated.grain - simResources.grain,
+      wood: adjustedUpdated.wood - simResources.wood,
+      planks: adjustedUpdated.planks - simResources.planks,
+      coin: adjustedUpdated.coin - simResources.coin,
+      mana: adjustedUpdated.mana - simResources.mana,
+      favor: adjustedUpdated.favor - simResources.favor,
       unrest: 0,
       threat: 0,
     } as any;
-  }, [simResources, placedBuildings, routes, totalWorkers, edicts, unlockedSkillIds, skillTreeSeed]);
+  }, [simResources, placedBuildings, routes, totalWorkers, edicts, unlockedSkillIds, skillTreeSeed, state?.founding_charter]);
+
+  const charterOptions = FOUNDING_CHARTERS;
+  const pendingCharter = selectedCharterId
+    ? charterOptions.find(c => c.id === selectedCharterId) ?? null
+    : null;
 
   // Shared PIXI context for Game + HUD (so HUD panels can access viewport)
   const [pixiApp, setPixiApp] = useState<PIXI.Application | null>(null);
@@ -2143,6 +2787,66 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
               <div className="mt-5 flex items-center justify-between">
                 <div className="text-xs text-gray-500">Infinite expansion is enabled during play.</div>
                 <button onClick={confirmMapSize} className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-500">Start</button>
+              </div>
+            </div>
+          </div>
+        )}
+        {charterModalOpen && !state.founding_charter && (
+          <div className="absolute inset-0 z-[19500] bg-slate-950/85 backdrop-blur-sm flex items-center justify-center px-4">
+            <div className="w-full max-w-5xl space-y-6 rounded-2xl border border-blue-500/40 bg-slate-900/95 p-6 md:p-8 shadow-2xl">
+              <div className="space-y-2">
+                <h2 className="text-2xl font-semibold text-blue-200">Swear a Founding Charter</h2>
+                <p className="text-sm text-blue-100/80">
+                  Choose the origin covenant that will shape your city&apos;s first seasons. This choice cannot be changed later.
+                </p>
+              </div>
+              <div className="grid gap-4 md:grid-cols-3">
+                {charterOptions.map(charter => {
+                  const perks = getCharterPerkSummary(charter);
+                  const isSelected = selectedCharterId === charter.id;
+                  return (
+                    <button
+                      key={charter.id}
+                      type="button"
+                      onClick={() => setSelectedCharterId(charter.id)}
+                      className={`text-left h-full rounded-xl border p-4 transition focus:outline-none focus:ring-2 focus:ring-blue-400 ${
+                        isSelected
+                          ? 'border-blue-400 bg-blue-500/10 shadow-lg'
+                          : 'border-slate-700 bg-slate-900 hover:border-blue-500/60 hover:bg-blue-500/5'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-lg font-semibold text-slate-100">{charter.name}</span>
+                        {isSelected && <span className="text-xs font-medium text-blue-300">Selected</span>}
+                      </div>
+                      <p className="mt-2 text-sm text-slate-300/80">{charter.description}</p>
+                      <ul className="mt-3 space-y-1 text-sm text-slate-200/90 list-disc list-inside">
+                        {perks.map((perk, idx) => (
+                          <li key={idx}>{perk}</li>
+                        ))}
+                      </ul>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="text-xs text-slate-400">
+                  Charter perks apply immediately and influence proposals, production, and exploration bonuses.
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => pendingCharter && applyCharter(pendingCharter)}
+                    disabled={!pendingCharter || isApplyingCharter}
+                    className={`px-5 py-2 rounded-md font-semibold transition ${
+                      pendingCharter && !isApplyingCharter
+                        ? 'bg-blue-600 hover:bg-blue-500 text-white'
+                        : 'bg-slate-700 text-slate-400 cursor-not-allowed'
+                    }`}
+                  >
+                    {isApplyingCharter ? 'Binding Oath…' : 'Swear Charter'}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -3008,3 +3712,5 @@ export default function PlayPage({ initialState = null, initialProposals = [] }:
     </div>
   );
 }
+
+export type { StoredBuilding, TradeRoute, QuestEventLogEntry, QuestComputationContext, CrisisStats };
