@@ -16,6 +16,7 @@ const tradeOpportunity: EventDefinition = {
   iconType: 'positive',
   color: '#4444ff',
   animationType: 'glow',
+  eraPrerequisites: { allowedEraIds: ['founding_age', 'expansion_age'] },
   responses: [
     {
       id: 'accept_deal',
@@ -29,7 +30,12 @@ const tradeOpportunity: EventDefinition = {
       },
       description: 'Trade resources for immediate profit'
     }
-  ]
+  ],
+  resolution: {
+    description: 'Trade envoys formalize customs houses, unlocking arcane brokers to calm threat.',
+    unlockMitigationId: 'arcane_customs',
+    pressureAdjustments: { threat: -0.5 }
+  }
 };
 
 export default tradeOpportunity;

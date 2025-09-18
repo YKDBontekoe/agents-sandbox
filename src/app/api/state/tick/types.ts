@@ -1,6 +1,6 @@
-import type { GameState } from '@engine'
+import type { GameState } from '@engine';
 
-export type EngineState = GameState
+export type EngineState = GameState;
 
 export type GameStateUpdatePayload = Pick<
   GameState,
@@ -16,6 +16,6 @@ export type GameStateUpdatePayload = Pick<
     | 'milestones'
     | 'era'
 > & {
-  updated_at: string
-  last_tick_at: string
-}
+  updated_at: string;
+  last_tick_at: string;
+};

@@ -15,7 +15,12 @@ const weatherChange: EventDefinition = {
   },
   iconType: 'neutral',
   color: '#888888',
-  animationType: 'pulse'
+  animationType: 'pulse',
+  eraPrerequisites: { maxStage: 1 },
+  resolution: {
+    description: 'Skywatchers refine their forecasts, softening unrest caused by future storms.',
+    pressureAdjustments: { unrest: -0.2 }
+  }
 };
 
 export default weatherChange;

@@ -16,6 +16,7 @@ const economicBoom: EventDefinition = {
   iconType: 'positive',
   color: '#44ff44',
   animationType: 'glow',
+  eraPrerequisites: { allowedEraIds: ['expansion_age', 'ascension_age'] },
   responses: [
     {
       id: 'invest_growth',
@@ -28,6 +29,10 @@ const economicBoom: EventDefinition = {
       description: 'Reinvest profits to sustain the boom'
     }
   ],
+  resolution: {
+    description: 'Guild factors codify equitable tariffs, easing unrest as commerce stabilizes.',
+    pressureAdjustments: { unrest: -0.5 }
+  },
   triggers: [
     {
       condition: 'high_trade',

@@ -434,18 +434,13 @@ export function processTick(state: GameState, proposals: Proposal[], catalog: Re
     favor: currentFavor,
   });
   const effectivePressures = eraStatus.pressures.effective;
-  const manaDrain = Math.max(0, toTwoDecimals(effectivePressures.manaUpkeep));
-  const unrestPressure = Math.max(0, toTwoDecimals(effectivePressures.unrest));
-  const threatPressure = Math.max(0, toTwoDecimals(effectivePressures.threat));
-  resources.mana = Math.max(0, currentMana - manaDrain);
-  resources.unrest = Math.max(0, currentUnrest + unrestPressure);
-  resources.threat = Math.max(0, currentThreat + threatPressure);
-  const upkeepRate = Math.max(0, 0.2 + skillEffects.upkeepDelta);
-  const charterEffects = deriveCharterEffects(state.founding_charter);
-  const unrestThreatDecay = 1 + Math.floor(afterProps.cycle / 10);
-  resources.mana = Math.max(0, Number(resources.mana ?? 0) - 5);
-  resources.unrest = Math.max(0, Number(resources.unrest ?? 0) + unrestThreatDecay);
-  resources.threat = Math.max(0, Number(resources.threat ?? 0) + unrestThreatDecay);
+  const manaDelta = toTwoDecimals(effectivePressures.manaUpkeep);
+  const unrestDelta = toTwoDecimals(effectivePressures.unrest);
+  const threatDelta = toTwoDecimals(effectivePressures.threat);
+  resources.mana = Math.max(0, currentMana - manaDelta);
+  resources.unrest = Math.max(0, currentUnrest + unrestDelta);
+  resources.threat = Math.max(0, currentThreat + threatDelta);
+  const charterEffects = deriveCharterEffects(afterProps.founding_charter ?? state.founding_charter);
   const upkeepRate = Math.max(0, 0.2 + skillEffects.upkeepDelta + charterEffects.upkeepDelta);
   const upkeep = Math.max(0, Math.round(workers * upkeepRate));
   if (upkeep > 0) {

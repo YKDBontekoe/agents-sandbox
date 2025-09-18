@@ -16,6 +16,7 @@ const festival: EventDefinition = {
   iconType: 'positive',
   color: '#ffff44',
   animationType: 'bounce',
+  eraPrerequisites: { maxStage: 2 },
   responses: [
     {
       id: 'sponsor_festival',
@@ -28,7 +29,11 @@ const festival: EventDefinition = {
       },
       description: 'Invest in making the festival even better'
     }
-  ]
+  ],
+  resolution: {
+    description: 'Stewards enshrine the festival calendar, giving citizens a pressure valve that reduces unrest.',
+    pressureAdjustments: { unrest: -0.3 }
+  }
 };
 
 export default festival;

@@ -16,6 +16,7 @@ const resourceDiscovery: EventDefinition = {
   iconType: 'positive',
   color: '#ffaa44',
   animationType: 'bounce',
+  eraPrerequisites: { allowedEraIds: ['founding_age', 'expansion_age'] },
   responses: [
     {
       id: 'exploit_immediately',
@@ -43,7 +44,12 @@ const resourceDiscovery: EventDefinition = {
       },
       description: 'Develop the resource site for long-term benefit'
     }
-  ]
+  ],
+  resolution: {
+    description: 'Ritualists chart the new veins, empowering rites that temper upkeep.',
+    unlockMitigationId: 'ritual_anchor',
+    pressureAdjustments: { manaUpkeep: -0.5 }
+  }
 };
 
 export default resourceDiscovery;

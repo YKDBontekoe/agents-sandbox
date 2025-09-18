@@ -16,6 +16,7 @@ const plagueOutbreak: EventDefinition = {
   iconType: 'critical',
   color: '#aa44aa',
   animationType: 'pulse',
+  eraPrerequisites: { allowedEraIds: ['founding_age', 'expansion_age', 'unrest_age'] },
   responses: [
     {
       id: 'quarantine',
@@ -40,6 +41,11 @@ const plagueOutbreak: EventDefinition = {
       description: 'Invest in finding a cure'
     }
   ],
+  resolution: {
+    description: 'Healer guilds codify ward protocols, unlocking fortified districts to ease future outbreaks.',
+    unlockMitigationId: 'warded_districts',
+    pressureAdjustments: { unrest: -1, manaUpkeep: -0.5 }
+  },
   triggers: [
     {
       condition: 'high_population_density',

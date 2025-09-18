@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import type { EraStatus, MilestoneSnapshot } from '@engine';
 
 const DISMISSED_KEY = 'ad_goal_banner_dismissed';

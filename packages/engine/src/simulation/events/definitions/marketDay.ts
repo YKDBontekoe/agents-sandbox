@@ -16,6 +16,7 @@ const marketDay: EventDefinition = {
   iconType: 'positive',
   color: '#00aa44',
   animationType: 'glow',
+  eraPrerequisites: { allowedEraIds: ['founding_age', 'expansion_age'] },
   responses: [
     {
       id: 'expand_market',
@@ -28,7 +29,11 @@ const marketDay: EventDefinition = {
       },
       description: 'Invest in market infrastructure for lasting benefits'
     }
-  ]
+  ],
+  resolution: {
+    description: 'Merchants agree on common standards, calming unrest tied to trade squabbles.',
+    pressureAdjustments: { unrest: -0.3 }
+  }
 };
 
 export default marketDay;

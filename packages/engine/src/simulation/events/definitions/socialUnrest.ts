@@ -16,6 +16,7 @@ const socialUnrest: EventDefinition = {
   iconType: 'warning',
   color: '#ff8844',
   animationType: 'shake',
+  eraPrerequisites: { minStage: 1 },
   responses: [
     {
       id: 'address_concerns',
@@ -40,7 +41,12 @@ const socialUnrest: EventDefinition = {
       },
       description: 'Maintain order through enforcement'
     }
-  ]
+  ],
+  resolution: {
+    description: 'Spymasters weave a shadow network to intercept agitators before they spark crises.',
+    unlockMitigationId: 'shadow_network',
+    pressureAdjustments: { unrest: -1 }
+  }
 };
 
 export default socialUnrest;

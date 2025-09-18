@@ -16,6 +16,7 @@ const culturalEvent: EventDefinition = {
   iconType: 'positive',
   color: '#aa44ff',
   animationType: 'pulse',
+  eraPrerequisites: { allowedEraIds: ['expansion_age', 'unrest_age', 'ascension_age'] },
   responses: [
     {
       id: 'support_arts',
@@ -28,7 +29,12 @@ const culturalEvent: EventDefinition = {
       },
       description: 'Fund cultural programs for extended benefits'
     }
-  ]
+  ],
+  resolution: {
+    description: 'The celebration elevates guild envoys, unlocking the Crown Conclave mitigation.',
+    unlockMitigationId: 'crown_conclave',
+    pressureAdjustments: { unrest: -1 }
+  }
 };
 
 export default culturalEvent;
